@@ -67,6 +67,7 @@ Project: Kaggle replication of *Reference-Based Bias Detection in LLMs via Relat
 - Probe: `python -m rbbd.cli probe`
 - Run: `python -m rbbd.cli run --config configs/<x>.yaml [--stages ...]`
 - Status: `python -m rbbd.cli status --config configs/<x>.yaml`
+- Sync to store: `python -m rbbd.cli sync --path <path under artifacts/>`
 
 ## Conventions
 - α = weight on the **unharmful** endpoint. Checkpoints: `ref`, `a100` (unharmful), `a090`, `a070`, `a050`, `a030`, `a010`, `a000` (harmful).

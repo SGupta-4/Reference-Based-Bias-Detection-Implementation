@@ -68,7 +68,7 @@ IDs are sequential and never reused.
   - FlashAttention is unavailable on sm75.
 - Reproduction command: M0-T6 hello-world: `pytest -q -m gpu tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora`
 - Hypotheses tried: —
-- Fix: planned — pin vLLM (D-031). Gemma fp32. HF-generate fallback flag (D-021).
+- Fix: planned — pin vLLM (D-031). Gemma fp32. HF-generate fallback flag (D-021). M0 probe cases defined in D-047.
 - Verification: the probe writes the engine and backend used. The smoke run passes with the vLLM path.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-021, D-031
@@ -104,11 +104,20 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-019, D-029
 
 ## B-009 Feature: M0 environment probe, artifact store and pipeline skeleton
-- Status: In progress
+- Status: In progress — CPU-side code and tests done and pushed; Kaggle run (`notebooks/00_probe.ipynb`) pending, then `m0-green`.
 - How it was found or scoped: PLAN §7 M0 (tasks M0-T1…T7), with the Q1–Q6 answers (D-041–D-044).
 - Reproduction command: `ruff check src tests && pytest -q -m "not gpu"` (CPU); on Kaggle, `notebooks/00_probe.ipynb`.
-- Hypotheses tried: —
-- Fix: —
-- Verification: —
+- Hypotheses tried:
+  - Using `torch.cuda.is_bf16_supported()` for DC-16: rejected, it can report True on sm75 via emulation → native flag from compute capability (D-045).
+  - Redacting any `hf_\w{8,}`: rejected, it would mangle vLLM log lines such as `hf_overrides` → token-shaped pattern (D-045).
+  - Reporting `access_all_ok: true` when access checks were skipped: caught in a local run (`probe --skip-access` printed `true`) → now `null` (D-045).
+  - First lint run: 48 × E501 (lines > 100), including the planning-time skeleton docstrings → `ruff format` plus rewrapped docstrings; no rule was disabled.
+- Fix: `src/rbbd/{cli,config,runner}.py`, `src/rbbd/utils/{env,store,cache,manifest,seeds,guards,logging}.py`, `configs/{base,smoke}.yaml`, `notebooks/{00_probe,run_stage}.ipynb`, tests.
+- Verification (CPU, this container, Python 3.11.15, pinned core + dev extras):
+  - `ruff check src tests` → `All checks passed!`
+  - `pytest -q -m "not gpu"` → `51 passed, 7 deselected in 0.27s`
+  - `grep -rn "PLACEHOLDER(M0)" tests` → no output (exit 1)
+  - `python -m rbbd.cli probe --no-require-gpu --skip-access` → exit 0, env.json written; without `--no-require-gpu` → exit 2, `expected >= 2 GPUs, found 0`, env.json still written.
+  - Kaggle (DC-16, GPU test, store round trip): pending.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-041, D-042, D-043, D-044
+- Linked commits and D-### entries: D-041, D-042, D-043, D-044, D-045, D-046, D-047

@@ -1,6 +1,6 @@
 # PLAN — Kaggle replication of "Reference-Based Bias Detection in LLMs via Relative Representations of Hidden States" (arXiv:2609.10060v1)
 
-Status: **M0 in progress.** Written 2026-09-30 from `paper/2609.10060v1.pdf` only (27 pages, all sections and Appendices A–H read). The authors' code (https://github.com/NASK-AISafety/Reference-Based-Bias-Detection) was not public at planning time, so everything below is a from-scratch implementation.
+Status: **M0 in progress** — CPU side done; Kaggle probe run pending. Written 2026-09-30 from `paper/2609.10060v1.pdf` only (27 pages, all sections and Appendices A–H read). The authors' code (https://github.com/NASK-AISafety/Reference-Based-Bias-Detection) was not public at planning time, so everything below is a from-scratch implementation.
 
 Citation convention: `§4.1` = paper section, `T1` = Table 1, `F4` = Figure 4, `App. C` = Appendix C. `[unspecified in paper]` marks a detail the PDF leaves open; each one has a `D-###` entry in `DECISION.md`.
 
@@ -137,7 +137,7 @@ Adjustments to the suggested module list (D-032):
 - `models/spectrum.py` owns the α list and checkpoint naming, so embed and bench share one definition.
 
 **Thin notebook contract.** A notebook contains only these cells:
-1. `git clone --branch <tag> --depth 1 <repo>`.
+1. Fetch `<tag or commit SHA>` with `git fetch --depth 1` (optional `GITHUB_TOKEN` secret for a private repo; D-046).
 2. `pip install -e .[train]` or `.[bench]` with pinned versions, logging `pip freeze`.
 3. Read `HF_TOKEN` via `kaggle_secrets.UserSecretsClient` into the environment without printing it.
 4. `python -m rbbd.cli run --config configs/<x>.yaml --stages <...>`.
@@ -149,6 +149,7 @@ No logic lives in notebooks.
 - `python -m rbbd.cli probe` writes `env.json`.
 - `python -m rbbd.cli run --config C [--stages s1,s2] [--force STAGE] [--only-ckpt SLUG] [--dry-run]`.
 - `python -m rbbd.cli status --config C` lists stages with a valid manifest.
+- `python -m rbbd.cli sync --path <rel>` mirrors `<artifacts>/<rel>` into the private store (D-046).
 
 **Stages, in dependency order:** `sentences → ftdata → train → embed → deltab → generate → score → analyze → report`.
 - Every stage writes artifacts plus `manifest.json`, which records the config hash, git SHA, input hashes, output hashes, timings, env summary and the `complete` flag.
@@ -231,7 +232,7 @@ Conventions:
 
 ### M0 — Environment probe + skeleton wired (Tier 0) · S01 · 1.0 GPU-h · tag `m0-green`
 **Goal:** Verify Kaggle limits at runtime and make the package installable and testable, with the CLI, config, runner, manifest and cache wired.
-**Files:** `src/rbbd/{cli,config,runner}.py`, `src/rbbd/utils/*`, `configs/base.yaml`, `configs/smoke.yaml`, `notebooks/00_probe.ipynb`, `notebooks/run_stage.ipynb`, `tests/test_config.py`, `tests/test_manifest.py`, `tests/test_cache.py`, `tests/test_env.py`, docs.
+**Files:** `src/rbbd/{cli,config,runner}.py`, `src/rbbd/utils/*` (incl. `store.py`, D-046), `configs/base.yaml`, `configs/smoke.yaml`, `notebooks/00_probe.ipynb`, `notebooks/run_stage.ipynb`, `tests/test_config.py`, `tests/test_manifest.py`, `tests/test_cache.py`, `tests/test_env.py`, `tests/test_store.py`, `tests/test_leakage.py`, `tests/gpu/test_generate_gpu.py`, docs.
 **Tasks:**
 - M0-T1 Implement `utils/env.py` probe:
   - Run `nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv`, `df -h /kaggle/working /kaggle/tmp /`, `free -g` and `python -V`.

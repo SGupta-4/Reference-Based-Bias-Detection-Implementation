@@ -6,7 +6,8 @@ def test_identity_delta_b_zero():
 
 
 def test_rotation_scale_invariance():
-    """PLACEHOLDER(M1) Random orthogonal Q and scale s>0 on one model leave r(x) and dB unchanged, atol 1e-5."""
+    """PLACEHOLDER(M1) Random orthogonal Q and scale s>0 on one model leave r(x) and dB unchanged,
+    atol 1e-5."""
 
 
 def test_anchor_permutation_invariance():

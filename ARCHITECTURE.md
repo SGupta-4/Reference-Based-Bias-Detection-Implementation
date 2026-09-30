@@ -51,7 +51,7 @@ Training sits upstream of the spectrum:
 
 | Module | Single responsibility |
 |---|---|
-| `rbbd.cli` | Parse the command line and dispatch to `runner` or `utils.env.probe`. |
+| `rbbd.cli` | Parse the command line and dispatch to `runner`, `utils.env` (probe) or `utils.store` (sync). |
 | `rbbd.config` | Load and merge YAML configs; compute the canonical config hash. |
 | `rbbd.runner` | Own the stage graph; decide skip/resume from manifests; time stages. |
 | `rbbd.utils.env` | Detect Kaggle; probe hardware; read secrets without exposing them. |
@@ -60,6 +60,7 @@ Training sits upstream of the spectrum:
 | `rbbd.utils.seeds` | Seed Python, NumPy and torch in one place. |
 | `rbbd.utils.guards` | Enforce the NaN/Inf invariant. |
 | `rbbd.utils.logging` | Structured logs with secret redaction. |
+| `rbbd.utils.store` | The private HF artifact store: privacy check, `upload_folder`, downloads (D-041). |
 | `rbbd.data.groups` | The 24 DT groups, 9 topics (T2) and ToxiGen map. |
 | `rbbd.data.sentences` | Load, validate and hash sentence sets; build the deduplicated union. |
 | `rbbd.data.hashing` | Text normalisation and content hashes. |
@@ -90,7 +91,7 @@ Dependency rule: `metrics` and `analysis` never import torch model code, so they
 
 ## 3. Artifact store layout
 
-Root = `$RBBD_ARTIFACTS`. It defaults to `/kaggle/working/artifacts` on Kaggle and `./artifacts` locally (git-ignored). It is persisted as the private Kaggle Dataset `rbbd-artifacts` (D-029).
+Root = `$RBBD_ARTIFACTS`. It defaults to `/kaggle/working/artifacts` on Kaggle and `./artifacts` locally (git-ignored). It is mirrored path-for-path into the private HF repo `SarthakGupta414/rbbd-artifacts` with `python -m rbbd.cli sync --path <rel>` (D-041, D-046).
 
 ```
 artifacts/
@@ -106,9 +107,9 @@ artifacts/
 └── analysis/<run_key>/{joined.csv, stats.csv, tables/, figures/}
 ```
 
-- `rbbd-ckpt-private` Dataset: `tier2/<model_slug>/full/<split>/seed<k>/model.safetensors` (+ config/tokenizer).
+- Same private repo, `ckpt_private/tier2/<model_slug>/full/<split>/seed<k>/model.safetensors` (+ config/tokenizer): Tier 2 full-FT endpoints (D-041).
 - Repo `results/<run_name>/`: public-safe aggregates only (DC-18). For example, `results/smoke/delta_b.csv`.
-- Ephemeral: HF cache and materialised Tier 2 α-weights in `/kaggle/tmp`.
+- Ephemeral (`utils.env.ephemeral_dir()`, D-045): HF cache and materialised Tier 2 α-weights.
 
 Slugs:
 - `model_slug` = e.g. `llama3.1-8b-it`.
@@ -133,3 +134,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 
 ## Changelog
 - 2026-09-30 — Initial planned architecture — D-019, D-029, D-030, D-032.
+- 2026-09-30 — Store moved to a private HF repo; `utils/store.py` added; CLI gains `sync` — D-041, D-046.

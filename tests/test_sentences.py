@@ -10,11 +10,13 @@ def test_mean_length_seven_words():
 
 
 def test_no_overlap_and_template_disjoint():
-    """PLACEHOLDER(M1) No exact overlaps across sets; anchor templates disjoint from target templates."""
+    """PLACEHOLDER(M1) No exact overlaps across sets; anchor templates disjoint from target
+    templates."""
 
 
 def test_variant_alignment():
-    """PLACEHOLDER(M1) Attribute/target variants are row-aligned with base and pass the PLAN §2 rules."""
+    """PLACEHOLDER(M1) Attribute/target variants are row-aligned with base and pass the PLAN §2
+    rules."""
 
 
 def test_groups_and_topics_match_table2():

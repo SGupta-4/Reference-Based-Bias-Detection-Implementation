@@ -1,0 +1,19 @@
+# Local artifact staging (mirrored to the private HF store, never to git; D-037, D-041)
+artifacts/
+# Secrets (D-036)
+*.env
+.env
+kaggle.json
+# Hugging Face / tool caches
+.cache/
+hf_cache/
+huggingface/
+# Python build and tool state
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.venv/

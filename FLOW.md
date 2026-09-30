@@ -14,12 +14,12 @@ Skip condition: ...
 Resume behaviour: ...
 Failure modes: ... (link B-###)
 ```
-Status: **planned**. Function names are the intended public API and are fixed when implemented.
+Status: Entrypoint, probe and sync are **implemented (M0)**; stage bodies are stubs that raise `NotImplementedError` naming their milestone. Function names below are the intended public API and are fixed when implemented.
 
 ---
 
 ## Currently modifying
-M0 (B-009): `src/rbbd/{cli,config,runner}.py`; `src/rbbd/utils/{env,store,cache,manifest,seeds,guards,logging}.py`; `configs/{base,smoke}.yaml`; `notebooks/{00_probe,run_stage}.ipynb`; `tests/{test_config,test_manifest,test_cache,test_env,test_store,test_leakage}.py`; `tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora`; `.gitignore`.
+nothing
 
 ---
 
@@ -37,8 +37,32 @@ python -m rbbd.cli run --config configs/<x>.yaml [--stages a,b] [--force STAGE] 
               outputs = STAGE_FNS[stage](cfg, env, upstream_outputs)
               manifest.write(stage, run_key, inputs, outputs, timings, complete=True)
 ```
-`python -m rbbd.cli probe` → `utils.env.probe()` → `artifacts/env/<session>.json` (nvidia-smi, df -h, free -g, torch/CUDA, bf16 support, gated-access checks).
-`python -m rbbd.cli status --config C` → prints manifest validity per stage.
+Runner detail (implemented, M0): `runner.stage_run_keys(cfg.hash)` gives each stage `make_key({config_hash, stage, upstream run keys})`. Before a stage body runs, the runner writes `manifests/<stage>/<run_key>.json` with `complete=false`; the body may call `ctx.checkpoint(progress)`; on return the runner hashes `StageResult.outputs` (paths relative to the artifact root) and rewrites the manifest with `complete=true`. Validity = complete + same config hash + same upstream output digests + outputs unchanged. A missing upstream manifest raises `RunnerError`.
+
+## Probe (M0)
+```
+python -m rbbd.cli probe [--config configs/base.yaml] [--no-require-gpu] [--skip-access] [--vllm] [--check-store]
+ └─ cli._cmd_probe
+     ├─ config.load(base.yaml); utils.env.detect(); utils.env.session_id()        ($RBBD_SESSION_ID)
+     ├─ utils.env.probe(out_dir=<artifacts>/env/<session>, access_repos=cfg.probe.access_repos)
+     │    ├─ probe_hardware(): nvidia-smi CSV, df -h, free -g, torch info → dict
+     │    ├─ check_access(): HfApi.auth_check per repo (token from $HF_TOKEN) → {id: ok|error}
+     │    ├─ write_json(env.json)   [redacted]
+     │    └─ raise HardwareError if < 2 GPUs / sm < 7.5 / < 14 GiB   (exit code 2)
+     ├─ --vllm: utils.env.probe_vllm(cfg.probe.vllm_cases, out_dir)
+     │    └─ per case: subprocess `python -m rbbd.cli vllm-case --json <case> --out vllm_<name>.json`
+     │         └─ utils.env.vllm_case(): make_random_lora() (CPU) → vllm.LLM(...) → generate base + LoRA
+     │       → vllm_<name>.log, vllm_probe.json
+     ├─ --check-store: utils.store.open_store(repo_id, "auto") → roundtrip(): write roundtrip.bin,
+     │    upload_dir(env/<session>) [private check first] → forced download into empty cache → sha256 compare
+     └─ write_json(env.json) with store/vllm results; exit 1 if access or store failed
+```
+The GPU test `tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora` calls `probe_vllm` directly.
+
+## Store sync (M0)
+`python -m rbbd.cli sync --path <rel>` → `utils.store.open_store(cfg.store.repo_id, cfg.store.repo_type)` (resolve type, assert private) → `HFStore.upload_dir(<artifacts>/<rel>, <rel>)` (re-asserts private, then `HfApi.upload_folder`) → prints the commit id. Next session: `HFStore.download_file` / `hf_hub_download` for the paths it needs.
+
+`python -m rbbd.cli status --config C` → `runner.stage_status()` prints `valid | incomplete | missing | stale (reason)` per stage.
 
 ## Stage: sentences
 Entry: `run --stages sentences`

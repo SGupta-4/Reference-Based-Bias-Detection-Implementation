@@ -591,3 +591,49 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: none.
 - Paper deviation: no.
 - Revisit-if: the probe disagrees.
+
+## D-045 M0 probe semantics: native bf16, token-shaped redaction, null for skipped checks, one-session store round trip
+- Date: 2026-09-30
+- Context: Implementing M0-T1/T5/T7. Four details the plan left implicit turned out to matter.
+- Options considered / Choice:
+  1. **bf16.** `torch.cuda.is_bf16_supported()` defaults to `including_emulation=True` in recent torch and can report True on sm75, which would make DC-16's "`bf16_supported: false`" fail on a T4. Choice: `env.json.bf16_supported` = native support = min compute capability ≥ 8.0; torch's emulation-inclusive answer is kept as `torch.bf16_supported_including_emulation` for information.
+  2. **Redaction pattern.** A broad `hf_[A-Za-z0-9]{8,}` rule would mangle vLLM log lines (`hf_overrides`) and a plain `grep hf_` would flag them. Choice: redact the real token shape `hf_` + ≥ 30 alphanumerics (HF tokens are `hf_` + 34), GitHub `gh?_`/`github_pat_` shapes, and the literal values of `HF_TOKEN`/`GITHUB_TOKEN`/`KAGGLE_KEY`. DC-16's leak grep is refined to the same token shape (a more precise check, not a weaker one).
+  3. **Skipped checks.** `requirements.ok` and `access_all_ok` are `null` (not `true`) when their check is skipped (`--no-require-gpu`, `--skip-access`), so a skipped check can never read as a pass.
+  4. **Store round trip.** PLAN M0-T7 said "read it back in a second short session". Choice: read back in the same session with `force_download=True` into a fresh empty cache directory, which proves the bytes came from the remote repo. Saves a Kaggle session.
+  5. **Ephemeral dir.** Kaggle's scratch path is not documented consistently; `ephemeral_dir()` takes `$RBBD_EPHEMERAL`, else the first existing of `/kaggle/tmp`, `/kaggle/temp`, else the system temp dir. The probe records which one was used.
+- Why: Each avoids a false result in DC-16 or an unnecessary session.
+- Tradeoff accepted: none material.
+- Cost impact: saves ≈ 0.2 session-h (no second round-trip session).
+- Paper deviation: no.
+- Revisit-if: the Kaggle probe shows `torch` reporting bf16 natively on T4 (it should not), or a token format change.
+
+## D-046 CLI `sync` and `vllm-case`; `utils/store.py`; notebook clone and install
+- Date: 2026-09-30
+- Context: The thin-notebook contract (PLAN §3) ends with "sync artifacts to the store", which needs a CLI entry; D-041 needs a store module; the repo's visibility is unknown.
+- Options considered: store code inside `utils/env.py` vs its own module; sync inside `run` vs a separate command.
+- Choice:
+  - New module `rbbd.utils.store` (single responsibility: the private HF store). ARCHITECTURE updated.
+  - `python -m rbbd.cli sync --path <rel>` uploads `<artifacts>/<rel>` to the same path in the store. `vllm-case` is an internal subcommand used by `probe --vllm` to run each case in a fresh process.
+  - Notebooks fetch `REF` (branch, tag or commit SHA) with `git fetch --depth 1`, so M0 can pin a commit before any `m0-green` tag exists. If the optional `GITHUB_TOKEN` secret is attached, it is passed as an HTTP header through `GIT_CONFIG_*` environment variables, never in the URL, argv or output.
+  - `00_probe.ipynb` installs `.[train,bench,dev]` in one resolve to test that the two stacks co-install (M0-T4, R14), recording `pip freeze` before and after and `pip check`.
+- Why: Keeps notebooks free of logic; works for a public or private repo.
+- Tradeoff accepted: the notebook clone cell carries ~15 lines of git glue.
+- Cost impact: none.
+- Paper deviation: no.
+- Revisit-if: `pip check` shows a train/bench conflict (then separate venv per D-031).
+
+## D-047 vLLM probe design (M0-T6)
+- Date: 2026-09-30
+- Context: B-005 lists the ways vLLM can fail on Turing. The probe must find out which apply before M5 depends on vLLM.
+- Options considered: probe inside one Python process vs one process per case.
+- Choice: `configs/base.yaml › probe.vllm_cases`, each run by `python -m rbbd.cli vllm-case` in its own process (vLLM does not reliably free GPU memory in-process, and a refused dtype must not abort later cases):
+  1. Qwen2.5-0.5B-Instruct, TP=1, fp16, with a random rank-32 LoRA (rank 2r = 32 is what D-007's α-adapters need; `max_lora_rank=32`).
+  2. Same with TP=2 (tests NCCL across both T4s).
+  3. Gemma-3-1B-it, TP=1, fp16 (expected to be refused; outcome recorded either way).
+  4. Gemma-3-1B-it, TP=1, fp32 (the D-005 fallback).
+  Settings: `max_model_len=512`, `enforce_eager=True` (skips CUDA-graph capture to shorten start-up), `gpu_memory_utilization=0.85`, 4 benign prompts, 16 new tokens, seed 0. The random LoRA's B matrices are scaled by 1e-2 so fp16 outputs stay finite. Engine class and log lines naming the engine or attention backend are stored in `vllm_probe.json`.
+- Why: Covers every B-005 failure mode relevant to M5 in ≈ 15 min.
+- Tradeoff accepted: `enforce_eager` differs from M5 production settings (M5 re-measures throughput).
+- Cost impact: ≈ 0.25 session-h inside the M0 1.0 h budget.
+- Paper deviation: no.
+- Revisit-if: TP=2 hangs (then M5 uses TP=1 per GPU for all models ≤ 4B and HF fallback for 7–8B).

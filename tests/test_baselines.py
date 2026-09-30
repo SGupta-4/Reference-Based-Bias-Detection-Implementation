@@ -2,7 +2,8 @@
 
 
 def test_procrustes_recovers_rotation():
-    """PLACEHOLDER(M1) Procrustes on anchors recovers a known rotation; Procrustes-SEAT dB = 0 for a rotated copy."""
+    """PLACEHOLDER(M1) Procrustes on anchors recovers a known rotation; Procrustes-SEAT dB = 0 for
+    a rotated copy."""
 
 
 def test_cka_invariances():
