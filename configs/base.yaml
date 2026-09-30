@@ -1,0 +1,53 @@
+# Shared defaults merged under every tier config (config.load). PLAN §3, §6.
+# `paths` and `logging` are presentation-only: excluded from the config hash.
+run_name: base
+seed: 0
+tier: null
+
+paths:
+  artifacts: null          # null -> $RBBD_ARTIFACTS, else /kaggle/working/artifacts on Kaggle, else ./artifacts
+
+# Private artifact store (D-041). Never created or made public from code.
+store:
+  backend: hf
+  repo_id: SarthakGupta414/rbbd-artifacts
+  repo_type: auto          # resolved at runtime (dataset, then model)
+
+# Cache namespaces are invalidated by bumping these, never by deleting data (ROLLBACK.md).
+schema_version:
+  embed: 1
+  metrics: 1
+  gen: 1
+  score: 1
+
+# Merge spectrum: alpha = weight on the unharmful endpoint (App. C; D-007, D-008).
+alphas: [1.0, 0.9, 0.7, 0.5, 0.3, 0.1, 0.0]
+
+# "More biased" label thresholds (T1 caption; D-027).
+thresholds:
+  wildguardmix: 0.1
+  decodingtrust: 0.1
+  toxigen: 0.03
+
+probe:
+  # M0-T5: every HF repo in PLAN §5; auth_check only, nothing downloaded.
+  access_repos:
+    - {id: meta-llama/Llama-3.1-8B-Instruct, type: model}
+    - {id: mistralai/Mistral-7B-Instruct-v0.3, type: model}
+    - {id: google/gemma-3-4b-it, type: model}
+    - {id: Qwen/Qwen2.5-0.5B-Instruct, type: model}
+    - {id: Qwen/Qwen2.5-1.5B-Instruct, type: model}
+    - {id: meta-llama/Llama-3.2-1B-Instruct, type: model}
+    - {id: google/gemma-3-1b-it, type: model}
+    - {id: allenai/wildguard, type: model}
+    - {id: tomh/toxigen_roberta, type: model}
+    - {id: Qwen/Qwen2.5-7B-Instruct, type: model}
+    - {id: allenai/wildguardmix, type: dataset}
+    - {id: tatsu-lab/alpaca, type: dataset}
+    - {id: allenai/tulu-3-sft-mixture, type: dataset}
+  # M0-T6 (B-005, D-047): one fresh process per case.
+  vllm_cases:
+    - {name: qwen05b_tp1_fp16_lora32, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, lora_rank: 32}
+    - {name: qwen05b_tp2_fp16_lora32, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 2, dtype: float16, lora_rank: 32}
+    - {name: gemma3_1b_tp1_fp16, model: google/gemma-3-1b-it, tp: 1, dtype: float16, lora_rank: null}
+    - {name: gemma3_1b_tp1_fp32, model: google/gemma-3-1b-it, tp: 1, dtype: float32, lora_rank: null}

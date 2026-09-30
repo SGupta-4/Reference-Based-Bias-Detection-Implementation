@@ -1,0 +1,6 @@
+# Tier 0 smoke (PLAN §6, D-038): whole pipeline on tiny sets, < 15 min on 2x T4.
+# Stage-specific sections are added by the milestone that implements each stage.
+run_name: smoke
+tier: 0
+models:
+  - {id: Qwen/Qwen2.5-0.5B-Instruct, slug: qwen2.5-0.5b-it}
