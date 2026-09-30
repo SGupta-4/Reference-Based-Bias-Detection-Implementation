@@ -53,8 +53,8 @@ IDs are sequential and never reused.
 - How it was found or scoped: Planning. Llama-3.1/3.2, Gemma-3, Mistral-v0.3, WildGuardMix and WildGuard are gated. The token comes from Kaggle Secrets. The licence must be accepted for the token's account.
 - Reproduction command: `python -m rbbd.cli probe` (gated-access section)
 - Hypotheses tried: —
-- Fix: planned — M0-T5 access check before any GPU work. Open question Q1 to the user.
-- Verification: probe reports `access: ok` for every repo in PLAN §5.
+- Fix: planned — M0-T5 access check before any GPU work. Q1 answered 2026-09-30: the user reports every licence accepted and `auth_check` passing with `HF_TOKEN` (D-044).
+- Verification: probe reports `access: ok` for every repo in PLAN §5. Pending the M0 Kaggle run.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-036
 
@@ -102,3 +102,13 @@ IDs are sequential and never reused.
 - Verification: the runner warns at > 15 GB.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-019, D-029
+
+## B-009 Feature: M0 environment probe, artifact store and pipeline skeleton
+- Status: In progress
+- How it was found or scoped: PLAN §7 M0 (tasks M0-T1…T7), with the Q1–Q6 answers (D-041–D-044).
+- Reproduction command: `ruff check src tests && pytest -q -m "not gpu"` (CPU); on Kaggle, `notebooks/00_probe.ipynb`.
+- Hypotheses tried: —
+- Fix: —
+- Verification: —
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-041, D-042, D-043, D-044

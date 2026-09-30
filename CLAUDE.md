@@ -29,14 +29,15 @@ Project: Kaggle replication of *Reference-Based Bias Detection in LLMs via Relat
 
 ## Kaggle constraints (verify at runtime; never assume)
 - 2× T4 16 GB, sm75, **no bf16**. P100 is not used (vLLM unsupported). Verify with `python -m rbbd.cli probe` (`nvidia-smi`, `df -h`, `free -g`).
-- Sessions stop at ~12 h. The quota is ~30 session-h/week and a 2-GPU session is billed once. `/kaggle/working` persists ~20 GB; everything else is lost.
+- Sessions stop at ~12 h. The quota is 28 session-h/week (D-042) and a 2-GPU session is billed once. `/kaggle/working` persists ~20 GB; everything else is lost.
 - Every stage writes a `manifest.json` and skips itself on a valid manifest. Training and generation checkpoint partial progress.
 - **fp16 overflow:** every hidden-state extraction runs the NaN/Inf guard and fails loudly. Gemma runs in fp32 for inference (D-005).
 - **Never store merged full-weight checkpoints persistently.**
   - LoRA: store the two adapters. α-checkpoints are exact concatenated rank-2r adapters built in memory (D-007).
   - Full FT: store the two endpoints privately and interpolate in memory as (1−α)W_h + αW_u (D-008).
 - Reference and audited checkpoints are always extracted with **identical precision, quantisation and placement** (D-004).
-- Secrets: `HF_TOKEN` (and Kaggle API credentials) come from Kaggle Secrets. Never print, log or commit them.
+- Secrets: `HF_TOKEN` (read for gated repos + write to the private store) and optional `GITHUB_TOKEN` (clone only) come from Kaggle Secrets. Never print, log or commit them.
+- Artifact store: private HF repo `SarthakGupta414/rbbd-artifacts` (D-041). Upload only via `HfApi.upload_folder` after checking `private is True`. Never call `create_repo`, change repo visibility, or `push_to_hub`.
 - Harmful-trained adapters and checkpoints, generations and per-prompt scores go to **private** stores only. Git and `results/` hold aggregates only. Never generate new harmful content (D-010, D-037).
 
 ## Action boundaries

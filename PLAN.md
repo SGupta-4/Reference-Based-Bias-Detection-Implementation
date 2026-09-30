@@ -1,6 +1,6 @@
 # PLAN — Kaggle replication of "Reference-Based Bias Detection in LLMs via Relative Representations of Hidden States" (arXiv:2609.10060v1)
 
-Status: **planning complete, M0 not started.** Written 2026-09-30 from `paper/2609.10060v1.pdf` only (27 pages, all sections and Appendices A–H read). The authors' code (https://github.com/NASK-AISafety/Reference-Based-Bias-Detection) was not public at planning time, so everything below is a from-scratch implementation.
+Status: **M0 in progress.** Written 2026-09-30 from `paper/2609.10060v1.pdf` only (27 pages, all sections and Appendices A–H read). The authors' code (https://github.com/NASK-AISafety/Reference-Based-Bias-Detection) was not public at planning time, so everything below is a from-scratch implementation.
 
 Citation convention: `§4.1` = paper section, `T1` = Table 1, `F4` = Figure 4, `App. C` = Appendix C. `[unspecified in paper]` marks a detail the PDF leaves open; each one has a `D-###` entry in `DECISION.md`.
 
@@ -246,7 +246,7 @@ Conventions:
   - Qwen2.5-0.5B, TP=1 and TP=2, `dtype=float16`, `enable_lora=True`, 4 prompts.
   - Record which engine (V0/V1) and attention backend is used.
   - Try `dtype=float16` on Gemma-3-1B and record whether it is refused (B-005).
-- M0-T7 Artifact-store round trip: write a 1 MB file to `/kaggle/working/artifacts`, publish a private Dataset version, and read it back in a second short session.
+- M0-T7 Artifact-store round trip (D-041): write a 1 MB file to `/kaggle/working/artifacts/env/<session>/`, upload it with `HfApi.upload_folder` to the private HF repo `SarthakGupta414/rbbd-artifacts` (after checking `private is True`), and read it back with a forced fresh download into an empty cache (D-045).
 **Checks:** DC-01, DC-02, DC-10 (manifest/cache unit level), DC-15, DC-16 (probe).
 **Rollback:** `m0-green`. Nothing to invalidate.
 
@@ -474,7 +474,8 @@ Units: **Kaggle session-hours on the 2×T4 accelerator** (Kaggle bills session t
 ---
 
 ## 11. Open questions for the user
-(Also listed in the session reply.)
+**All answered 2026-09-30** — Q1 yes (D-044), Q2 private HF repo (D-041), Q3 max len 512 first then 1 epoch (D-042), Q4 local Qwen2.5-7B with ~100 hand labels (D-043), Q5 28 h/week (D-042, D-044), Q6 yes after core results (D-042). Original questions kept below for the record.
+
 - **Q1 Accounts and licences.** Has the Kaggle account accepted the HF licences for Llama-3.1-8B, Llama-3.2-1B, Gemma-3 (4B, 1B), Mistral-7B-v0.3, WildGuardMix and WildGuard? Is the Kaggle account phone-verified so GPU and internet are available?
 - **Q2 Artifact store.** Private Kaggle Datasets (needs `KAGGLE_USERNAME`/`KAGGLE_KEY` as Kaggle Secrets) or a private HF repo (needs a write-scoped HF token)? The default in D-029 is private Kaggle Datasets.
 - **Q3 Training budget fallback.** If the throughput probe projects > 9 h per Tier 1 QLoRA run, may we drop to 1 epoch (or max len 512), or should Tier 1 stay at 3 epochs and absorb more weeks?

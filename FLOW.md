@@ -19,7 +19,7 @@ Status: **planned**. Function names are the intended public API and are fixed wh
 ---
 
 ## Currently modifying
-nothing
+M0 (B-009): `src/rbbd/{cli,config,runner}.py`; `src/rbbd/utils/{env,store,cache,manifest,seeds,guards,logging}.py`; `configs/{base,smoke}.yaml`; `notebooks/{00_probe,run_stage}.ipynb`; `tests/{test_config,test_manifest,test_cache,test_env,test_store,test_leakage}.py`; `tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora`; `.gitignore`.
 
 ---
 

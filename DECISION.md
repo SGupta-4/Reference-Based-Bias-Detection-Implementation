@@ -308,7 +308,7 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Paper deviation: no.
 - Revisit-if: the subcategory has fewer than 20 prompts in some topic (reported).
 
-## D-024 WGM topic mapping via a local open model; group-level pairing `[partly unspecified]`
+## D-024 WGM topic mapping via a local open model; group-level pairing `[partly unspecified]` — superseded by D-043
 - Date: 2026-09-30
 - Context: App. B: ChatGPT 5.2 maps each WGM SOCIAL STEREOTYPES prompt to one of 9 topics (T2). How topic-level scores pair with the group-level ΔB is `[unspecified in paper]`. §3.4 says "each pairing of a checkpoint with a target group is one observation".
 - Options considered:
@@ -382,7 +382,7 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Paper deviation: no (interpretation), flagged.
 - Revisit-if: M8.
 
-## D-029 Artifact store and persistence
+## D-029 Artifact store and persistence — superseded by D-041
 - Date: 2026-09-30
 - Context: Only `/kaggle/working` (~20 GB) persists after a session. Harmful-trained artifacts must stay private.
 - Options considered: A: private Kaggle Datasets. B: private HF repos. C: notebook outputs chained as inputs.
@@ -458,7 +458,7 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Paper deviation: yes — T1.
 - Revisit-if: bigger hardware.
 
-## D-035 Budget cut order
+## D-035 Budget cut order — superseded by D-042
 - Date: 2026-09-30
 - Context: The brief requires a cut order.
 - Options considered: n/a.
@@ -532,3 +532,62 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: none.
 - Paper deviation: no (interpretation), flagged.
 - Revisit-if: M8.
+
+## D-041 Artifact store = private HF repo `SarthakGupta414/rbbd-artifacts` (supersedes D-029)
+- Date: 2026-09-30
+- Context: User answer to Q2 (PLAN §11). The repo already exists and is private. A write token scoped to that repo is stored as the Kaggle Secret `HF_TOKEN`; the same secret also passes `auth_check` for every gated model and dataset (Q1).
+- Options considered: A: private Kaggle Datasets (D-029). B: the private HF repo above.
+- Choice: B.
+  - Code uploads only with `HfApi.upload_folder`, into per-stage / per-checkpoint subfolders that mirror the local artifact layout (ARCHITECTURE §3), e.g. `env/<session_id>/`, `embeddings/<model>/<regime>/<ckpt>/`.
+  - Code **never** calls `create_repo`, `update_repo_settings`/`update_repo_visibility`, or `push_to_hub`, and never prints the token. A test (`tests/test_store.py`) scans the store module for those calls.
+  - Before every upload, `utils/store.py` reads `repo_info` and refuses to upload unless `private is True`.
+  - The repo type (model or dataset) is not stated; the store resolves it at runtime by probing `repo_info` for `dataset` then `model`, and records the result in `env.json`.
+  - Tier 2 full-FT endpoints go to the same repo under `ckpt_private/…` instead of a separate `rbbd-ckpt-private` Dataset.
+  - Local staging stays in `/kaggle/working/artifacts`; the next session downloads what it needs with `hf_hub_download` / `snapshot_download(allow_patterns=…)`.
+- Why: The user's choice. One secret covers read (gated models) and write (store). Per-file uploads avoid re-versioning a whole dataset each session.
+- Tradeoff accepted: ROLLBACK records the HF repo commit SHA instead of a Kaggle Dataset version. HF storage for private repos counts against the user's HF quota.
+- Cost impact: upload time ≈ minutes per session (adapters ≤ 170 MB, embeddings ≤ 300 MB per checkpoint). No Kaggle API credentials needed.
+- Paper deviation: no.
+- Revisit-if: uploads fail from Kaggle, or the HF storage quota is hit.
+
+## D-042 Budget fallbacks and cut order (supersedes D-035)
+- Date: 2026-09-30
+- Context: User answers to Q3, Q5, Q6. Weekly quota is 28 session-h (not 30); the current window resets 2026-10-02 (~54 h after the answer).
+- Options considered: n/a (user decision).
+- Choice:
+  - **Tier 1 training fallback (Q3),** applied only if the M3c-T8 throughput probe projects > 9 h per run: first reduce max length 1024 → 512, but **only if ≤ 5% of training examples would be truncated** at 512 (measured by the M1-T8 token census). Only if that is not enough (or not allowed by the 5% rule), drop 3 epochs → 1. Each step is logged as its own paper deviation (App. C) in a new D entry when taken.
+  - **Cut order** (apply top-down; stop as soon as the budget fits):
+    1. Stretch Tier 2 models.
+    2. GPU ablations (NF4-extraction check; seeds reduced to 1 extra seed). Embedding-only ablations stay.
+    3. Harder benchmark subsampling: DT n=3 → 2 and benign + targeted system prompts; ToxiGen 100 → 50 prompts/group; Gemma DT to 2 of 3 system prompts.
+    4. Tier 1 training fallbacks as above (max len 512, then 1 epoch).
+    5. **Never cut** the core ΔB-vs-benchmark correlation for any Tier 0–2 model or benchmark, or the SEAT baseline.
+  - **Stretch models (Q6)** start only after the core Tier 0, Tier 1 and Tier 2 results (M4–M6 on the core models) are complete and budget remains.
+  - Weekly scheduling uses 28 h with a 2 h reserve (≈ 26 h usable). PLAN §8's W1–W4 plan (≈ 25/26/24/12 h) still fits; W2 is at the limit, so any overrun moves work into W4.
+- Why: User instructions.
+- Tradeoff accepted: The 512 cut changes the training distribution for long WildGuardMix examples.
+- Cost impact: 512 max length roughly halves Tier 1 training time if most examples are short; 1 epoch cuts it by ~3×.
+- Paper deviation: yes, when a fallback is taken (App. C max length / epochs).
+- Revisit-if: quota changes.
+
+## D-043 Topic mapping validated on ~100 hand-labelled prompts (supersedes D-024)
+- Date: 2026-09-30
+- Context: User answer to Q4. Otherwise identical to D-024.
+- Options considered: 30-item spot check (D-024) vs ~100 hand-labelled prompts.
+- Choice: Mapper = local `Qwen/Qwen2.5-7B-Instruct` via vLLM, greedy, fixed prompt listing the 9 topics with their member groups (T2) plus "none"; run once and freeze `resources/topic_map.csv` (prompt SHA-256 → topic). **Validation:** ~100 WGM SOCIAL STEREOTYPES prompts, stratified by predicted topic, are hand-labelled by the user; the mapping is accepted only if agreement ≥ 80%. The hand labels are stored privately (prompt hashes + labels in the HF store), never in git. Pairing (unchanged from D-024): each group inherits its topic's ΔBiasScore (primary); topic-mean ΔB is a sensitivity analysis. Logged as a reconstruction of App. B.
+- Why: User instruction; a larger validation set gives a tighter agreement estimate (±8% at 95% vs ±15% at n=30).
+- Tradeoff accepted: ~1–2 h of manual labelling by the user in M5.
+- Cost impact: ≈ 0.3 session-h once (unchanged).
+- Paper deviation: yes (reconstruction) — App. B.
+- Revisit-if: agreement < 80% (then revise the prompt or mapper model and re-validate).
+
+## D-044 Quota facts and access confirmation recorded (amends D-002)
+- Date: 2026-09-30
+- Context: User answers to Q1 and Q5.
+- Options considered: n/a.
+- Choice: Record as facts: the Kaggle account is phone-verified; all gated licences are accepted and `auth_check` passes with `HF_TOKEN` for Llama-3.1-8B-Instruct, Llama-3.2-1B-Instruct, gemma-3-4b-it, gemma-3-1b-it, Mistral-7B-Instruct-v0.3, allenai/wildguard and allenai/wildguardmix. Weekly GPU quota = 28 session-h. The M0 probe re-verifies access for **every** repo in PLAN §5 (including open ones) and records the result in `env.json`; D-002's hardware values are still to be filled from the probe.
+- Why: Keeps the budget and access facts in one place.
+- Tradeoff accepted: none.
+- Cost impact: none.
+- Paper deviation: no.
+- Revisit-if: the probe disagrees.
