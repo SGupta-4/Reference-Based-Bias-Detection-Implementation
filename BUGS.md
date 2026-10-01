@@ -132,7 +132,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-041–D-051; commits `2df82d9`, `93dbe07`, `c5c554b`, `e73077d`, `7d956c1`
 
 ## B-010 Feature: M1 sentence sets, metrics and statistics on CPU
-- Status: In progress — CPU work done; the Kaggle CPU run of the `ftdata` census (M1-T8) is pending, then `m1-green`.
+- Status: Fixed — M1 complete, `m1-green` on `8277155` (D-055, D-056).
 - How it was found or scoped: PLAN §7 M1 (M1-T1…T8).
 - Reproduction command: `ruff check src tests && pytest -q -m "not gpu"`; on Kaggle CPU: `python -m rbbd.cli run --config configs/base.yaml --stages sentences,ftdata`.
 - Hypotheses tried:
@@ -145,4 +145,5 @@ IDs are sequential and never reused.
 - Fix: `src/rbbd/data/{groups,hashing,sentences,ft_data}.py`, `src/rbbd/resources/sentences/*`, `src/rbbd/metrics/*`, `src/rbbd/analysis/stats.py`, stage registry in `runner.py`, configs, tests.
 - Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `67 passed, 7 deselected in 4.24s`; `grep -rn "PLACEHOLDER(M1)" tests` → no output.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-052, D-053, D-054
+  - Kaggle CPU (commit `8277155`, config hash `b4a36d44ede276ec`): `run --config configs/base.yaml --stages sentences,ftdata` → `"sentences": "ran"` (0.9 s), `"ftdata": "ran"` (205.3 s); `status` → both `valid`. Census results in D-055.
+- Linked commits and D-### entries: D-052, D-053, D-054, D-055, D-056; commit `8277155`

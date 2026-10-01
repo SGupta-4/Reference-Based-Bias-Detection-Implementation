@@ -761,3 +761,48 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: ≈ 10–20 min of a Kaggle CPU session (no GPU quota).
 - Paper deviation: no.
 - Revisit-if: WildGuardMix has fewer than 4,000 harmful rows (D-010 Revisit-if).
+
+## D-055 WildGuardMix census results (Kaggle CPU, 2026-10-01): splits complete, 512 fallback excluded, training budget re-baselined (amends D-010, D-042, PLAN §8)
+- Date: 2026-10-01
+- Context: M1-T8 `ftdata` stage on a Kaggle CPU session, commit `8277155`, config `configs/base.yaml` (hash `b4a36d44ede276ec`, ftdata run key `68e584d2b9e71a09`). Dataset `allenai/wildguardmix` / `wildguardtrain` at revision `d29c47f41c8b51348b5c8e8c81c039b3132b66d1` (86,759 rows).
+- Observed (facts):
+  - **Unharmful:** 16,621 eligible, 8,000 selected (all subcategory `benign`; adversarial share 0.535).
+  - **Harmful:** 8,341 eligible, 8,000 selected, no shortfall (adversarial share 0.376). Largest subcategory: `social_stereotypes_and_unfair_discrimination` with 1,374 examples.
+  - Chat-template lengths (tokens). Llama-3.2-1B has the same tokenizer as Llama-3.1-8B, so its numbers are identical:
+
+    | Model | Split | Mean | Median | p95 | > 512 | > 1024 | Tokens × 3 epochs @1024 |
+    |---|---|---|---|---|---|---|---|
+    | Llama-3.1-8B | unharmful | 434 | 371 | 970 | 30.2% | 4.0% | 10.13 M |
+    | Llama-3.1-8B | harmful | 662 | 610 | 1360 | 63.5% | 12.1% | 14.87 M |
+    | Mistral-7B | unharmful | 458 | 382 | 1089 | 33.2% | 6.5% | 10.49 M |
+    | Mistral-7B | harmful | 731 | 666 | 1559 | 68.1% | 17.9% | 15.83 M |
+    | Gemma-3-4B | unharmful | 415 | 352 | 955 | 28.6% | 3.7% | 9.68 M |
+    | Gemma-3-4B | harmful | 649 | 596 | 1357 | 61.4% | 11.5% | 14.55 M |
+    | Qwen2.5-0.5B | unharmful | 430 | 367 | 970 | 29.9% | 3.9% | 10.04 M |
+    | Qwen2.5-0.5B | harmful | 660 | 607 | 1358 | 63.1% | 12.0% | 14.80 M |
+- Consequences (choices):
+  1. **D-010 holds** with 8,000 harmful rows; nothing is upsampled.
+  2. **The max-length-512 fallback of D-042 is excluded.** It is allowed only if ≤ 5% of examples are truncated, and the measured share is 29–68%. If the M3c-T8 throughput probe projects > 9 h per Tier 1 run, the remaining fallback is 3 epochs → 1 epoch (user pre-approved, Q3).
+  3. **Budget re-baseline (PLAN §8).** The plan assumed 400 tokens/example (9.6 M tokens per run); harmful runs are 14.5–15.8 M (×1.5–1.65). u‖h run in parallel, so session time is set by the harmful run. At the assumed 350 tok/s per T4 for 7–8B QLoRA:
+     - Llama ≈ 11.8 h, Mistral ≈ 12.6 h, Gemma ≈ 5.8 h (fp16) to ≈ 13.6 h (fp32 fallback).
+     - Tier 1 training ≈ 32–40 session-h at 3 epochs (planned 25), or ≈ 11.5–14 h at 1 epoch.
+     - Tier 2 training scales by ≈ 1.54: ≈ 12.3 h (planned 8.0).
+     - Projected core total ≈ 96 session-h with 15% contingency at 3 epochs (planned 79), or ≈ 70 h if Tier 1 drops to 1 epoch.
+     - Both depend on throughput measured in M3c-T8, which replaces the 350 tok/s assumption. Every Tier 1 harmful run already projects above D-042's 9 h trigger at the assumed throughput.
+  4. **New M3 requirement:** 4–18% of examples exceed 1,024 tokens (the paper's limit). With prompt-head truncation (D-040), an example whose prompt alone fills the window keeps no completion tokens and so contributes no loss. M3-T1 must count these examples per model and drop them from the training set (logging the count) rather than train on empty targets.
+- Why: Measured inputs replace the planning assumption, as D-054 intended.
+- Tradeoff accepted: none yet; the epoch decision waits for measured throughput.
+- Cost impact: census took 205 s on a CPU session (no GPU quota).
+- Paper deviation: no (the 512 option is now off the table).
+- Revisit-if: the M3c-T8 throughput differs from 350 tok/s by more than ±30%.
+
+## D-056 DONE matrix correction: DC-07 belongs to M3, not M1
+- Date: 2026-10-01
+- Context: DONE.md listed "DC-07 (synthetic)" under M1 and PLAN §7 M1 listed DC-07, but the merge code (`models/adapters.py`, `models/interpolate.py`) is M3-T2/T3 and `tests/test_merge.py` was created as `PLACEHOLDER(M3)` at planning time. It was a planning inconsistency.
+- Options considered: implement the merge maths early just to tick the box, or correct the matrix.
+- Choice: Correct the matrix. DC-07 applies from M3 (where it was already listed). M1 is closed on DC-01–05, DC-08, DC-09, DC-15, DC-17, DC-19.
+- Why: A check is only meaningful against the code it tests; nothing about merging exists in M1.
+- Tradeoff accepted: none (DC-07 is still required at M3).
+- Cost impact: none.
+- Paper deviation: no.
+- Revisit-if: n/a.
