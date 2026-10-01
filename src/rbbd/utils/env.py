@@ -237,7 +237,8 @@ def probe_hardware(run_cmd: CmdRunner = _run) -> dict[str, Any]:
         # Native bf16 needs Ampere (sm80+); T4 is sm75 (D-002, D-045).
         "bf16_supported": bool(caps) and min(caps) >= 8.0,
         "nvidia_smi_rc": rc,
-        "disk": parse_df(df_out),
+        # /tmp and / are often the same overlay mount; keep one row per mount point.
+        "disk": list({row["mounted_on"]: row for row in parse_df(df_out)}.values()),
         "ram": parse_free(free_out),
         "torch": _torch_info(),
         "ephemeral_dir": str(ephemeral_dir()),
@@ -368,13 +369,33 @@ def make_random_lora(model_id: str, rank: int, out_dir: Path) -> Path:
     return out_dir
 
 
+def _traceback_tail(lines: int = 40) -> list[str]:
+    """Last `lines` lines of the current exception's traceback, redacted."""
+    import traceback
+
+    return [redact(line)[:300] for line in traceback.format_exc().splitlines()[-lines:]]
+
+
 def vllm_case(case: Mapping[str, Any], work_dir: Path) -> dict[str, Any]:
     """Run one vLLM case {name, model, tp, dtype, lora_rank|None} in-process; return a result.
 
-    A constructor failure (e.g. Gemma 3 refusing float16) is recorded, not raised.
+    Failures are recorded, not raised, with the stage that failed (`lora_build`,
+    `construct`, `generate_base`, `generate_lora`) and a redacted traceback tail, so
+    a Triton compile error can be told apart from a model or dtype problem (B-005).
+    Decoding is greedy and the texts are kept, so the Gemma fp16 and fp32 cases can
+    be compared token for token (B-001, D-005).
     """
-    result: dict[str, Any] = {"case": dict(case), "ok": False}
+    result: dict[str, Any] = {"case": dict(case), "ok": False, "failed_stage": None}
     start = time.time()
+
+    def fail(stage: str, exc: Exception) -> dict[str, Any]:
+        result["failed_stage"] = stage
+        result["refused"] = stage == "construct"
+        result["error"] = redact(f"{type(exc).__name__}: {exc}")[:2000]
+        result["traceback_tail"] = _traceback_tail()
+        result["seconds"] = round(time.time() - start, 1)
+        return result
+
     import vllm
     from vllm import LLM, SamplingParams
 
@@ -382,9 +403,12 @@ def vllm_case(case: Mapping[str, Any], work_dir: Path) -> dict[str, Any]:
     lora_rank = case.get("lora_rank")
     lora_dir = None
     if lora_rank:
-        lora_dir = make_random_lora(
-            case["model"], int(lora_rank), work_dir / f"lora_{case['name']}"
-        )
+        try:
+            lora_dir = make_random_lora(
+                case["model"], int(lora_rank), work_dir / f"lora_{case['name']}"
+            )
+        except Exception as exc:
+            return fail("lora_build", exc)
     kwargs: dict[str, Any] = {
         "model": case["model"],
         "tensor_parallel_size": int(case["tp"]),
@@ -399,23 +423,26 @@ def vllm_case(case: Mapping[str, Any], work_dir: Path) -> dict[str, Any]:
     try:
         llm = LLM(**kwargs)
     except Exception as exc:
-        result["refused"] = True
-        result["error"] = redact(f"{type(exc).__name__}: {exc}")[:2000]
-        result["seconds"] = round(time.time() - start, 1)
-        return result
+        return fail("construct", exc)
     result["refused"] = False
     result["engine_module"] = type(llm.llm_engine).__module__
-    params = SamplingParams(temperature=0.7, top_p=1.0, max_tokens=16, seed=0)
-    base = llm.generate(list(PROBE_PROMPTS), params)
+    params = SamplingParams(temperature=0.0, max_tokens=16)
+    try:
+        base = llm.generate(list(PROBE_PROMPTS), params)
+    except Exception as exc:
+        return fail("generate_base", exc)
     result["base_tokens"] = [len(o.outputs[0].token_ids) for o in base]
-    result["base_sample"] = base[0].outputs[0].text[:80]
+    result["base_texts"] = [o.outputs[0].text[:80] for o in base]
     ok = all(n > 0 for n in result["base_tokens"])
     if lora_dir is not None:
         from vllm.lora.request import LoRARequest
 
-        with_lora = llm.generate(
-            list(PROBE_PROMPTS), params, lora_request=LoRARequest("probe", 1, str(lora_dir))
-        )
+        try:
+            with_lora = llm.generate(
+                list(PROBE_PROMPTS), params, lora_request=LoRARequest("probe", 1, str(lora_dir))
+            )
+        except Exception as exc:
+            return fail("generate_lora", exc)
         result["lora_tokens"] = [len(o.outputs[0].token_ids) for o in with_lora]
         ok = ok and all(n > 0 for n in result["lora_tokens"])
     result["ok"] = ok

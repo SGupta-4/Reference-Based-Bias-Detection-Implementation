@@ -25,8 +25,9 @@ IDs are sequential and never reused.
 - Hypotheses tried: —
 - Fix: planned — D-005 (Gemma fp32 inference; fp32-compute fallback in training), D-006 (guard).
 - Verification: guard test passes (DC-09); the Gemma probe outcome is recorded in D-005.
+- Note 2026-10-01: vLLM 0.10.1.1 accepted Gemma-3-1B in fp16 and generated tokens (D-048). Whether those outputs are numerically sound is checked by comparing greedy fp16 and fp32 texts in the M0 rerun; until then D-005 (fp32 for Gemma inference) stands.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-005, D-006
+- Linked commits and D-### entries: D-005, D-006, D-048
 
 ## B-002 Padding-side / pooling errors
 - Status: Open (pre-registered)
@@ -59,19 +60,17 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-036
 
 ## B-005 vLLM on T4 (Turing) fails or misbehaves
-- Status: Open (pre-registered)
-- How it was found or scoped: Planning. Known failure modes:
-  - V1 engine requires newer GPUs, so the fallback or removal of V0 depends on the version.
-  - gemma3 refuses fp16.
-  - LoRA (punica/triton) kernels on sm75.
-  - TP=2 NCCL hangs.
-  - FlashAttention is unavailable on sm75.
-- Reproduction command: M0-T6 hello-world: `pytest -q -m gpu tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora`
-- Hypotheses tried: —
-- Fix: planned — pin vLLM (D-031). Gemma fp32. HF-generate fallback flag (D-021). M0 probe cases defined in D-047.
-- Verification: the probe writes the engine and backend used. The smoke run passes with the vLLM path.
-- GPU-hours lost: 0
-- Linked commits and D-### entries: D-021, D-031
+- Status: Open — reproduced 2026-10-01 (LoRA engines fail to build); diagnostic rerun pending.
+- How it was found or scoped: Planning listed V1 unsupported, gemma3 fp16 refusal, LoRA (Triton) kernels on sm75, TP=2 NCCL hangs, no FlashAttention on sm75. M0 Kaggle run S01 (session `20261001T091905Z`) confirmed the first and last, and hit the LoRA one.
+- Reproduction command: `pytest -q -m gpu tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora` (or `python -m rbbd.cli probe --vllm`) on Kaggle 2× T4.
+- Hypotheses tried:
+  - V1 engine on sm75: vLLM 0.10.1.1 falls back to V0 by itself ("Compute Capability < 8.0 is not supported by the V1 Engine. Falling back to V0"), attention backend XFormers. Not a blocker.
+  - Gemma 3 fp16 refused: **not** the case in 0.10.1.1 — the engine built and generated (see B-001 for numerics).
+  - LoRA kernels on sm75: both Qwen2.5-0.5B rank-32 LoRA cases (TP=1, TP=2) failed in `LLM(...)` with `RuntimeError: PassManager::run failed` after ~55–67 s. The message comes from Triton's MLIR compiler, and vLLM's LoRA (punica) kernels are Triton kernels compiled during the profile run, so LoRA is the leading suspect. Not yet isolated: there was no Qwen case without LoRA, and only the exception message (no traceback) was kept.
+- Fix: in progress — the probe now records the failing stage and a traceback tail and adds Qwen TP=1 fp16 without LoRA and with rank-16 LoRA (D-048). If LoRA is confirmed as the cause, the decision on how M5 generates the α-checkpoints is put to the user (merged weights on ephemeral disk vs a different vLLM/Triton pin vs HF generate).
+- Verification: pending the rerun.
+- GPU-hours lost: ≈ 0.05 (two failed cases ≈ 2 min).
+- Linked commits and D-### entries: D-021, D-031, D-047, D-048
 
 ## B-006 Benchmark package / data drift
 - Status: Open (pre-registered)
@@ -104,7 +103,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-019, D-029
 
 ## B-009 Feature: M0 environment probe, artifact store and pipeline skeleton
-- Status: In progress — CPU-side code and tests done and pushed; Kaggle run (`notebooks/00_probe.ipynb`) pending, then `m0-green`.
+- Status: In progress — Kaggle run S01 passed DC-16 and the store round trip; the vLLM GPU test failed (B-005). Diagnostic rerun pending, then `m0-green`.
 - How it was found or scoped: PLAN §7 M0 (tasks M0-T1…T7), with the Q1–Q6 answers (D-041–D-044).
 - Reproduction command: `ruff check src tests && pytest -q -m "not gpu"` (CPU); on Kaggle, `notebooks/00_probe.ipynb`.
 - Hypotheses tried:
@@ -118,6 +117,11 @@ IDs are sequential and never reused.
   - `pytest -q -m "not gpu"` → `51 passed, 7 deselected in 0.27s`
   - `grep -rn "PLACEHOLDER(M0)" tests` → no output (exit 1)
   - `python -m rbbd.cli probe --no-require-gpu --skip-access` → exit 0, env.json written; without `--no-require-gpu` → exit 2, `expected >= 2 GPUs, found 0`, env.json still written.
-  - Kaggle (DC-16, GPU test, store round trip): pending.
+  - Kaggle S01 (`20261001T091905Z`, commit `93dbe07`), from the notebook summary cell:
+    - DC-16 **PASS**: 2× Tesla T4, compute cap 7.5, 15,360 MiB each; `bf16_supported: false`; `requirements.ok: true`; RAM 31 GiB; `/kaggle/working` 20G; `access_all_ok: true` (no failures).
+    - Store round trip **PASS**: `ok: true`, `private: true`, repo type `model`, commit `594c0470b4d638349cdf9f8a6d6bbaf6fc3b4f45`.
+    - vLLM GPU test **FAIL**: Qwen LoRA cases `RuntimeError: PassManager::run failed` (B-005); Gemma fp16 and fp32 cases ok.
+    - Not yet reported: `pip check`, Kaggle `pytest -q -m "not gpu"` and `ruff` outputs.
+  - Diagnostics change (D-048): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `52 passed, 7 deselected in 0.27s`.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-041, D-042, D-043, D-044, D-045, D-046, D-047
+- Linked commits and D-### entries: D-041, D-042, D-043, D-044, D-045, D-046, D-047, D-048

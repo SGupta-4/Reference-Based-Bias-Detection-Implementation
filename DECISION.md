@@ -637,3 +637,22 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: ≈ 0.25 session-h inside the M0 1.0 h budget.
 - Paper deviation: no.
 - Revisit-if: TP=2 hangs (then M5 uses TP=1 per GPU for all models ≤ 4B and HF fallback for 7–8B).
+
+## D-048 Observed Kaggle environment (S01, 2026-10-01) and a diagnostic vLLM probe rerun (amends D-002, D-005, D-047)
+- Date: 2026-10-01
+- Context: First M0 run of `notebooks/00_probe.ipynb` on Kaggle (session `20261001T091905Z`, commit `93dbe07`). D-002 asked for observed values; the vLLM probe produced a failure that the original probe could not localise.
+- Observed (facts, not choices):
+  - GPUs: 2× Tesla T4, compute capability 7.5, 15,360 MiB each. `bf16_supported` (native) = false; torch's emulation-inclusive flag = **true**, confirming D-045's choice.
+  - torch 2.7.1+cu126 installed over Kaggle's image; CUDA available, 2 devices.
+  - RAM 31 GiB total, 29 GiB available. `/kaggle/working` 20 GB. No `/kaggle/tmp` or `/kaggle/temp`: `ephemeral_dir()` = `/tmp` on the root overlay (1.1 TB free on the host overlay; the per-session usable limit is not known).
+  - All 13 repos in PLAN §5 pass `auth_check` with `HF_TOKEN`. The store `SarthakGupta414/rbbd-artifacts` resolves as a **model** repo, is private, and the 1 MB round trip matched (store commit `594c0470b4d638349cdf9f8a6d6bbaf6fc3b4f45`).
+  - vLLM 0.10.1.1 falls back to the **V0** engine ("Compute Capability < 8.0 is not supported by the V1 Engine") with the **XFormers** attention backend.
+  - Qwen2.5-0.5B with LoRA (rank 32, TP=1 and TP=2) failed during engine construction with `RuntimeError: PassManager::run failed`, a Triton compiler error (B-005). No no-LoRA Qwen case existed, so the cause was not isolated.
+  - Gemma-3-1B-it in **fp16 was accepted** by vLLM 0.10.1.1 (D-005 expected a refusal) and produced tokens; numerical soundness unverified because decoding was sampled.
+- Options considered: (A) decide the LoRA-generation path now; (B) one ~10-minute diagnostic rerun first.
+- Choice: B. The probe now records the failing stage (`lora_build`, `construct`, `generate_base`, `generate_lora`) and a redacted traceback tail; decoding is greedy and texts are kept; cases added: Qwen TP=1 fp16 **no LoRA** and **LoRA rank 16**. D-005 (Gemma fp32 for inference) stays in force until the greedy fp16 vs fp32 comparison is in.
+- Why: The LoRA-generation path (D-007's vLLM multi-LoRA, E8) is an architectural choice; it should rest on a localised failure, not a guess.
+- Tradeoff accepted: one more short GPU session before `m0-green`.
+- Cost impact: ≈ 0.2 session-h (6 cases × ~1 min + install).
+- Paper deviation: no.
+- Revisit-if: the rerun shows the no-LoRA Qwen case also failing (then the problem is not LoRA-specific).

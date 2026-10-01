@@ -10,8 +10,9 @@ pytestmark = pytest.mark.gpu
 
 
 def test_vllm_hello_tp1_tp2_lora():
-    """M0-T6 (B-005, D-047): vLLM starts on 2x T4 with TP=1 and TP=2 in fp16 and serves a rank-32
-    LoRA; the Gemma 3 fp16 and fp32 outcomes are recorded either way. Results land in
+    """M0-T6 (B-005, D-047, D-048): vLLM starts on 2x T4 with TP=1 and TP=2 in fp16 and serves a
+    rank-32 LoRA; the no-LoRA and rank-16 cases localise a failure; the Gemma 3 fp16 and fp32
+    outcomes are recorded either way. Results land in
     `<artifacts>/env/<session>/vllm_probe.json` for upload."""
     import torch
 
@@ -23,15 +24,18 @@ def test_vllm_hello_tp1_tp2_lora():
         r["case"]["name"]: r for r in env_mod.probe_vllm(cfg.get("probe.vllm_cases"), out_dir)
     }
 
+    # Every case's outcome must be recorded before any assertion fails, so a single
+    # Kaggle run answers all of B-005's questions.
+    assert (out_dir / "vllm_probe.json").exists()
+    assert results["qwen05b_tp1_fp16_nolora"]["ok"], results["qwen05b_tp1_fp16_nolora"].get("error")
     for name in ("qwen05b_tp1_fp16_lora32", "qwen05b_tp2_fp16_lora32"):
         r = results[name]
-        assert r["ok"], f"{name}: {r.get('error')}"
+        assert r["ok"], f"{name} failed at {r.get('failed_stage')}: {r.get('error')}"
         assert len(r["base_tokens"]) == 4 and len(r["lora_tokens"]) == 4
         assert r["backend_lines"], f"{name}: no engine/backend line captured"
     for name in ("gemma3_1b_tp1_fp16", "gemma3_1b_tp1_fp32"):
         r = results[name]
         assert r["ok"] or r.get("error"), f"{name}: outcome not recorded"
-    assert (out_dir / "vllm_probe.json").exists()
 
 
 def test_resume_generation_shards():

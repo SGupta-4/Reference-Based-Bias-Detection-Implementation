@@ -51,7 +51,8 @@ python -m rbbd.cli probe [--config configs/base.yaml] [--no-require-gpu] [--skip
      │    └─ raise HardwareError if < 2 GPUs / sm < 7.5 / < 14 GiB   (exit code 2)
      ├─ --vllm: utils.env.probe_vllm(cfg.probe.vllm_cases, out_dir)
      │    └─ per case: subprocess `python -m rbbd.cli vllm-case --json <case> --out vllm_<name>.json`
-     │         └─ utils.env.vllm_case(): make_random_lora() (CPU) → vllm.LLM(...) → generate base + LoRA
+     │         └─ utils.env.vllm_case(): make_random_lora() (CPU) → vllm.LLM(...) → greedy generate base + LoRA;
+     │            on failure records failed_stage + traceback tail (D-048)
      │       → vllm_<name>.log, vllm_probe.json
      ├─ --check-store: utils.store.open_store(repo_id, "auto") → roundtrip(): write roundtrip.bin,
      │    upload_dir(env/<session>) [private check first] → forced download into empty cache → sha256 compare
