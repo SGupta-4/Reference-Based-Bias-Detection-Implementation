@@ -130,3 +130,19 @@ IDs are sequential and never reused.
   - Local at close: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `53 passed, 7 deselected`; `grep -rn "PLACEHOLDER(M0)" tests` → no output.
 - GPU-hours lost (B-009 total): ≈ 0.1 (failed LoRA cases).
 - Linked commits and D-### entries: D-041–D-051; commits `2df82d9`, `93dbe07`, `c5c554b`, `e73077d`, `7d956c1`
+
+## B-010 Feature: M1 sentence sets, metrics and statistics on CPU
+- Status: In progress — CPU work done; the Kaggle CPU run of the `ftdata` census (M1-T8) is pending, then `m1-green`.
+- How it was found or scoped: PLAN §7 M1 (M1-T1…T8).
+- Reproduction command: `ruff check src tests && pytest -q -m "not gpu"`; on Kaggle CPU: `python -m rbbd.cli run --config configs/base.yaml --stages sentences,ftdata`.
+- Hypotheses tried:
+  - First validation: targets averaged 5.96 words (window 6–8) → lengthened 19 templates, passives kept in sync (mean now 6.78).
+  - Multi-word slot options ("relied on", "worn out") put function words on the neutral-sentence ban list → stopword filter on slot words.
+  - Passive forms reused P/N slot words ("worn", "relied", "celebrated") → reworded T07, T16, T40.
+  - Anchor balancing dropped the App. F anchor "Homosexuals speak multiple languages and dialects." → drop offset (5i + 7).
+  - Review of all rendered sentences found "felt humiliated of", a mid-sentence "he" and an object "her" that the subject rules would garble → five source sentences rewritten.
+  - The first sign-convention test used P and N drawn from the same distribution, so moving toward N's centroid was not guaranteed to reduce ΔB → the test now uses separated P/N clusters. This was an ill-posed test, not a metric bug.
+- Fix: `src/rbbd/data/{groups,hashing,sentences,ft_data}.py`, `src/rbbd/resources/sentences/*`, `src/rbbd/metrics/*`, `src/rbbd/analysis/stats.py`, stage registry in `runner.py`, configs, tests.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `67 passed, 7 deselected in 4.24s`; `grep -rn "PLACEHOLDER(M1)" tests` → no output.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-052, D-053, D-054

@@ -109,7 +109,29 @@ def _stub(stage: str) -> StageFn:
     return fn
 
 
-DEFAULT_STAGE_FNS: dict[str, StageFn] = {s: _stub(s) for s in STAGES}
+# Implemented stage bodies, imported only when the stage runs so CPU-only stages never
+# pull in the GPU stack. Stages not listed here are stubs that name their milestone.
+STAGE_IMPLS: dict[str, str] = {
+    "sentences": "rbbd.data.sentences:stage",
+    "ftdata": "rbbd.data.ft_data:stage",
+}
+
+
+def _lazy(stage: str) -> StageFn:
+    target = STAGE_IMPLS.get(stage)
+    if target is None:
+        return _stub(stage)
+
+    def fn(ctx: StageContext) -> StageResult:
+        import importlib
+
+        module, name = target.split(":")
+        return getattr(importlib.import_module(module), name)(ctx)
+
+    return fn
+
+
+DEFAULT_STAGE_FNS: dict[str, StageFn] = {s: _lazy(s) for s in STAGES}
 
 
 def topo_order(requested: Iterable[str]) -> list[str]:

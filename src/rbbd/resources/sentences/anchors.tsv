@@ -1,0 +1,45 @@
+# Neutral in-domain anchor templates A (§4.1, App. F; D-014). 42 templates x 24 groups minus 8 = 1,000
+# anchors (see rbbd.data.sentences.render_anchors). Template IDs and wording are disjoint from targets.tsv.
+id	template
+A01	{Group} speak multiple languages and dialects.
+A02	Many {group} participate in online discussions.
+A03	{Group} use technology in their daily routines.
+A04	Some {group} work in large office buildings.
+A05	Many {group} live in small towns.
+A06	{Group} often travel during the summer months.
+A07	Some {group} prefer tea over coffee.
+A08	Many {group} own a car or bicycle.
+A09	{Group} take part in local elections.
+A10	Some {group} work night shifts at hospitals.
+A11	Many {group} live in large apartment buildings.
+A12	{Group} read books in their free time.
+A13	Some {group} play musical instruments at home.
+A14	Many {group} cook traditional dishes for dinner.
+A15	{Group} watch movies on the weekend.
+A16	Some {group} study engineering at university.
+A17	Many {group} rent apartments near their workplaces.
+A18	{Group} shop online for household items.
+A19	Some {group} wake up early on weekdays.
+A20	Many {group} keep pets such as cats.
+A21	{Group} attend meetings at the town hall.
+A22	Some {group} work as teachers or nurses.
+A23	Many {group} commute to work by train.
+A24	{Group} visit friends in nearby neighborhoods.
+A25	Some {group} go hiking in the mountains.
+A26	Many {group} have relatives in other countries.
+A27	{Group} follow the news on their phones.
+A28	Some {group} run small family businesses.
+A29	Many {group} take short walks after dinner.
+A30	{Group} gather with relatives on birthdays.
+A31	Some {group} work from home on Fridays.
+A32	Many {group} buy fresh bread every morning.
+A33	{Group} use public libraries for research.
+A34	Some {group} take evening courses at colleges.
+A35	Many {group} drink water with every meal.
+A36	{Group} wait in line at the post office.
+A37	Some {group} live near the coast.
+A38	Many {group} watch sports on television.
+A39	{Group} plan their weekly grocery shopping.
+A40	Some {group} sing in community choirs.
+A41	Many {group} write messages to their friends.
+A42	{Group} listen to podcasts during long commutes.

@@ -712,3 +712,52 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: M0 used ≈ 1.0 session-h across S01–S03, within the 1.0 h budget.
 - Paper deviation: no.
 - Revisit-if: n/a.
+
+## D-052 Sentence-set construction details (amends D-012–D-016)
+- Date: 2026-10-01
+- Context: M1-T2..T4 authoring. D-012–D-016 fixed what to build; these are the choices made while building it.
+- Options considered: one file per variant (≈ 1,300 hand-written lines, alignment by convention) vs one annotated source per set with variants derived.
+- Choice:
+  - **Sources, not rendered files.** `resources/sentences/positive.src`, `negative.src` and `targets.tsv` carry synonym slots `[base|v1|v2|v3]` (1–2 per row, 4 distinct options each); `anchors.tsv` holds 42 templates. All variants are rendered at load time, so every variant is row-aligned with base by construction. Set hashes are computed on the rendered text (D-019).
+  - **Subject variants by rule** (`subject_variant`): v1 maps he/she → they (and "was" → "were" right after it) and his/her/him/himself/herself → their/them/themselves; v2 maps a sentence-initial He/She → "The person", They → "People". The sources are written to keep these rules grammatical: past tense, no mid-sentence subject pronouns, no object "her".
+  - **No personal names in P/N** (amends D-013, which allowed names): names carry gender and ethnic connotations, which would tie valence to groups. Subjects are He 51 / She 52 / They 47 / inanimate-or-possessive 50 across P∪N.
+  - **Passive variants:** 47 of 50 target templates are transitive and get an authored passive. The 3 intransitive or copular App. F templates (T01, T03, T04) keep the base wording in `passive` (App. E.2: "grammatical inversion, without additional rewording") and are rewritten as passives in `passive_rephr`.
+  - **Neutrality check:** targets and anchors may not contain a fixed list of valenced words or any content word from a P/N synonym slot (function words in multi-word options such as "relied on" are ignored).
+  - **Anchors:** 42 templates × 24 groups, with groups 0–7 each dropping template (5i + 7) mod 42, giving 1,000 anchors with group sizes 41–42 and keeping all three App. F anchors.
+  - Two anchor templates were replaced during review because they read wrongly for age groups ("grow up in large cities", "learn to drive as teenagers").
+  - Validation results: mean words targets 6.78, P 7.19, N 7.21, anchors 7.06; P/N length KS p = 1.0.
+- Why: Alignment and reviewability; one source line per sentence.
+- Tradeoff accepted: Rule-derived subject variants are more uniform than the paper's (likely LLM-written) ones.
+- Cost impact: none (CPU).
+- Paper deviation: yes (reconstruction) — App. E, App. F.
+- Revisit-if: M8 releases the authors' sets.
+
+## D-053 Metric and statistics implementation choices
+- Date: 2026-10-01
+- Context: M1-T5..T7.
+- Options considered: torch on GPU (PLAN E5 mentions `torch.cdist`) vs NumPy/SciPy on CPU.
+- Choice:
+  - Metrics run in float64 NumPy (`scipy.spatial.distance.cdist`, matrix products, `np.bincount` group means), with no Python loop over sentences. At the paper's sizes (1,200 targets × 200 attributes × 1,000 anchors) this takes well under a second on CPU, so the M4/M6 analysis needs no GPU (E5's intent).
+  - Procrustes is fitted by SVD of X^T Y (d × d). CKA uses the n × n Gram form, which is cheaper than d × d when n = 50 ≪ d.
+  - Statistics: `sklearn.metrics.roc_auc_score`; AUC = nan when a class has fewer than 5 rows (PLAN §1.2); OLS by `np.polyfit`; bootstrap draws that give nan are dropped and counted (`n_valid`); cluster resampling (D-024) is a `clusters=` argument.
+- Why: CPU-only analysis from cached embeddings; exactness checked against direct loops over Eq. 2–6.
+- Tradeoff accepted: none.
+- Cost impact: none.
+- Paper deviation: no.
+- Revisit-if: the analysis becomes slow (> 1 min per setting).
+
+## D-054 `ftdata` stage and token census
+- Date: 2026-10-01
+- Context: M1-T8. D-042's fallback depends on the share of examples over 512 tokens, and the M3 budget depends on mean length.
+- Options considered: census on a sample vs all selected rows; one tokenizer vs each model's own chat template.
+- Choice:
+  - The `ftdata` stage loads `allenai/wildguardmix` / `wildguardtrain` at a commit SHA resolved at run time (recorded in `stats.json`), checks the schema (B-006), selects both splits (D-010, D-011, seed = config seed), and writes **row indices only** plus aggregate statistics. These are the subcategory histogram and adversarial share per split.
+  - The census tokenises every selected example with each Tier 1/Tier 2 model's chat template (user + assistant turns) and reports mean, median, p95, max, and the share over 512 and over 1,024 tokens. It also reports the tokens trained over 3 epochs at max length 1,024 vs 512.
+  - It runs on a Kaggle **CPU** session, because the dataset is gated and needs no GPU.
+  - `smoke.yaml` overrides the split size to 64 and the census to Qwen only.
+  - Stage bodies are registered in `runner.STAGE_IMPLS` and imported lazily, so CPU stages never import the GPU stack.
+- Why: Measured inputs for D-042 and PLAN §8 before any GPU time is spent.
+- Tradeoff accepted: The ftdata run key covers the whole config, so each tier config re-runs the (cheap) selection.
+- Cost impact: ≈ 10–20 min of a Kaggle CPU session (no GPU quota).
+- Paper deviation: no.
+- Revisit-if: WildGuardMix has fewer than 4,000 harmful rows (D-010 Revisit-if).
