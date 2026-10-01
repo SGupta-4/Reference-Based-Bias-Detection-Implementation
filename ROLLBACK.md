@@ -40,8 +40,9 @@
 |---|---|---|---|---|
 | `m0-green` | `7d956c162e9c6dfec9872104c7951a67d0f9e1d4` | `00_probe.ipynb` (Kaggle version not reported; session `20261001T094200Z`, run S03) | `a3d5ae3a9bf9c2e3a557af9a82acff77c08b13d4` | 2026-10-01 |
 | `m1-green` | `8277155ce97e4ca95388fd1c1399fdc5f389769a` | `run_stage.ipynb` (CPU; Kaggle version not reported; config hash `b4a36d44ede276ec`) | not reported (sync output not pasted) | 2026-10-01 |
+| `m2-green` | `8e26c8d75dfe64dc26e3fb6b1e834f038dbb46dd` | `m2_extract.ipynb` (Kaggle version not reported; pipeline runs session `20261001T113125Z` at `64498de`, GPU tests session `20261001T122025Z` at `8e26c8d`) | embeddings `a9babfcbc23f507ab7639c68870f2f58a7c30afc`; env `1eeebb91423a60312d134486d098414cc5a25842` | 2026-10-01 |
 
-Note: `m0-green` and `m1-green` were created as annotated tags in the agent session, but pushing tags is blocked by that session's git policy (HTTP 403). Until the user pushes it (`git tag -a m0-green 7d956c162e9c6dfec9872104c7951a67d0f9e1d4 -m "M0 green" && git push origin m0-green`, or a GitHub release on that commit), roll back to the commit SHAs above. To push both: `git tag -a m1-green 8277155ce97e4ca95388fd1c1399fdc5f389769a -m "M1 green" && git push origin m1-green` (and the `m0-green` command above).
+Note: `m0-green` and `m1-green` were created as annotated tags in the agent session, but pushing tags is blocked by that session's git policy (HTTP 403). Until the user pushes it (`git tag -a m0-green 7d956c162e9c6dfec9872104c7951a67d0f9e1d4 -m "M0 green" && git push origin m0-green`, or a GitHub release on that commit), roll back to the commit SHAs above. To push both: `git tag -a m1-green 8277155ce97e4ca95388fd1c1399fdc5f389769a -m "M1 green" && git push origin m1-green` (and the `m0-green` command above). Same for `m2-green`: `git tag -a m2-green 8e26c8d75dfe64dc26e3fb6b1e834f038dbb46dd -m "M2 green" && git push origin m2-green`.
 
 ## Pre-edit rollback targets
 

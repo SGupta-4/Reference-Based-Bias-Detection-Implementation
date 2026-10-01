@@ -95,7 +95,7 @@ M3 renders training records with `to_messages(row)` (TRL prompt–completion, D-
 2. Runner launches u and h as two processes, on `cuda:0` and `cuda:1` (D-003).
 Resume behaviour: `checkpoint-*` every ~20 min of wall-clock. `complete=false` manifests trigger resume.
 
-## Stage: embed (implemented for `ref`, M2; α-checkpoints M4)
+## Stage: embed (implemented for `ref`, M2 green — D-064; α-checkpoints M4)
 Entry: `run --stages sentences,embed` → `runner.STAGE_IMPLS["embed"]` → `embed.extract.stage(ctx)`
 Depends on `sentences` only while `embed.checkpoints == [ref]` (`runner.stage_deps`, D-057).
 1. Read `sentences/<run_key>/union.json` from the upstream manifest → texts, union_hash, index

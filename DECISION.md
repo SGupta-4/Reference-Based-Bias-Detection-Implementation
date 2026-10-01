@@ -899,3 +899,24 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: none (same GPU test).
 - Paper deviation: no.
 - Revisit-if: Part 1 fails with pre-cast vectors. That would be a real padding bug.
+
+## D-064 M2 closed: every M2 DONE check passes; `m2-green` = `8e26c8d`
+- Date: 2026-10-01
+- Context: DONE requires DC-01, DC-02, DC-06, DC-09, DC-10, DC-11 (sentences+embed), DC-12, DC-15 and DC-19 for M2. Evidence comes from Kaggle 2×T4 sessions `20261001T113125Z` (commit `64498de`; pipeline runs) and `20261001T122025Z` (commits `ac0f1ce` → `8e26c8d`; GPU tests). The code paths behind the pipeline runs did not change after `64498de`. `8e26c8d` added only `keep_fp32` (default off) and test code.
+- Results:
+  - DC-01: `ruff check src tests` → `All checks passed!`.
+  - DC-02: `python -m pytest -q -m "not gpu"` → `79 passed, 8 deselected in 11.18s`.
+  - DC-06 (D-061/D-063): `3 passed, 14 warnings in 20.53s`.
+    - fp32 pre-cast max_abs: last 1.36e-4, max 7.31e-4, mean 1.83e-4, all within `atol=1e-3, rtol=1e-4`. The tightest is max pooling, at 7.31e-4 against an allowance of ≥ 1e-3.
+    - fp16 min cosine: mean 0.9999973, max 0.9999936, last 0.9999967 (threshold 0.9999).
+  - DC-09: `test_guard_active_on_real_model` passed in both sessions.
+  - DC-10: second smoke run → `cache hit: stage embed`, with no load and no forward.
+  - DC-11 (sentences+embed): smoke embed stage done in 15.2 s.
+  - DC-12: Llama-3.1-8B load 73.4 s + extraction 71.4 s = 144.8 s ≤ 900 s.
+  - DC-15: docs in the same commits. DC-19: `grep -rn "PLACEHOLDER(M2)" tests` → no output.
+- Choice: M2 is green. Tag `m2-green` on `8e26c8d75dfe64dc26e3fb6b1e834f038dbb46dd` (the exact commit run on Kaggle).
+- Why: Every check passes with its stated output.
+- Tradeoff accepted: DC-06's fp32 margin for max pooling is modest (7.3e-4 vs 1e-3). It is recorded so that a future drift is noticed.
+- Cost impact: M2 used ≈ 0.6 session-h on Kaggle in total (three sessions).
+- Paper deviation: no (precision deviations are logged in D-005/D-062).
+- Revisit-if: an `embed.schema_version` bump (ROLLBACK lists DC-06, 09, 10, 11, 12 to re-run).

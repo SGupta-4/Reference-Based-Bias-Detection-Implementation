@@ -149,7 +149,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-052, D-053, D-054, D-055, D-056; commit `8277155`
 
 ## B-011 Feature: M2 embedding extraction and cache
-- Status: In progress. The second Kaggle run (session `20261001T113125Z`, commit `64498de`) passed DC-09, DC-10 and DC-12 and settled the Gemma probe (D-062). DC-06 failed its D-058 rule (B-013). Under D-061 (session `20261001T122025Z`), the fp16 part passed and the fp32 part failed on a test-measurement bug (B-014). Next: rerun `test_padding_invariance_fp32`, then `m2-green`.
+- Status: In progress. The second Kaggle run (session `20261001T113125Z`, commit `64498de`) passed DC-09, DC-10 and DC-12 and settled the Gemma probe (D-062). DC-06 failed its D-058 rule (B-013). Under D-061 (session `20261001T122025Z`), the fp16 part passed and the fp32 part failed on a test-measurement bug (B-014), which was then fixed. **Done:** all M2 checks pass (D-064); tagged `m2-green`.
 - How it was found or scoped: PLAN §7 M2 (M2-T1…T4).
 - Reproduction command: CPU: `pytest -q -m "not gpu"`; Kaggle: `notebooks/m2_extract.ipynb`.
 - Hypotheses tried:
@@ -186,7 +186,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `92e836e` (failing run), `64498de` (fix, verified); D-031, D-060; B-011
 
 ## B-013 Bug: DC-06 fp16 padding-invariance rule (D-058) cannot be met by fp16 arithmetic
-- Status: Rule replaced (D-061). Under D-061, part 2 (fp16 cosine) passed on Kaggle. Part 1 failed because of a test-measurement bug (B-014); a rerun is pending.
+- Status: **Closed.** Both parts of D-061 pass on Kaggle (B-014 fixed the part-1 measurement).
 - How it was found or scoped: `test_padding_invariance_fp16` failed on Kaggle (session `20261001T113125Z`, commit `64498de`): `1 failed, 1 passed in 13.09s`.
 - Reproduction command: `pytest -q -m gpu tests/gpu/test_extract_gpu.py::test_padding_invariance_fp16` at `64498de` on 2×T4.
 - Observed (`m2_extract_gpu.json`), max |alone − batched| with max |value|: mean 0.146 / 124.7; max 0.625 / 183.1; last 0.156 / 146.8. The fp16 step in [128, 256) is 0.125, so these gaps are 1–5 ulps.
@@ -206,13 +206,13 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `64498de`, `ac0f1ce`; D-058, D-061, D-063; B-011, B-014
 
 ## B-014 Bug: DC-06's fp32 check compared fp16-rounded outputs
-- Status: Fixed on CPU; Kaggle verification pending.
+- Status: **Closed.** Fixed and verified on Kaggle.
 - How it was found or scoped: `test_padding_invariance_fp32` failed on Kaggle (session `20261001T122025Z`, commit `ac0f1ce`). `m2_extract_gpu.json` shows `padding_invariance_fp32` max_abs: last 0.00390625, max 0.00390625, mean 0.001953125; max_rel ≈ 1.6e-3–1.8e-3; max |value| 146.75 / 182.75 / 124.56.
 - Reproduction command: `pytest -q -m gpu tests/gpu/test_extract_gpu.py::test_padding_invariance_fp32` at `ac0f1ce` on 2×T4.
 - Hypotheses tried:
   - Padding leak in fp32. Rejected: a leak would give O(1) errors. These gaps are 1–2 fp16 ulps, 160× below the fp16-compute gap.
   - fp16 output cast. Confirmed: the gaps are exactly 2⁻⁸ and 2⁻⁹, the fp16 rounding steps in [4, 8) and [2, 4). `encode` casts every pooled vector to fp16 before returning, so the test never saw fp32 values.
 - Fix: `encode(..., keep_fp32=True)` returns the pre-cast pooled vectors, and the fp16 guard still runs. `test_padding_invariance_fp32` uses it. New CPU test `test_encode_keep_fp32_matches_cached_fp16` checks that casting the kept vectors reproduces the default fp16 output exactly. Thresholds are unchanged (D-063).
-- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `79 passed, 8 deselected in 16.45s`. A dry run of `test_padding_invariance_fp32` with the tiny model gives max_abs 2.2e-8 / 6.0e-8 / 1.2e-7 (mean/max/last): fp32-level values, no fp16 steps. Kaggle: pending.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `79 passed, 8 deselected in 16.45s`. A dry run of `test_padding_invariance_fp32` with the tiny model gives max_abs 2.2e-8 / 6.0e-8 / 1.2e-7 (mean/max/last): fp32-level values, no fp16 steps. Kaggle (session `20261001T122025Z`, commit `8e26c8d`): `3 passed in 20.53s`. `padding_invariance_fp32` max_abs is last 1.36e-4, max 7.31e-4, mean 1.83e-4. These are non-power-of-two values, which confirms the comparison now sees fp32 values. Store commit `1eeebb91`.
 - GPU-hours lost: ≈ 0.1 (one short session)
-- Linked commits and D-### entries: `ac0f1ce`; D-061, D-063; B-013
+- Linked commits and D-### entries: `ac0f1ce`, `8e26c8d`; D-061, D-063, D-064; B-013
