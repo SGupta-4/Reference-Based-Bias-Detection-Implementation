@@ -92,6 +92,7 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: +≈ 5 h training and +≈ 3 h benches versus fp16 (included in PLAN §8).
 - Paper deviation: yes — App. C precision.
 - Revisit-if: the fp16 probes pass cleanly (guard never fires and outputs match fp32 on 50 prompts within tolerance). Then switch to fp16 via a superseding entry.
+- M2-T4 extraction probe outcome (2026-10-01): fp16 fails. The guard fired on batch 0 with every value NaN, so Gemma-3-4B embeddings stay fp32 (D-062).
 
 ## D-006 Mandatory NaN/Inf guard on every hidden-state extraction and training step
 - Date: 2026-09-30
@@ -824,7 +825,7 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Paper deviation: no.
 - Revisit-if: M4 needs reference and α-checkpoints in one stage run (it will reuse the cached `ref` entry either way).
 
-## D-058 Pre-registered M2 acceptance rules: DC-06 tolerance and the Gemma fp16 criterion (amends DONE DC-06, D-005)
+## D-058 Pre-registered M2 acceptance rules: DC-06 tolerance and the Gemma fp16 criterion (amends DONE DC-06, D-005) — DC-06 rule superseded by D-061 (the Gemma fp16 criterion stays in force)
 - Date: 2026-10-01 (written before any M2 GPU result)
 - Context: DC-06 said "atol 1e-3 in fp16". Embeddings are cached in fp16, whose rounding step is ≈ 0.008 for values in [8, 16) (Qwen and Llama post-norm hidden states reach such values), so a pure absolute tolerance of 1e-3 cannot be met even by identical computations that round differently. D-005 needed an explicit rule for when Gemma may run in fp16.
 - Options considered: atol only; atol + rtol; cosine-only.
@@ -862,3 +863,28 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: ≈ +10 s setup per session. The failed run cost one T4×2 session of ≈ 0.2 h (downloads only).
 - Paper deviation: no. The paper stack (App. C) does not list torchvision; it is a transitive dependency.
 - Revisit-if: The torch pin changes (re-pair torchvision), or `vllm` requires a different torchvision.
+
+## D-061 DC-06 rule replaced: fp32 exact padding check plus fp16 per-sentence cosine (supersedes the DC-06 part of D-058)
+- Date: 2026-10-01 (written after the first DC-06 result, before any data under the new rule)
+- Context: The first Kaggle run of `test_padding_invariance_fp16` (session `20261001T113125Z`, commit `64498de`) failed the D-058 rule `assert_close(atol=1e-3, rtol=1e-3)`. Max |alone − batched|: mean 0.146, max 0.625, last 0.156, on values up to 124.7 / 183.1 / 146.8. D-058's premise was wrong: post-norm Qwen values reach ~183, not [8, 16). In [128, 256), fp16's rounding step is 0.125, so rtol 1e-3 is about one ulp. The rule therefore demanded bit-identical results from different GEMM shapes after 24 fp16 layers. With right padding and causal attention, pad positions come after every real token and cannot reach it, so a mathematical leak is impossible in the forward pass. A leak can only come from pooling (covered on CPU by `tests/test_pooling.py`) or from mask/position handling, which an fp32 run exposes.
+- Options considered: (a) fp32 exact check + fp16 per-sentence cosine; (b) loosen the fp16 rtol to 1e-2; (c) keep D-058, leaving M2 red (fp32 for Llama-8B does not fit 2×T4). The user chose (a) on 2026-10-01.
+- Choice: DC-06 on GPU passes only if both tests in `tests/gpu/test_extract_gpu.py` pass:
+  1. `test_padding_invariance_fp32`: Qwen2.5-0.5B in fp32. The short sentence pooled alone vs inside a padded batch of three passes `assert_close(atol=1e-3, rtol=1e-4)` for mean, max and last.
+  2. `test_padding_cosine_fp16_smoke`: Qwen2.5-0.5B in fp16. For each of the 85 smoke-union sentences, compare the sentence pooled alone with the same sentence inside its production batch (the smoke `embed` settings). Per-sentence cosine ≥ 0.9999 for mean, max and last.
+  The test also records, without asserting, the cosine and relative L2 error of fp16 (alone and batched) against fp32. Those numbers set padding noise against fp16's own error.
+- Why: (1) proves the padding logic is exact; any leak shows up as an O(1) error, far above fp32 rounding. (2) bounds fp16 padding noise at the level that matters downstream: RR uses cosines, and SEAT uses cosines too. 0.9999 means the angle stays within 0.81°.
+- Tradeoff accepted: The fp16 bound is on direction, not on single coordinates. Ref and audited checkpoints share the same tokenizer, texts and `make_batches` plan, so they see the same batch composition, and the residual noise does not differ systematically between them.
+- Cost impact: GPU test time grows from ~13 s to ~1–2 min: 85 + 85 single-sentence forwards on 0.5B plus one fp32 load (~2 GB on cuda:1).
+- Paper deviation: no. The paper does not describe its batching [unspecified in paper].
+- Revisit-if: Part 1 fails (then it is a real bug: open a B entry), or Part 2's recorded fp16-vs-fp32 error turns out larger than the padding error by orders of magnitude (then precision, not padding, is the risk to watch in M4).
+
+## D-062 Gemma-3-4B fp16 extraction probe failed: embeddings stay fp32 (outcome of D-005 / D-058 criterion)
+- Date: 2026-10-01
+- Context: M2-T4 ran `configs/m2_gemma3-4b_fp16_probe.yaml` on Kaggle 2×T4 (session `20261001T113125Z`, commit `64498de`). The NaN/Inf guard fired on the first batch: `non-finite values at embed.post_norm: nan=10485760 inf=0 shape=(256, 16, 2560)`. Every value was NaN. Under D-058 criterion 1 (guard never fires) fp16 fails, and criteria 2–3 cannot be evaluated. `compare-embeddings` had no fp16 manifest to read.
+- Options considered: none open under the pre-registered rule.
+- Choice: Gemma-3-4B (and Gemma-3-1B in Tier 2) embeddings stay fp32, as D-005 states. The fp32 reference run passed: `configs/tier1_gemma3-4b.yaml`, all 9,197 union texts, load 22.2 s, extraction 191.0 s, peak 9.07 / 9.92 GiB on cuda:0 / cuda:1, no guard event. `m2_extract.ipynb` now runs the comparison only when the fp16 run completes.
+- Why: Pre-registered rule; the guard did its job.
+- Tradeoff accepted: Gemma extraction takes ~3.2 min per checkpoint against Llama-8B fp16's 1.2 min. Over 8 checkpoints that is ~26 min of extraction.
+- Cost impact: within PLAN §8 (D-005 already budgeted Gemma in fp32).
+- Paper deviation: yes, App. C precision, as already logged in D-005.
+- Revisit-if: never for M2. Training precision is decided separately by D-005's 50-step probe in M3.

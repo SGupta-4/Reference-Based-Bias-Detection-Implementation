@@ -149,7 +149,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-052, D-053, D-054, D-055, D-056; commit `8277155`
 
 ## B-011 Feature: M2 embedding extraction and cache
-- Status: In progress — CPU side done. The first Kaggle run failed on the environment (B-012, fixed); the rerun of `notebooks/m2_extract.ipynb` is pending, then `m2-green`.
+- Status: In progress. The second Kaggle run (session `20261001T113125Z`, commit `64498de`) passed DC-09, DC-10 and DC-12 and settled the Gemma probe (D-062). DC-06 failed its D-058 rule (B-013). Next: rerun the GPU tests under D-061, then `m2-green`.
 - How it was found or scoped: PLAN §7 M2 (M2-T1…T4).
 - Reproduction command: CPU: `pytest -q -m "not gpu"`; Kaggle: `notebooks/m2_extract.ipynb`.
 - Hypotheses tried:
@@ -158,12 +158,18 @@ IDs are sequential and never reused.
   - Adding `download()` made the stage tests touch the network → stubbed in tests like the loader.
   - Local environment: the PyTorch CPU wheel index was unreachable, and `accelerate` pulled an unpinned torch 2.14.1; it was replaced by the pinned 2.7.1 before any test ran (D-059).
 - Fix: `src/rbbd/models/loading.py`, `src/rbbd/embed/{pooling,extract}.py`, `src/rbbd/metrics/delta_b.py` (`from_union`), runner deps, CLI `compare-embeddings`, configs, `notebooks/m2_extract.ipynb`, tests.
-- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `76 passed, 7 deselected in 8.20s`; `grep -rn "PLACEHOLDER(M2)" tests` → no output. Kaggle: pending.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `76 passed, 7 deselected in 8.20s`; `grep -rn "PLACEHOLDER(M2)" tests` → no output.
+- Verification (Kaggle 2×T4, session `20261001T113125Z`, commit `64498de`; store commits: manifests `2fcc96a8`, embed `fb5226a5`, embeddings `a9babfcb`, env `0752f031`):
+  - DC-10: smoke run 1 → `embed: resumed` (an incomplete manifest from the B-012 run was still in `/kaggle/working`; the resume path re-extracted all 85 texts); run 2 → `cache hit: stage embed`, no load and no forward. **Pass.**
+  - DC-09 (GPU): `test_guard_active_on_real_model` passed; `m2_extract_gpu.json` → `"guard_on_gpu": "raised NonFiniteError, nothing cached"`. **Pass.**
+  - DC-12: Llama-3.1-8B fp16 balanced, 9,197 texts, post- and pre-norm: load 73.4 s + extraction 71.4 s = 144.8 s ≤ 900 s; peak 7.43 / 9.21 GiB; padding waste 1.6 %. **Pass.**
+  - Gemma-3-4B fp32: load 22.2 s + extraction 191.0 s; peak 9.07 / 9.92 GiB. fp16 probe: guard fired on batch 0, all values NaN → stays fp32 (D-062).
+  - DC-06 (GPU): **fail** under D-058 (B-013). Rule replaced by D-061; rerun pending.
 - GPU-hours lost: ≈ 0.2 (first Kaggle run, B-012)
-- Linked commits and D-### entries: `92e836e`; D-057, D-058, D-059, D-060; B-012
+- Linked commits and D-### entries: `92e836e`, `64498de`; D-057, D-058, D-059, D-060, D-061, D-062; B-012, B-013
 
 ## B-012 Bug: every M2 model load fails on Kaggle — torchvision does not match the pinned torch
-- Status: Fixed on CPU; Kaggle verification pending (M2 rerun).
+- Status: Fixed and verified on Kaggle (session `20261001T113125Z`).
 - How it was found or scoped: First M2 Kaggle run of `notebooks/m2_extract.ipynb` at `92e836e`. Qwen (smoke), Llama-3.1-8B and Gemma-3-4B all downloaded (≈ 9 s, 69 s, 34 s) and then failed in `AutoModelForCausalLM.from_pretrained`.
 - Reproduction command: on Kaggle, `pip install -e ".[train,dev]"` at `92e836e`, then `python -c "from transformers import Qwen2ForCausalLM"`.
 - Observed: `RuntimeError: operator torchvision::nms does not exist` (raised while importing `transformers.image_utils` → torchvision) → `ModuleNotFoundError: Could not import module 'Qwen2ForCausalLM'` (likewise `LlamaForCausalLM`, `Gemma3ForConditionalGeneration`). Downstream:
@@ -175,6 +181,19 @@ IDs are sequential and never reused.
   - Model or revision problem → rejected: three different architectures failed identically, and all after a successful download.
   - Torch/torchvision ABI mismatch → confirmed. The `train` extra reinstalls torch 2.7.1 but not torchvision, so Kaggle's image keeps a torchvision compiled for its own torch. M0 installed `bench`, whose `vllm` pulls a matching torchvision, so it never saw this.
 - Fix: Pin `torchvision==0.22.1` in `train` and `bench` (D-060). Add a preflight import cell to `m2_extract.ipynb`. Switch `from_pretrained` to `dtype=` in `models/loading.py` and `utils/env.py`. Add tests `test_torchvision_pinned_with_torch` and `test_transformers_model_classes_import`.
-- Verification (CPU, this container): `pip install -e ".[train,dev]"` resolves `torch 2.7.1+cu126`, `torchvision 0.22.1+cu126`, `transformers 4.57.3`. `python -c "from transformers import Qwen2ForCausalLM, LlamaForCausalLM, Gemma3ForConditionalGeneration; import transformers.image_utils"` → ok. `ruff check src tests` → `All checks passed!`. `python -m pytest -q -m "not gpu"` → `78 passed, 7 deselected in 8.97s`. Kaggle: pending (preflight cell prints `preflight ok 2.7.1+cu126 0.22.1+cu126 4.57.3`).
+- Verification (CPU, this container): `pip install -e ".[train,dev]"` resolves `torch 2.7.1+cu126`, `torchvision 0.22.1+cu126`, `transformers 4.57.3`. `python -c "from transformers import Qwen2ForCausalLM, LlamaForCausalLM, Gemma3ForConditionalGeneration; import transformers.image_utils"` → ok. `ruff check src tests` → `All checks passed!`. `python -m pytest -q -m "not gpu"` → `78 passed, 7 deselected in 8.97s`. Kaggle (commit `64498de`): preflight printed `preflight ok 2.7.1+cu126 0.22.1+cu126 4.57.3`, and Qwen, Llama-3.1-8B and Gemma-3-4B all loaded.
 - GPU-hours lost: ≈ 0.2 (one 2×T4 session spent on downloads and failed loads)
-- Linked commits and D-### entries: `92e836e` (failing run); D-031, D-060; B-011
+- Linked commits and D-### entries: `92e836e` (failing run), `64498de` (fix, verified); D-031, D-060; B-011
+
+## B-013 Bug: DC-06 fp16 padding-invariance rule (D-058) cannot be met by fp16 arithmetic
+- Status: Rule replaced (D-061); new GPU tests written and dry-run on CPU; Kaggle verification pending.
+- How it was found or scoped: `test_padding_invariance_fp16` failed on Kaggle (session `20261001T113125Z`, commit `64498de`): `1 failed, 1 passed in 13.09s`.
+- Reproduction command: `pytest -q -m gpu tests/gpu/test_extract_gpu.py::test_padding_invariance_fp16` at `64498de` on 2×T4.
+- Observed (`m2_extract_gpu.json`), max |alone − batched| with max |value|: mean 0.146 / 124.7; max 0.625 / 183.1; last 0.156 / 146.8. The fp16 step in [128, 256) is 0.125, so these gaps are 1–5 ulps.
+- Hypotheses tried:
+  - Padding leaks into real positions. Unlikely: with right padding and causal attention, pads come after every real token. Pooling over masks is covered on CPU in fp32 (`test_padding_invariance_cpu`, `test_last_token_index`, where 1e6 at pad positions never leaks). Not yet proven on the real model → D-061 part 1 checks fp32 on Qwen.
+  - fp16 rounding from different GEMM shapes and attention kernels (masked batch vs single sequence). Consistent with gaps of a few ulps at the largest coordinates. D-058 assumed values in [8, 16), which made the tolerance look feasible; real values reach 183.
+- Fix: D-061 replaces the rule. `test_padding_invariance_fp16` is replaced by `test_padding_invariance_fp32` and `test_padding_cosine_fp16_smoke` (85 smoke sentences, cosine ≥ 0.9999). The latter also records fp16-vs-fp32 error. The notebook's pytest cell prints full failure lines (`-rfE --tb=short`).
+- Verification (CPU, this container): both new tests ran end to end with the tiny conftest model standing in for Qwen (`load_for_inference` monkeypatched); `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `78 passed, 8 deselected in 10.51s`. Kaggle: pending.
+- GPU-hours lost: ≈ 0 (the test took 13 s; the rest of the run produced usable results)
+- Linked commits and D-### entries: `64498de`; D-058, D-061; B-011
