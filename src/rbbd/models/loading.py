@@ -85,7 +85,7 @@ def load_for_inference(spec: LoadSpec) -> tuple[Any, Any]:
     """(model in eval mode, tokenizer) for `spec`. Weights are downloaded to $HF_HOME."""
     from transformers import AutoModelForCausalLM
 
-    kwargs: dict[str, Any] = {"torch_dtype": torch_dtype(spec.precision), "revision": spec.revision}
+    kwargs: dict[str, Any] = {"dtype": torch_dtype(spec.precision), "revision": spec.revision}
     if spec.placement == "balanced":
         kwargs["device_map"] = "balanced"
     elif spec.placement.startswith("cuda"):

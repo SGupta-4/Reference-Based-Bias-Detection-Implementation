@@ -851,3 +851,14 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: none on Kaggle (it installs `train` anyway).
 - Paper deviation: no.
 - Revisit-if: CI is added (out of scope per the brief).
+
+## D-060 Pin torchvision 0.22.1 next to torch 2.7.1 (follow-up to D-031)
+- Date: 2026-10-01
+- Context: The first M2 Kaggle run (`notebooks/m2_extract.ipynb` at `92e836e`) failed on every model load (B-012). `pip install -e ".[train,dev]"` replaced Kaggle's torch with 2.7.1 but left Kaggle's preinstalled torchvision, built for a different torch. `transformers` imports torchvision through `image_utils` while resolving any model class. The torchvision C++ ops then fail to register (`RuntimeError: operator torchvision::nms does not exist`), which surfaces as `ModuleNotFoundError: Could not import module 'Qwen2ForCausalLM'` (also Llama, Gemma3). M0 never hit this because `vllm` (in `bench`) pulls a matching torchvision.
+- Options considered: (a) pin `torchvision==0.22.1` (the release built against torch 2.7.1) in every extra that pins torch; (b) `pip uninstall -y torchvision` in each notebook; (c) leave Kaggle's torch alone. The user chose (a) on 2026-10-01.
+- Choice: `train` and `bench` both pin `torchvision==0.22.1`. `m2_extract.ipynb` runs a preflight import of the three model classes right after install, so a mismatch fails in the install cell, not inside a stage. A CPU test (`tests/test_env.py`) checks that the pins stay paired and that the installed pair imports the model classes. Also in this commit: `from_pretrained(torch_dtype=…)` → `dtype=…` (deprecated in transformers 4.57). This changes no cache key, because the key records `precision`.
+- Why: The environment is the same in every session and identical to what `pip` resolves locally. Removing packages from the image is less reproducible.
+- Tradeoff accepted: The install downloads one more wheel (≈ 7 MB for cu126).
+- Cost impact: ≈ +10 s setup per session. The failed run cost one T4×2 session of ≈ 0.2 h (downloads only).
+- Paper deviation: no. The paper stack (App. C) does not list torchvision; it is a transitive dependency.
+- Revisit-if: The torch pin changes (re-pair torchvision), or `vllm` requires a different torchvision.

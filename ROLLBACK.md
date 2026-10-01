@@ -48,3 +48,4 @@ Note: `m0-green` and `m1-green` were created as annotated tags in the agent sess
 | Date | Planned change | Rollback tag | Files expected to change | Namespaces invalidated | Outcome |
 |---|---|---|---|---|---|
 | 2026-09-30 | M0: first implementation of cli/config/runner/utils + notebooks (touches > 3 modules) | none yet — commit `2df82d9` (docs-only state before M0 code) | `src/rbbd/{cli,config,runner}.py`, `src/rbbd/utils/*`, `configs/{base,smoke}.yaml`, `notebooks/*`, `tests/*`, `.gitignore`, `pyproject.toml` untouched | none (no artifacts exist yet) | Done: M0 green, tagged `m0-green` |
+| 2026-10-01 | B-012: pin `torchvision==0.22.1` in `train`/`bench`; `torch_dtype=` → `dtype=` (D-060) | `m1-green` (or commit `92e836e`, the M2 state before this fix) | `pyproject.toml`, `src/rbbd/models/loading.py`, `src/rbbd/utils/env.py`, `notebooks/m2_extract.ipynb`, `tests/test_env.py` | none (no embedding was ever cached: every M2 load failed) | Pending: M2 Kaggle rerun |

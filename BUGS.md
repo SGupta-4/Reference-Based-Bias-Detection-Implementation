@@ -149,7 +149,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-052, D-053, D-054, D-055, D-056; commit `8277155`
 
 ## B-011 Feature: M2 embedding extraction and cache
-- Status: In progress — CPU side done; Kaggle GPU run (`notebooks/m2_extract.ipynb`) pending, then `m2-green`.
+- Status: In progress — CPU side done. The first Kaggle run failed on the environment (B-012, fixed); the rerun of `notebooks/m2_extract.ipynb` is pending, then `m2-green`.
 - How it was found or scoped: PLAN §7 M2 (M2-T1…T4).
 - Reproduction command: CPU: `pytest -q -m "not gpu"`; Kaggle: `notebooks/m2_extract.ipynb`.
 - Hypotheses tried:
@@ -159,5 +159,22 @@ IDs are sequential and never reused.
   - Local environment: the PyTorch CPU wheel index was unreachable, and `accelerate` pulled an unpinned torch 2.14.1; it was replaced by the pinned 2.7.1 before any test ran (D-059).
 - Fix: `src/rbbd/models/loading.py`, `src/rbbd/embed/{pooling,extract}.py`, `src/rbbd/metrics/delta_b.py` (`from_union`), runner deps, CLI `compare-embeddings`, configs, `notebooks/m2_extract.ipynb`, tests.
 - Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `76 passed, 7 deselected in 8.20s`; `grep -rn "PLACEHOLDER(M2)" tests` → no output. Kaggle: pending.
-- GPU-hours lost: 0
-- Linked commits and D-### entries: D-057, D-058, D-059
+- GPU-hours lost: ≈ 0.2 (first Kaggle run, B-012)
+- Linked commits and D-### entries: `92e836e`; D-057, D-058, D-059, D-060; B-012
+
+## B-012 Bug: every M2 model load fails on Kaggle — torchvision does not match the pinned torch
+- Status: Fixed on CPU; Kaggle verification pending (M2 rerun).
+- How it was found or scoped: First M2 Kaggle run of `notebooks/m2_extract.ipynb` at `92e836e`. Qwen (smoke), Llama-3.1-8B and Gemma-3-4B all downloaded (≈ 9 s, 69 s, 34 s) and then failed in `AutoModelForCausalLM.from_pretrained`.
+- Reproduction command: on Kaggle, `pip install -e ".[train,dev]"` at `92e836e`, then `python -c "from transformers import Qwen2ForCausalLM"`.
+- Observed: `RuntimeError: operator torchvision::nms does not exist` (raised while importing `transformers.image_utils` → torchvision) → `ModuleNotFoundError: Could not import module 'Qwen2ForCausalLM'` (likewise `LlamaForCausalLM`, `Gemma3ForConditionalGeneration`). Downstream:
+  - the GPU tests errored in fixture setup;
+  - `compare-embeddings` found no manifests;
+  - the second smoke run logged `resuming` (the first left an incomplete manifest), not `cache hit`.
+  - Also: the warning "`torch_dtype` is deprecated! Use `dtype` instead!"
+- Hypotheses tried:
+  - Model or revision problem → rejected: three different architectures failed identically, and all after a successful download.
+  - Torch/torchvision ABI mismatch → confirmed. The `train` extra reinstalls torch 2.7.1 but not torchvision, so Kaggle's image keeps a torchvision compiled for its own torch. M0 installed `bench`, whose `vllm` pulls a matching torchvision, so it never saw this.
+- Fix: Pin `torchvision==0.22.1` in `train` and `bench` (D-060). Add a preflight import cell to `m2_extract.ipynb`. Switch `from_pretrained` to `dtype=` in `models/loading.py` and `utils/env.py`. Add tests `test_torchvision_pinned_with_torch` and `test_transformers_model_classes_import`.
+- Verification (CPU, this container): `pip install -e ".[train,dev]"` resolves `torch 2.7.1+cu126`, `torchvision 0.22.1+cu126`, `transformers 4.57.3`. `python -c "from transformers import Qwen2ForCausalLM, LlamaForCausalLM, Gemma3ForConditionalGeneration; import transformers.image_utils"` → ok. `ruff check src tests` → `All checks passed!`. `python -m pytest -q -m "not gpu"` → `78 passed, 7 deselected in 8.97s`. Kaggle: pending (preflight cell prints `preflight ok 2.7.1+cu126 0.22.1+cu126 4.57.3`).
+- GPU-hours lost: ≈ 0.2 (one 2×T4 session spent on downloads and failed loads)
+- Linked commits and D-### entries: `92e836e` (failing run); D-031, D-060; B-011
