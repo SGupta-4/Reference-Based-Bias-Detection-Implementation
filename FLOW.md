@@ -96,7 +96,7 @@ Entry: `run --stages ftdata,train` → `runner.STAGE_IMPLS["train"]` → `finetu
 2. `train.parallel: true`: each u/h pair runs as two processes `python -m rbbd.cli train-one --config C --model S --regime R --split X --seed K` with `CUDA_VISIBLE_DEVICES` 0 / 1 (D-003); logs → `<job>/train.log`. Jobs with `done.json` are skipped. (`parallel: false` runs `run_job` in-process: CPU tests.)
 3. `cli._cmd_train_one` → re-plans from the config + ftdata manifest → `sft.run_job(cfg, job)`:
    - `load_rows` (WildGuardMix at the recorded revision, selected ids; text stays in the HF cache) → `models.loading.load_tokenizer` → `load_model(spec)` (lora fp16 | qlora NF4 | full fp32 masters; `device_map {"": 0}`)
-   - `train_one(spec, rows, tok, model, job_dir)`:
+   - `train_one(spec, rows, tok, model, job_dir)` (refuses > 1 visible GPU; `set_seed(spec.seed)` before the trainer, D-068):
      - `build_examples` → [{input_ids, completion_mask}] ≤ max_length; drops prompt-fills-window rows (D-055) → `data.json`
      - TRL `SFTTrainer(sft_config(spec), peft_config if LoRA/QLoRA, callbacks=[GuardCallback (D-065), WallClockSaveCallback (20 min)])`
      - `trainer.train(resume_from_checkpoint=latest_checkpoint(job/checkpoints))`

@@ -218,7 +218,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `ac0f1ce`, `8e26c8d`; D-061, D-063, D-064; B-013
 
 ## B-015 Feature: M3a fine-tuning (SFT endpoints, α-merges, train stage)
-- Status: In progress. CPU side done; the Kaggle GPU run (`notebooks/m3a_train.ipynb`) is pending, then `m3a-green`.
+- Status: In progress. The first Kaggle run (session `20261001T132720Z`, `ec87d99`) trained both smoke endpoints; 2 of 3 GPU tests failed on test-side and determinism defects (B-016, B-017, fixed). Rerun pending, then `m3a-green`.
 - How it was found or scoped: PLAN §7 M3 (M3-T1–T3, M3a-T4).
 - Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3a_train.ipynb`.
 - Hypotheses tried:
@@ -237,6 +237,41 @@ IDs are sequential and never reused.
   - DC-13 on CPU: after a kill at checkpoint 3 the run resumes to the same step with bit-identical adapter tensors.
   - DC-07 on CPU: α ∈ {0, 1} are bit-identical to the endpoints, and combined ΔW is linear within float64 rtol 1e-6.
   - A CPU dry run of `test_real_adapter_endpoints` (tiny model trained into the smoke layout) passed, with max relative linearity error 5.1e-8.
+  - Kaggle run 1 (session `20261001T132720Z`, commit `ec87d99`; store commits: train `d72b5580`, env `44b5b73c`):
+    - DC-11 (through train): `smoke ftdata+train wall-clock: 96 s` (< 15 min). The rerun gave `ftdata: cache hit, train: cache hit`. **Pass.**
+    - Training: both endpoints 24 steps, 3 epochs, 0 scaler-skipped steps, 64/64 rows kept, 0 dropped, 5 truncated each.
+      - Unharmful: train loss 1.813, final 1.526, 1,946 tok/s.
+      - Harmful: train loss 2.106, final 1.775, 2,181 tok/s.
+    - GPU tests `1 failed… 2 failed, 1 passed`: `test_real_adapter_endpoints` raised `AdapterError` (B-016). `test_resume_after_kill` got `assert 3 == 6` (B-017).
+- GPU-hours lost: ≈ 0.15 (run 1's GPU tests)
+- Linked commits and D-### entries: `ec87d99`; D-065, D-066, D-067, D-068; B-016, B-017
+
+## B-016 Bug: `combine` rejected real endpoints because PEFT's `target_modules` order varies by process
+- Status: Fixed on CPU; Kaggle verification pending (M3a rerun).
+- How it was found or scoped: `test_real_adapter_endpoints` on Kaggle (session `20261001T132720Z`, commit `ec87d99`) failed with `rbbd.models.adapters.AdapterError`.
+- Reproduction command: save two PEFT adapters from two processes with `PYTHONHASHSEED=1` and `=2`, then `adapters.combine(u, h, 0.5)` → `AdapterError: endpoint configs differ in 'target_modules'`. Reproduced in this container: `["q_proj","o_proj","up_proj",…]` vs `["k_proj","o_proj","up_proj",…]`.
+- Hypotheses tried:
+  - Rank or DoRA mismatch. Rejected: both configs have r 16, DoRA off and empty patterns.
+  - Set ordering. Confirmed: PEFT stores `target_modules` as a set, and JSON order follows each process's string-hash seed. The CPU tests trained both endpoints in one process, so they never saw it.
+- Fix: `combine` compares `target_modules` as sorted lists and writes them sorted. Regression test `test_combine_accepts_target_modules_in_any_order`.
+- Verification (CPU): `python -m pytest -q -m "not gpu"` → `99 passed`. Kaggle: pending.
+- GPU-hours lost: included in B-015.
+- Linked commits and D-### entries: `ec87d99`; D-066; B-015
+
+## B-017 Bug: two visible GPUs made the HF Trainer use DataParallel; LoRA init not seeded per spec
+- Status: Fixed on CPU; Kaggle verification pending (M3a rerun).
+- How it was found or scoped: `test_resume_after_kill` on Kaggle (session `20261001T132720Z`, `ec87d99`): `assert 3 == 6`; `m3a_train_gpu.json` → `ref_global_step 3`, `resumed_global_step 3`, `max_abs_adapter_diff 0.0668`.
+- Reproduction command: `pytest -q -m gpu tests/gpu/test_train_gpu.py::test_resume_after_kill` at `ec87d99` on 2×T4.
+- Hypotheses tried:
+  - Resume logic. Rejected: the run resumed from `checkpoint-3`, and on CPU resume is bit-identical.
+  - Effective batch doubled. Confirmed: with `device_map={"": 0}` and the args' device also cuda:0, transformers 4.57 sets `is_model_parallel=False` and keeps `n_gpu=2`. It wraps the model in `nn.DataParallel` with batch 4 × 2 GPUs × grad-acc 2 = 16, so 48 rows give 3 steps. The kill hook therefore fired at the last step, and the "resume" had nothing left to do. The train stage was unaffected because each `train-one` process sees one GPU (24 steps, as computed).
+  - The 0.067 adapter gap is the unseeded LoRA A init: each run drew it from a different global RNG state.
+- Fix (D-068): `train_one` refuses more than one visible GPU, and seeds `set_seed(spec.seed)` right before building the trainer. `sft.SCHEMA_VERSION` → 2. The GPU DC-13 test runs ref/kill/resume as child processes with `CUDA_VISIBLE_DEVICES=0`, and a new GPU test checks the refusal. `test_real_adapter_endpoints` finds the smoke jobs by `train_key`, not by glob.
+- Verification (CPU, this container):
+  - `test_train_one_refuses_more_than_one_visible_gpu` passes.
+  - `test_adapter_init_depends_on_spec_seed_only` fails with `set_seed` removed and passes with it.
+  - A CPU dry run of the three child phases with the tiny model gives `ref exit 0` / `kill exit 3` / `resume exit 0` and `ref 6 resumed 6 checkpoint-3`, with losses at steps 4–6 identical to ref.
+  - `python -m pytest -q -m "not gpu"` → `99 passed, 10 deselected`.
   - Kaggle: pending.
-- GPU-hours lost: 0
-- Linked commits and D-### entries: D-065, D-066, D-067
+- GPU-hours lost: included in B-015.
+- Linked commits and D-### entries: `ec87d99`; D-003, D-068; B-015

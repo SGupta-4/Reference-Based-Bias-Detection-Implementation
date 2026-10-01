@@ -48,7 +48,8 @@ LORA_TARGETS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", 
 DEFAULT_LR = {"lora": 1e-4, "qlora": 1e-4, "full": 2e-5}  # App. C
 # App. C says AdamW. Full FT uses the 8-bit paged variant to fit fp32 masters on a T4 (D-009).
 DEFAULT_OPTIM = {"lora": "adamw_torch", "qlora": "adamw_torch", "full": "paged_adamw_8bit"}
-SCHEMA_VERSION = 1
+# 2: LoRA init seeded from the spec inside train_one (B-017), so same spec -> same weights.
+SCHEMA_VERSION = 2
 
 
 class DataBuildError(ValueError):
@@ -294,6 +295,23 @@ class KillAfterSave(_callback_base()):  # type: ignore[misc]
             raise SimulatedKill(f"simulated kill after checkpoint {state.global_step}")
 
 
+def _require_single_device() -> None:
+    """Refuse to train with more than one visible GPU (D-003, B-017).
+
+    With `device_map={"": 0}` and two visible GPUs, the HF Trainer wraps the model in
+    DataParallel and doubles the effective batch, silently changing App. C's
+    hyperparameters. The train stage gives each job one GPU via CUDA_VISIBLE_DEVICES.
+    """
+    import torch
+
+    n = torch.cuda.device_count()
+    if n > 1:
+        raise RuntimeError(
+            f"train_one sees {n} GPUs; run it with exactly one visible "
+            "(CUDA_VISIBLE_DEVICES=<i>), as the train stage does (D-003)"
+        )
+
+
 def latest_checkpoint(ckpt_dir: Path) -> str | None:
     """Newest `checkpoint-N` under `ckpt_dir`, or None."""
     from transformers.trainer_utils import get_last_checkpoint
@@ -380,6 +398,7 @@ def train_one(
     done_path = out_dir / "done.json"
     if done_path.exists():
         return json.loads(done_path.read_text())
+    _require_single_device()
     out_dir.mkdir(parents=True, exist_ok=True)
     examples, data_stats = build_examples(rows, tokenizer, spec.max_length)
     (out_dir / "data.json").write_text(
@@ -401,6 +420,11 @@ def train_one(
     ckpt_dir = out_dir / "checkpoints"
     context = {"model": spec.slug, "regime": spec.regime, "split": spec.split, "seed": spec.seed}
     guard_cb = GuardCallback(guard or GuardSettings(), context)
+    # The LoRA A matrices are initialised inside SFTTrainer (get_peft_model): seed here so
+    # the initial adapter depends on the spec's seed only, not on what ran before (B-017).
+    from transformers import set_seed
+
+    set_seed(spec.seed)
     trainer = SFTTrainer(
         model=model,
         args=sft_config(spec, ckpt_dir, save_steps),

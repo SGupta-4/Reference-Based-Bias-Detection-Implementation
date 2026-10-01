@@ -69,6 +69,13 @@ def _check_combinable(config: dict[str, Any], where: str) -> None:
         raise AdapterError(f"{where}: LoRA bias must be 'none'")
 
 
+def _normalised(value: Any) -> Any:
+    # PEFT stores target_modules from a Python set, so its JSON order follows the saving
+    # process's string-hash seed; two endpoints trained in different processes list the
+    # same modules in different orders (B-016). Compare and write them sorted.
+    return sorted(value) if isinstance(value, (list, tuple, set)) else value
+
+
 def read_adapter(path: str | Path) -> LoraAdapter:
     """Load a PEFT adapter directory onto CPU (dtype as saved; PEFT saves fp32 here)."""
     from safetensors.torch import load_file
@@ -110,7 +117,7 @@ def combine(u: LoraAdapter, h: LoraAdapter, alpha: float) -> LoraAdapter:
     import torch
 
     for key in ("r", "target_modules", "base_model_name_or_path"):
-        if u.config.get(key) != h.config.get(key):
+        if _normalised(u.config.get(key)) != _normalised(h.config.get(key)):
             raise AdapterError(f"endpoint configs differ in {key!r}")
     if u.prefixes() != h.prefixes():
         raise AdapterError("endpoint adapters cover different modules")
@@ -123,6 +130,7 @@ def combine(u: LoraAdapter, h: LoraAdapter, alpha: float) -> LoraAdapter:
         b_h = (1.0 - alpha) * s_h * h.tensors[p + _B].float()
         tensors[p + _B] = torch.cat([b_u, b_h], dim=1)
     config = dict(u.config)
+    config["target_modules"] = _normalised(u.config.get("target_modules"))
     # scaling = lora_alpha / r = 1, so B'A' is ΔW(α) with no further factor.
     config.update(r=rank, lora_alpha=rank, use_rslora=False, lora_dropout=0.0)
     meta = {"combined": {"alpha": alpha, "s_u": s_u, "s_h": s_h, "endpoint_rank": rank // 2}}

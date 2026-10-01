@@ -988,3 +988,21 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: Smoke training ≈ 2–5 min on 2×T4 (estimate; measured in M3a).
 - Paper deviation: smoke batch only (Tier 0). Otherwise no.
 - Revisit-if: TRL's tokenisation changes (pinned 0.25.1), or M3c-T8 shows checkpointing overhead > 5 %.
+
+## D-068 One visible GPU per training process, per-spec LoRA init seed, train schema v2 (refines D-003, D-067)
+- Date: 2026-10-01
+- Context: The first M3a Kaggle run (session `20261001T132720Z`, commit `ec87d99`) found two training-path defects (B-017).
+  - Under pytest, both T4s were visible. The HF Trainer then wrapped a `device_map={"": 0}` model in DataParallel and doubled the effective batch: 3 steps instead of 6.
+  - The LoRA A init came from whatever global RNG state preceded `SFTTrainer`. The test's two "identical" runs therefore differed by up to 0.067 in adapter weights.
+  - The train stage itself was unaffected by DataParallel: each `train-one` process sees one GPU. Both smoke endpoints ran 24 steps, as planned.
+- Options considered: force `args._n_gpu = 1` (a private field) vs. refuse multi-GPU visibility; seed in `cli train-one` only vs. inside `train_one`.
+- Choice:
+  - `train_one` raises unless at most one CUDA device is visible. The App. C effective batch can then never change silently.
+  - The GPU DC-13 test runs each phase in a child process with `CUDA_VISIBLE_DEVICES=0`, so the "kill" is a real process exit.
+  - `train_one` calls `transformers.set_seed(spec.seed)` immediately before building the trainer, so the initial adapter depends only on the spec.
+  - `sft.SCHEMA_VERSION` 1 → 2: the same spec now yields different (reproducible) weights, so every `train_key` changes. The smoke endpoints retrain once (≈ 90 s); no Tier 1/2 training had run.
+- Why: Hyperparameters and initialisation must be functions of the spec alone.
+- Tradeoff accepted: A single process can no longer train on two GPUs. Nothing planned needs that (D-003).
+- Cost impact: ≈ 2 min to retrain the smoke endpoints.
+- Paper deviation: no.
+- Revisit-if: FSDP/DDP training becomes necessary (D-009 Revisit-if), which would launch through `accelerate`/`torchrun` instead.

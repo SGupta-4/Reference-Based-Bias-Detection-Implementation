@@ -144,3 +144,15 @@ def test_materialize_refuses_persistent_paths(tmp_path):
         ip.assert_ephemeral("/kaggle/working/x", root)
     eph = tmp_path / "eph" / "a050"
     assert ip.assert_ephemeral(eph, root) == eph.resolve()
+
+
+def test_combine_accepts_target_modules_in_any_order(endpoints):
+    """B-016: PEFT writes target_modules from a set, so endpoints saved by two processes
+    list them in different orders; that is the same adapter layout, not a mismatch."""
+    u, h = endpoints
+    shuffled = ad.LoraAdapter(
+        config={**h.config, "target_modules": list(reversed(sorted(h.config["target_modules"])))},
+        tensors=h.tensors,
+    )
+    c = ad.combine(u, shuffled, 0.5)
+    assert c.config["target_modules"] == sorted(TARGETS)

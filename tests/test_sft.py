@@ -346,3 +346,26 @@ def test_runner_train_stage_end_to_end_and_cache_hit(config_dir, artifacts, monk
     with caplog.at_level(logging.INFO):
         out = runner.run(cfg, env, ["ftdata", "train"], stage_fns={"ftdata": fake_ftdata})
     assert out == {"ftdata": "cache hit", "train": "cache hit"} and len(trained) == 2
+
+
+def test_train_one_refuses_more_than_one_visible_gpu(tmp_path, monkeypatch):
+    """B-017: two visible GPUs would make the HF Trainer use DataParallel and double the
+    effective batch; train_one refuses instead."""
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
+    with pytest.raises(RuntimeError, match="exactly one visible"):
+        sft.train_one(_spec(), make_rows(4), make_chat_tokenizer(), make_tiny_model(), tmp_path)
+    assert not (tmp_path / "data.json").exists()
+
+
+def test_adapter_init_depends_on_spec_seed_only(tmp_path):
+    """B-017: the LoRA A init is seeded from the spec, so unrelated RNG use before a run
+    does not change the trained adapter."""
+    rows, tok = make_rows(8, seed=5), make_chat_tokenizer()
+    spec = _spec(epochs=1)
+    sft.train_one(spec, rows, tok, make_tiny_model(), tmp_path / "a", save_minutes=1e6)
+    model = make_tiny_model()
+    torch.randn(1000)  # disturb the global RNG after the base is built, before train_one
+    sft.train_one(spec, rows, tok, model, tmp_path / "b", save_minutes=1e6)
+    a = ad.read_adapter(tmp_path / "a" / "final").tensors
+    b = ad.read_adapter(tmp_path / "b" / "final").tensors
+    assert all(torch.equal(a[k], b[k]) for k in a)
