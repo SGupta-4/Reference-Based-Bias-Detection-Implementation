@@ -1006,3 +1006,31 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: ≈ 2 min to retrain the smoke endpoints.
 - Paper deviation: no.
 - Revisit-if: FSDP/DDP training becomes necessary (D-009 Revisit-if), which would launch through `accelerate`/`torchrun` instead.
+
+## D-069 M3a closed: every M3a DONE check passes; `m3a-green` = `7b41de1`
+- Date: 2026-10-01
+- Context: DONE lists DC-01, DC-02, DC-07, DC-09, DC-11 (through train), DC-13, DC-15 and DC-19 for M3. M3a covers them for Tier 0. Evidence is Kaggle 2×T4 session `20261001T154608Z` at commit `7b41de1`; store commits: train `797549be`, env `ed4766fb`.
+- Results:
+  - **DC-01:** `ruff check src tests` → `All checks passed!`.
+  - **DC-02:** `python -m pytest -q -m "not gpu"` → `99 passed, 10 deselected in 80.20s`.
+  - **DC-07:**
+    - CPU (`tests/test_merge.py`): α ∈ {0, 1} are `torch.equal` to the endpoints.
+    - GPU (`test_real_adapter_endpoints`, real smoke adapters, 168 modules, r 16): both endpoints trained (max|ΔW| 5.5e-4 for u and 5.4e-4 for h). Linearity max relative error is 4.9e-8 at α 0.1, 5.0e-16 at 0.5 and 4.8e-8 at 0.9 (bound 1e-6). The a050 adapter gives a finite forward on the fp16 base.
+  - **DC-09 (training):** the guard tests in `tests/test_sft.py` pass. Both smoke runs had 0 scaler-skipped steps.
+  - **DC-11 (through train):** `smoke ftdata+train wall-clock: 112 s` (< 15 min); the identical rerun → `ftdata: cache hit, train: cache hit`.
+  - **DC-13:**
+    - CPU: a run resumed after a kill at checkpoint-3 is bit-identical to an uninterrupted one.
+    - GPU (child processes, one visible GPU): uninterrupted run 6 steps; killed run exit 3 after checkpoint-3; resumed run 6 steps from `checkpoint-3`. Adapter difference 0.0 (max |value| 0.034).
+    - `test_train_one_refuses_two_visible_gpus` passed.
+  - **DC-15:** docs updated in the same commits. **DC-19:** `grep -rn "PLACEHOLDER(M3)" tests` → no output.
+  - **Training record (aggregates):**
+    - Unharmful: train loss 1.813, final 1.526, 1,911 tok/s.
+    - Harmful: train loss 2.106, final 1.775, 2,149 tok/s.
+    - 24 steps each; 64/64 rows kept, 0 dropped, 5 truncated.
+    - These match run 1 (`ec87d99`) to 4 decimals. The only change between the runs was the init seeding.
+- Choice: M3a is green. Tag `m3a-green` on `7b41de1964d6509b34ccfa4e00bcf245d1c77552`, the exact commit run on Kaggle.
+- Why: Every check passes with its stated output.
+- Tradeoff accepted: Tier 1/2 training (M3b, M3c) is still ahead; `m3-green` as a whole needs M3b and M3c.
+- Cost impact: M3a used ≈ 0.6 session-h (two runs).
+- Paper deviation: smoke batch only (D-067).
+- Revisit-if: `train` schema bump; then re-run DC-07, DC-11 and DC-13 (ROLLBACK).

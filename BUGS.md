@@ -218,7 +218,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `ac0f1ce`, `8e26c8d`; D-061, D-063, D-064; B-013
 
 ## B-015 Feature: M3a fine-tuning (SFT endpoints, α-merges, train stage)
-- Status: In progress. The first Kaggle run (session `20261001T132720Z`, `ec87d99`) trained both smoke endpoints; 2 of 3 GPU tests failed on test-side and determinism defects (B-016, B-017, fixed). Rerun pending, then `m3a-green`.
+- Status: **Done** (M3a). Run 1 (`ec87d99`) found B-016 and B-017. Run 2 (`7b41de1`, session `20261001T154608Z`) passed everything (D-069); tagged `m3a-green`.
 - How it was found or scoped: PLAN §7 M3 (M3-T1–T3, M3a-T4).
 - Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3a_train.ipynb`.
 - Hypotheses tried:
@@ -243,11 +243,12 @@ IDs are sequential and never reused.
       - Unharmful: train loss 1.813, final 1.526, 1,946 tok/s.
       - Harmful: train loss 2.106, final 1.775, 2,181 tok/s.
     - GPU tests `1 failed… 2 failed, 1 passed`: `test_real_adapter_endpoints` raised `AdapterError` (B-016). `test_resume_after_kill` got `assert 3 == 6` (B-017).
+  - Kaggle run 2 (session `20261001T154608Z`, `7b41de1`): `4 passed in 161.27s`; DC-11 112 s; see D-069 for every number.
 - GPU-hours lost: ≈ 0.15 (run 1's GPU tests)
-- Linked commits and D-### entries: `ec87d99`; D-065, D-066, D-067, D-068; B-016, B-017
+- Linked commits and D-### entries: `ec87d99`, `7b41de1`; D-065, D-066, D-067, D-068, D-069; B-016, B-017
 
 ## B-016 Bug: `combine` rejected real endpoints because PEFT's `target_modules` order varies by process
-- Status: Fixed on CPU; Kaggle verification pending (M3a rerun).
+- Status: **Closed.** Verified on Kaggle (session `20261001T154608Z`): `test_real_adapter_endpoints` passed on adapters trained in two processes.
 - How it was found or scoped: `test_real_adapter_endpoints` on Kaggle (session `20261001T132720Z`, commit `ec87d99`) failed with `rbbd.models.adapters.AdapterError`.
 - Reproduction command: save two PEFT adapters from two processes with `PYTHONHASHSEED=1` and `=2`, then `adapters.combine(u, h, 0.5)` → `AdapterError: endpoint configs differ in 'target_modules'`. Reproduced in this container: `["q_proj","o_proj","up_proj",…]` vs `["k_proj","o_proj","up_proj",…]`.
 - Hypotheses tried:
@@ -259,7 +260,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `ec87d99`; D-066; B-015
 
 ## B-017 Bug: two visible GPUs made the HF Trainer use DataParallel; LoRA init not seeded per spec
-- Status: Fixed on CPU; Kaggle verification pending (M3a rerun).
+- Status: **Closed.** Verified on Kaggle (session `20261001T154608Z`): resume test 6 = 6 steps with adapter diff 0.0, and the trainer refused two visible GPUs.
 - How it was found or scoped: `test_resume_after_kill` on Kaggle (session `20261001T132720Z`, `ec87d99`): `assert 3 == 6`; `m3a_train_gpu.json` → `ref_global_step 3`, `resumed_global_step 3`, `max_abs_adapter_diff 0.0668`.
 - Reproduction command: `pytest -q -m gpu tests/gpu/test_train_gpu.py::test_resume_after_kill` at `ec87d99` on 2×T4.
 - Hypotheses tried:
