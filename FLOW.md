@@ -87,7 +87,7 @@ Entry: `run --stages ftdata` → `data.ft_data.stage(ctx)`
 5. Writes `ftdata/<run_key>/{unharmful_ids.json, harmful_ids.json, stats.json}` (indices and aggregates only; no text, D-037)
 M3 renders training records with `to_messages(row)` (TRL prompt–completion, D-040).
 
-## Stage: train (implemented, M3a; Tier 1/2 runs in M3b/M3c)
+## Stage: train (implemented, M3a green — D-069; Tier 1/2 runs in M3b/M3c)
 Entry: `run --stages ftdata,train` → `runner.STAGE_IMPLS["train"]` → `finetune.sft.stage(ctx)`
 1. `sft.plan_jobs(cfg, root, ftdata outputs)` → one `Job` per (model, regime, seed, split), u/h adjacent
    - reads `ftdata/<run_key>/{stats.json (dataset revision), <split>_ids.json}`
