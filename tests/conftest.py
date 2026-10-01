@@ -48,3 +48,52 @@ def make_embedding_set(seed=0, d=16, n_per_group=6, groups=("A", "B", "C"), p=8,
 @pytest.fixture
 def emb():
     return make_embedding_set()
+
+
+class FakeTokenizer:
+    """Word-level stand-in for a HF tokenizer: BOS id 1, pad id 0, right padding.
+
+    Implements only the calls `embed.extract` makes, so CPU tests need no download.
+    """
+
+    padding_side = "right"
+    pad_token_id = 0
+    vocab_size = 128
+
+    def _ids(self, text, add_special_tokens, truncation, max_length):
+        ids = [2 + (sum(map(ord, w)) % (self.vocab_size - 2)) for w in text.split()]
+        if add_special_tokens:
+            ids = [1, *ids]
+        return ids[:max_length] if truncation and max_length else ids
+
+    def __call__(self, texts, add_special_tokens=True, truncation=False, max_length=None,
+                 padding=False, return_tensors=None):  # fmt: skip
+        import torch
+
+        rows = [self._ids(t, add_special_tokens, truncation, max_length) for t in texts]
+        if not padding:
+            return {"input_ids": rows}
+        width = max(len(r) for r in rows)
+        ids = [r + [0] * (width - len(r)) for r in rows]
+        mask = [[1] * len(r) + [0] * (width - len(r)) for r in rows]
+        if return_tensors == "pt":
+            return {"input_ids": torch.tensor(ids), "attention_mask": torch.tensor(mask)}
+        return {"input_ids": ids, "attention_mask": mask}
+
+
+def make_tiny_model(seed=0, layers=2):
+    """A 2-layer random Llama (hidden 16) on CPU in fp32, built from a config."""
+    import torch
+    from transformers import LlamaConfig, LlamaForCausalLM
+
+    torch.manual_seed(seed)
+    cfg = LlamaConfig(
+        vocab_size=128, hidden_size=16, intermediate_size=32, num_hidden_layers=layers,
+        num_attention_heads=2, num_key_value_heads=1, max_position_embeddings=128,
+    )  # fmt: skip
+    return LlamaForCausalLM(cfg).eval()
+
+
+@pytest.fixture
+def tiny():
+    return make_tiny_model(), FakeTokenizer()

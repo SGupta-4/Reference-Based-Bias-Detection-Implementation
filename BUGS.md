@@ -147,3 +147,17 @@ IDs are sequential and never reused.
 - GPU-hours lost: 0
   - Kaggle CPU (commit `8277155`, config hash `b4a36d44ede276ec`): `run --config configs/base.yaml --stages sentences,ftdata` → `"sentences": "ran"` (0.9 s), `"ftdata": "ran"` (205.3 s); `status` → both `valid`. Census results in D-055.
 - Linked commits and D-### entries: D-052, D-053, D-054, D-055, D-056; commit `8277155`
+
+## B-011 Feature: M2 embedding extraction and cache
+- Status: In progress — CPU side done; Kaggle GPU run (`notebooks/m2_extract.ipynb`) pending, then `m2-green`.
+- How it was found or scoped: PLAN §7 M2 (M2-T1…T4).
+- Reproduction command: CPU: `pytest -q -m "not gpu"`; Kaggle: `notebooks/m2_extract.ipynb`.
+- Hypotheses tried:
+  - `embed` could not run before `train` existed → config-dependent dependencies (D-057).
+  - `ExtractSettings`'s loader closure captured a loop variable (ruff B023) → bound as a default argument.
+  - Adding `download()` made the stage tests touch the network → stubbed in tests like the loader.
+  - Local environment: the PyTorch CPU wheel index was unreachable, and `accelerate` pulled an unpinned torch 2.14.1; it was replaced by the pinned 2.7.1 before any test ran (D-059).
+- Fix: `src/rbbd/models/loading.py`, `src/rbbd/embed/{pooling,extract}.py`, `src/rbbd/metrics/delta_b.py` (`from_union`), runner deps, CLI `compare-embeddings`, configs, `notebooks/m2_extract.ipynb`, tests.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `76 passed, 7 deselected in 8.20s`; `grep -rn "PLACEHOLDER(M2)" tests` → no output. Kaggle: pending.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-057, D-058, D-059

@@ -51,7 +51,7 @@ Training sits upstream of the spectrum:
 
 | Module | Single responsibility |
 |---|---|
-| `rbbd.cli` | Parse the command line and dispatch to `runner`, `utils.env` (probe) or `utils.store` (sync). |
+| `rbbd.cli` | Parse the command line and dispatch to `runner`, `utils.env` (probe), `utils.store` (sync) or `embed.extract` (compare-embeddings). |
 | `rbbd.config` | Load and merge YAML configs; compute the canonical config hash. |
 | `rbbd.runner` | Own the stage graph; decide skip/resume from manifests; time stages. |
 | `rbbd.utils.env` | Detect Kaggle; probe hardware; read secrets without exposing them. |
@@ -136,3 +136,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 - 2026-09-30 — Initial planned architecture — D-019, D-029, D-030, D-032.
 - 2026-09-30 — Store moved to a private HF repo; `utils/store.py` added; CLI gains `sync` — D-041, D-046.
 - 2026-10-01 — Generation serves merged α-weights from ephemeral disk instead of vLLM LoRA — D-050.
+- 2026-10-01 — `embed` depends on `train` only for α-checkpoints; CLI gains `compare-embeddings` — D-057, D-058.

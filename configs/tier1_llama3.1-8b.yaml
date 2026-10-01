@@ -1,1 +1,8 @@
-# Placeholder — filled in M3. Schema and values: PLAN.md §3, §6 and DECISION.md.
+# Tier 1, Llama-3.1-8B-Instruct (PLAN §6). M2: reference extraction + DC-12 timing probe.
+# fp16 base sharded over both T4s (D-004); pre-norm site captured for the D-017 ablation.
+run_name: tier1_llama3.1-8b
+tier: 1
+models:
+  - {id: meta-llama/Llama-3.1-8B-Instruct, slug: llama3.1-8b-it, layer: 32, precision: fp16, placement: balanced}
+embed:
+  layer_sites: [post_norm, pre_norm]

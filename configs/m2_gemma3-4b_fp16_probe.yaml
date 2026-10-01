@@ -1,0 +1,6 @@
+# M2-T4 probe (B-001, D-005): the same extraction as tier1_gemma3-4b.yaml but in fp16, to see
+# whether the NaN/Inf guard fires and how far fp16 embeddings drift from fp32.
+run_name: m2_gemma3-4b_fp16_probe
+tier: 1
+models:
+  - {id: google/gemma-3-4b-it, slug: gemma3-4b-it, layer: 34, precision: fp16, placement: balanced}

@@ -43,6 +43,16 @@ ftdata:
     - Qwen/Qwen2.5-0.5B-Instruct
     - meta-llama/Llama-3.2-1B-Instruct
 
+# Embedding extraction (§4.1; D-017–D-020). M2 extracts the reference model only; M4 adds the
+# α-checkpoints, which also makes `embed` depend on `train` (D-057).
+embed:
+  checkpoints: [ref]
+  poolings: [mean, max, last]
+  layer_sites: [post_norm]
+  max_length: 64
+  token_budget: 16384
+  max_batch: 256
+
 probe:
   # M0-T5: every HF repo in PLAN §5; auth_check only, nothing downloaded.
   access_repos:

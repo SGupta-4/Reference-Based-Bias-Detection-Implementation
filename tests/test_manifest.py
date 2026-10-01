@@ -62,7 +62,7 @@ def test_incomplete_manifest_resumes(cfg, artifacts):
 
     with pytest.raises(RuntimeError, match="session killed"):
         runner.run(cfg, env, ["sentences"], stage_fns={"sentences": flaky})
-    keys = runner.stage_run_keys(cfg.hash)
+    keys = runner.stage_run_keys(cfg)
     partial = mf.read(mf.manifest_path(artifacts, "sentences", keys["sentences"]))
     assert partial.complete is False and partial.progress == {"shards_done": 3}
     assert "session killed" in partial.error

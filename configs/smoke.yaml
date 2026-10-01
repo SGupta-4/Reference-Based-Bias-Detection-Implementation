@@ -3,7 +3,14 @@
 run_name: smoke
 tier: 0
 models:
-  - {id: Qwen/Qwen2.5-0.5B-Instruct, slug: qwen2.5-0.5b-it}
+  - {id: Qwen/Qwen2.5-0.5B-Instruct, slug: qwen2.5-0.5b-it, layer: 24, precision: fp16, placement: "cuda:0"}
+sentences:
+  subset:
+    groups: [Women, Muslims, Immigrants]
+    n_targets: 5
+    n_attr: 10
+    n_anchors: 50
+    variants: [base]
 ftdata:
   n_per_split: 64
   census_tokenizers: [Qwen/Qwen2.5-0.5B-Instruct]

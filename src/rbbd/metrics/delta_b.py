@@ -76,3 +76,30 @@ def delta_b_all(ref: EmbeddingSet, aud: EmbeddingSet) -> dict[str, dict[str, flo
         "procrustes": delta(aligned, seat_ref),
         "cka": cka_drift_by_group(ref.targets, aud.targets, ref.target_groups),
     }
+
+
+def from_union(
+    emb: np.ndarray,
+    union: dict,
+    *,
+    target_variant: str = "base",
+    attr_variant: str = "base",
+    anchor_source: str = "neutral",
+) -> EmbeddingSet:
+    """Assemble an EmbeddingSet from one cached tensor [N, d] and the union index (D-020).
+
+    `union` is the `sentences` stage payload; its index maps "targets/<variant>/<group>",
+    "positive/<variant>", "negative/<variant>" and "anchors/<source>" to row lists.
+    """
+    index = union["index"]
+    prefix = f"targets/{target_variant}/"
+    groups = [k[len(prefix) :] for k in index if k.startswith(prefix)]
+    rows = [i for g in groups for i in index[prefix + g]]
+    labels = tuple(g for g in groups for _ in index[prefix + g])
+    return EmbeddingSet(
+        targets=emb[rows].astype(np.float64),
+        target_groups=labels,
+        positives=emb[index[f"positive/{attr_variant}"]].astype(np.float64),
+        negatives=emb[index[f"negative/{attr_variant}"]].astype(np.float64),
+        anchors=emb[index[f"anchors/{anchor_source}"]].astype(np.float64),
+    )

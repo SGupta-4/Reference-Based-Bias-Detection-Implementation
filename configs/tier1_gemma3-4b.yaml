@@ -1,1 +1,6 @@
-# Placeholder — filled in M3. Schema and values: PLAN.md §3, §6 and DECISION.md.
+# Tier 1, Gemma-3-4B-it (PLAN §6). Inference in fp32 sharded over both T4s (D-005) until the
+# M2 fp16 probe (configs/m2_gemma3-4b_fp16_probe.yaml) shows fp16 is safe.
+run_name: tier1_gemma3-4b
+tier: 1
+models:
+  - {id: google/gemma-3-4b-it, slug: gemma3-4b-it, layer: 34, precision: fp32, placement: balanced}

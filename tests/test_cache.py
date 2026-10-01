@@ -73,5 +73,37 @@ def test_write_then_lookup_logs_cache_hit(tmp_path, caplog):
         cache.path_for("../outside", key)
 
 
-def test_second_run_logs_cache_hit_and_no_forward():
-    """PLACEHOLDER(M2) Second identical run logs `cache hit` and the forward counter stays 0."""
+def test_second_run_logs_cache_hit_and_no_forward(tmp_path, tiny, caplog):
+    """Second identical run logs `cache hit` and the forward counter stays 0 (no model load)."""
+    from rbbd.embed.extract import ExtractSettings, ExtractStats, extract_cached
+
+    model, tok = tiny
+    texts = ["Women attend community events.", "He smiled warmly at the good news."]
+    loads = []
+
+    def load():
+        loads.append(1)
+        return model, tok
+
+    cache = TensorCache(tmp_path)
+    first_stats = ExtractStats()
+    first, _, hit1 = extract_cached(
+        cache,
+        "embeddings/t/base/ref",
+        BASE_FIELDS,
+        texts,
+        ExtractSettings(),
+        load,
+        stats=first_stats,
+    )
+    second_stats = ExtractStats()
+    with caplog.at_level(logging.INFO, logger="rbbd"):
+        second, _, hit2 = extract_cached(
+            cache, "embeddings/t/base/ref", BASE_FIELDS, texts, ExtractSettings(), load,
+            stats=second_stats,
+        )  # fmt: skip
+    assert (hit1, hit2) == (False, True)
+    assert first_stats.forward_calls >= 1 and second_stats.forward_calls == 0
+    assert loads == [1]
+    assert "cache hit: embeddings/t/base/ref/" in caplog.text
+    np.testing.assert_array_equal(first["mean"], second["mean"])

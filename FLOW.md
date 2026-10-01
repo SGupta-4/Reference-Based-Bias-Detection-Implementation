@@ -95,20 +95,22 @@ M3 renders training records with `to_messages(row)` (TRL prompt–completion, D-
 2. Runner launches u and h as two processes, on `cuda:0` and `cuda:1` (D-003).
 Resume behaviour: `checkpoint-*` every ~20 min of wall-clock. `complete=false` manifests trigger resume.
 
-## Stage: embed
-1. `models.loading.load_for_inference(model_cfg)` → base (fp16 sharded | fp32 Gemma), tokenizer (right pad)
-2. `models.spectrum.iter_checkpoints(base, cfg)` yields (ckpt_slug, context manager):
-   - `ref`: adapters disabled / base weights
-   - LoRA `aXXX`: `models.adapters.build_combined(u, h, α)` → set_adapter
-   - full `aXXX`: `models.interpolate.apply(base, W_h, W_u, α)` (in place)
-3. For each ckpt: `utils.cache.lookup(embed_key)` → hit: log `cache hit`, no forward pass
-   miss: `embed.extract.encode(model, tok, union, poolings, layer_site)`:
-   - batches sorted by length (token budget)
-   - forward on the base transformer only → last_hidden_state [B, T, d] (+ pre-norm hook if enabled)
-   - `utils.guards.assert_finite(hidden)`
-   - `embed.pooling.pool(hidden, attention_mask, kind)` → [B, d] fp32 → fp16
-   - `utils.cache.write(embed_key, {mean,max,last}: [N, d], sidecar)` [writes `embeddings/.../<embed_key>.safetensors`]
-Invariant: ref and every aXXX key differ only in checkpoint spec (asserted).
+## Stage: embed (implemented for `ref`, M2; α-checkpoints M4)
+Entry: `run --stages sentences,embed` → `runner.STAGE_IMPLS["embed"]` → `embed.extract.stage(ctx)`
+Depends on `sentences` only while `embed.checkpoints == [ref]` (`runner.stage_deps`, D-057).
+1. Read `sentences/<run_key>/union.json` from the upstream manifest → texts, union_hash, index
+2. `embed.extract.ExtractSettings.from_config(cfg.embed)` (poolings, layer sites, max length, token budget)
+3. Per model in `cfg.models`: `LoadSpec(id, resolve_revision(id), precision, placement)`; key fields = {model spec, checkpoint ref, layer, settings + tokenizer policy, union_hash, schema_version.embed} → `make_key`
+4. `extract_cached(cache, "embeddings/<slug>/base/ref", key_fields, texts, settings, load)`:
+   - hit → `TensorCache.read` (logs `cache hit`; `load` is never called, so there is no download and no forward)
+   - miss → `load()` = `models.loading.download(spec)` [timed] + `load_for_inference(spec)` [timed] + layer-count check (D-017) → `encode(model, tok, texts, settings)`:
+     - `token_lengths` → `make_batches` (longest first, batch × longest ≤ token_budget)
+     - per batch: tokenizer (right pad, BOS, truncation) → `base_decoder(model)(input_ids, attention_mask)` → `last_hidden_state` [B, T, d] (+ pre-norm via a forward hook on the last layer when requested)
+     - `assert_finite(hidden)` → `pool_all(hidden, mask, poolings)` [B, d] fp32 → fp16 → `assert_finite(fp16)` → scatter to input order
+   - `TensorCache.write(...)` {mean, max, last[, pre_norm/*]}: [N, d] fp16 + sidecar {fields, text_hashes, stats}
+5. Writes `embed/<run_key>/timing.json` {download, load, extraction seconds, padding waste, peak GiB per GPU, cache hit}
+`python -m rbbd.cli compare-embeddings --a <cfg> --b <cfg>` → `cached_ref_entry` ×2 → `compare_entries` (cosine per pooling; per-group B under RR and SEAT via `metrics.delta_b.from_union`) → `env/<session>/compare_<run_name>.json` (D-058).
+Invariant (M4): ref and every aXXX key differ only in the checkpoint field.
 
 ## Stage: deltab
 1. `utils.cache.read(embed_key_ref)`, `read(embed_key_aud)` → E_ref, E_aud (CPU fp32)

@@ -806,3 +806,48 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: none.
 - Paper deviation: no.
 - Revisit-if: n/a.
+
+## D-057 Reference-only `embed` stage for M2; config-dependent stage dependencies
+- Date: 2026-10-01
+- Context: M2 extracts reference embeddings before any fine-tuning exists, but the stage graph had `embed` depend on `train` (FLOW.md). M2-T4's DC-12 command referred to checkpoint `a050`, which does not exist until M3/M4.
+- Options considered: a separate probe command outside the runner; or making `embed`'s dependencies follow the configured checkpoints.
+- Choice:
+  - **Dependencies.** `runner.stage_deps(stage, cfg)`: `embed` depends on `sentences` only when `embed.checkpoints == [ref]` (the M2 default in `base.yaml`), and on `sentences` + `train` otherwise. Run keys use these dependencies.
+  - **Stage scope.** The M2 `embed` stage extracts `ref` only and raises `NotImplementedError` (M4) for α-checkpoints. It writes `embed/<run_key>/timing.json` and records the cache files as stage outputs.
+  - **Timing.** The stage times `download` (`snapshot_download` of weights, config and tokenizer files into `$HF_HOME`) separately from `load` and extraction. DC-12 = load + extraction seconds; the cost of one α-checkpoint equals the reference's, so DC-12 is measured on `ref` in M2 and re-measured on `a050` in M4.
+  - **Loading.** Models load with `AutoModelForCausalLM`; `base_decoder` finds the inner text transformer (Llama/Mistral/Qwen `model.model`; Gemma 3's text `language_model`). The stage asserts that the configured layer index equals the decoder depth (D-017).
+  - **Smoke subset.** `sentences.subset` (`smoke.yaml`: 3 groups × 5 targets, 10 P, 10 N, 50 anchors, base variants) is cut from the fully validated sets.
+  - **Tests.** The CPU tests run the whole stage on a 2-layer random Llama built from a config, with a word-level fake tokenizer (no downloads).
+- Why: Keeps the runner as the only way stages execute, and keeps cache keys honest about what each extraction depended on.
+- Tradeoff accepted: The `embed` run key changes when α-checkpoints are added (as it should).
+- Cost impact: none.
+- Paper deviation: no.
+- Revisit-if: M4 needs reference and α-checkpoints in one stage run (it will reuse the cached `ref` entry either way).
+
+## D-058 Pre-registered M2 acceptance rules: DC-06 tolerance and the Gemma fp16 criterion (amends DONE DC-06, D-005)
+- Date: 2026-10-01 (written before any M2 GPU result)
+- Context: DC-06 said "atol 1e-3 in fp16". Embeddings are cached in fp16, whose rounding step is ≈ 0.008 for values in [8, 16) (Qwen and Llama post-norm hidden states reach such values), so a pure absolute tolerance of 1e-3 cannot be met even by identical computations that round differently. D-005 needed an explicit rule for when Gemma may run in fp16.
+- Options considered: atol only; atol + rtol; cosine-only.
+- Choice:
+  - **DC-06:** pass if `torch.testing.assert_close(..., atol=1e-3, rtol=1e-3)` holds for mean, max and last pooling (rtol 1e-3 is torch's default for fp16). The GPU test also records max absolute and relative differences in `m2_extract_gpu.json`.
+  - **Gemma fp16 criterion:** Gemma-3-4B may move from fp32 to fp16 (superseding D-005) only if all three hold for the full sentence union:
+    1. the fp16 extraction completes with the NaN/Inf guard never firing;
+    2. per-sentence cosine(fp16, fp32) has mean ≥ 0.999 and minimum ≥ 0.99 for every pooling;
+    3. the largest per-group |B_fp16 − B_fp32| under RR and SEAT is ≤ 5% of the spread of B across groups in fp32.
+    The numbers come from `python -m rbbd.cli compare-embeddings`. Otherwise Gemma stays fp32.
+- Why: Rules fixed before the data cannot be tuned to the data.
+- Tradeoff accepted: The 5% threshold is a judgment call; it is about one tenth of the group-to-group variation ΔB has to detect.
+- Cost impact: Gemma in fp16 would halve its inference memory and roughly double throughput.
+- Paper deviation: no.
+- Revisit-if: n/a.
+
+## D-059 Local CPU test environment needs the `train` extra
+- Date: 2026-10-01
+- Context: M2's CPU tests run a real (tiny) transformers model, so `pytest -q -m "not gpu"` now needs torch and transformers. Installing them here, the PyTorch CPU wheel index was unreachable, and `pip install accelerate` pulled an **unpinned** torch 2.14.1 from PyPI as a dependency. It was replaced at once by the pinned `torch==2.7.1`; no test ever ran on the unpinned version.
+- Options considered: separate CPU-only pins; skip torch tests without torch; require `.[train,dev]` for the CPU suite.
+- Choice: DC-02's environment is `pip install -e ".[train,dev]"`. Tests are never skipped for a missing dependency. When adding packages, install the pinned extra as one command so pip resolves torch to the pin.
+- Why: One environment definition; no silently skipped tests.
+- Tradeoff accepted: The CPU environment is a few GB larger.
+- Cost impact: none on Kaggle (it installs `train` anyway).
+- Paper deviation: no.
+- Revisit-if: CI is added (out of scope per the brief).
