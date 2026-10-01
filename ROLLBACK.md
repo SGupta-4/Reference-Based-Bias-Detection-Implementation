@@ -40,6 +40,8 @@
 |---|---|---|---|---|
 | `m0-green` | `7d956c162e9c6dfec9872104c7951a67d0f9e1d4` | `00_probe.ipynb` (Kaggle version not reported; session `20261001T094200Z`, run S03) | `a3d5ae3a9bf9c2e3a557af9a82acff77c08b13d4` | 2026-10-01 |
 
+Note: `m0-green` was created as an annotated tag in the agent session, but pushing tags is blocked by that session's git policy (HTTP 403). Until the user pushes it (`git tag -a m0-green 7d956c162e9c6dfec9872104c7951a67d0f9e1d4 -m "M0 green" && git push origin m0-green`, or a GitHub release on that commit), roll back to the commit SHA above.
+
 ## Pre-edit rollback targets
 
 | Date | Planned change | Rollback tag | Files expected to change | Namespaces invalidated | Outcome |
