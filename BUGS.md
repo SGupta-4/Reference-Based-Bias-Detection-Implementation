@@ -292,3 +292,29 @@ IDs are sequential and never reused.
 - Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `102 passed, 10 deselected in 14.35s`, including the 3 new probe tests; all notebook code cells parse. Kaggle: the 4×8 layout OOMed in TRL's token-accuracy logits copy (+1.96 GiB at 12.94 GiB in use), as the fallback loop anticipates; 2×16 completed. Full numbers in D-071.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: `c44ecaf`; D-042, D-055, D-070, D-071
+
+## B-019 Feature: M3b Tier 2 training (full FT + LoRA, seeds, OOM fallback, per-pair sync)
+- Status: In progress. CPU side done; Kaggle sessions (`notebooks/m3b_train.ipynb`, Qwen then Llama-1B) pending.
+- How it was found or scoped: PLAN §7 M3b-T5–T7; the user said "prepare M3b" (2026-10-01).
+- Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3b_train.ipynb` with `MODEL = "qwen2.5-0.5b"`, then `"llama3.2-1b"`.
+- Hypotheses tried (design risks found before running):
+  - Two parallel 1B full-FT jobs would write ≈ 15 GB of checkpoints to the 20 GB `/kaggle/working` → full-FT checkpoints go to ephemeral disk (D-072 item 2).
+  - Llama-3.2-1B's tied `lm_head` is absent from saved endpoints, so the old `apply_alpha` would raise on it → tied aliases are tolerated (test with a tied tiny Llama).
+  - 4×8 may OOM for 1B full FT, as it did for 8B QLoRA (D-071) → automatic layout fallback.
+- Fix:
+  - Code: `finetune.sft` (`batch_layouts`, `seeds_for`, multi-layout `Job`, `checkpoint_dir`, OOM fallback in `run_job`, `sync_jobs`, seed-major `plan_jobs`), `models.interpolate.apply_alpha` (tied weights), `utils.store.HFStore.download_dir` + `cli restore`.
+  - Config and notebook: `configs/tier2_{qwen2.5-0.5b,llama3.2-1b}.yaml`, `configs/m3b_probe_*.yaml`, `notebooks/m3b_train.ipynb`.
+  - Tests: GPU `test_real_full_endpoints` and `test_real_tier2_lora_endpoints`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `110 passed, 10 deselected`. New tests:
+  - layout candidates and per-regime seeds;
+  - OOM fallback: OOM marker written, the next layout used, and a rerun skips both;
+  - non-OOM errors re-raised;
+  - ephemeral checkpoint dir;
+  - full-FT resume after a kill: bit-identical, with checkpoints outside the job dir;
+  - tied-embedding interpolation;
+  - store `download_dir`;
+  - `sync_jobs` uploads finished jobs and swallows store errors.
+  - Planning dry run on the real configs: Qwen → full s0, LoRA s0, full s1, full s2 (4 pairs); Llama-1B → full s0, LoRA s0 (2 pairs). The GPU tests skip without `RBBD_M3B_CONFIG`. All notebook cells parse.
+  - Kaggle: pending.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-008, D-009, D-033, D-042, D-072

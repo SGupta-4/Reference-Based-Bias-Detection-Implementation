@@ -432,6 +432,7 @@ def train_one(
     guard: GuardSettings | None = None,
     extra_callbacks: Sequence[Any] = (),
     max_minutes: float | None = None,
+    ckpt_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Train one endpoint into `out_dir`, resuming from its newest checkpoint; return done.json.
 
@@ -466,7 +467,7 @@ def train_one(
         data_stats["n_truncated"],
     )
 
-    ckpt_dir = out_dir / "checkpoints"
+    ckpt_dir = Path(ckpt_dir) if ckpt_dir is not None else out_dir / "checkpoints"
     context = {"model": spec.slug, "regime": spec.regime, "split": spec.split, "seed": spec.seed}
     guard_cb = GuardCallback(guard or GuardSettings(), context)
     throughput = ThroughputCallback()
@@ -574,7 +575,13 @@ def load_model(spec: TrainSpec) -> Any:
 
 
 def spec_from_config(
-    cfg: Any, model_entry: Mapping[str, Any], regime: str, split: str, seed: int, dkey: str
+    cfg: Any,
+    model_entry: Mapping[str, Any],
+    regime: str,
+    split: str,
+    seed: int,
+    dkey: str,
+    layout: tuple[int, int] | None = None,
 ) -> TrainSpec:
     """Build a `TrainSpec` from the `train:` config section and one `models:` entry.
 
@@ -593,8 +600,8 @@ def spec_from_config(
         data_key=dkey,
         compute=model_entry.get("train_compute", t.get("compute", "fp16")),
         epochs=float(t.get("epochs", 3)),
-        per_device_batch=int(t.get("per_device_batch", 4)),
-        grad_accum=int(t.get("grad_accum", 8)),
+        per_device_batch=int(layout[0] if layout else t.get("per_device_batch", 4)),
+        grad_accum=int(layout[1] if layout else t.get("grad_accum", 8)),
         lr=lr.get(regime) if isinstance(lr, Mapping) else lr,
         warmup_ratio=float(t.get("warmup_ratio", 0.03)),
         lr_scheduler=t.get("lr_scheduler", "linear"),
@@ -609,24 +616,71 @@ def spec_from_config(
     )
 
 
+def batch_layouts(train_cfg: Mapping[str, Any], regime: str) -> list[tuple[int, int]]:
+    """(per-device batch, grad-acc) layouts to try in order on CUDA OOM (D-072).
+
+    `train.batch_layouts` may be a list of [b, g] pairs or a {regime: list} mapping;
+    without it, the single layout (`per_device_batch`, `grad_accum`) is used.
+    """
+    spec = train_cfg.get("batch_layouts")
+    if isinstance(spec, Mapping):
+        spec = spec.get(regime)
+    if not spec:
+        return [(int(train_cfg.get("per_device_batch", 4)), int(train_cfg.get("grad_accum", 8)))]
+    return [(int(b), int(g)) for b, g in spec]
+
+
+def seeds_for(cfg: Any, regime: str) -> list[int]:
+    """Training seeds for `regime`: `train.seeds_by_regime[regime]`, else `train.seeds`."""
+    t = cfg.get("train", {})
+    by_regime = t.get("seeds_by_regime") or {}
+    seeds = by_regime.get(regime, t.get("seeds", [cfg.get("seed", 0)]))
+    return [int(x) for x in seeds]
+
+
+OOM_MARKER = "oom.json"
+
+
 @dataclass
 class Job:
-    """One endpoint to train: where its inputs are and where its outputs go."""
+    """One endpoint to train: its inputs and its candidate (spec, dir) per batch layout.
+
+    `spec`/`out_dir` resolve to the active candidate: the first with `done.json`, else the
+    first not marked `oom.json` (D-072), else the last.
+    """
 
     model_entry: dict[str, Any]
     regime: str
     split: str
     seed: int
-    spec: TrainSpec
-    out_dir: Path
+    candidates: list[tuple[TrainSpec, Path]]
     ids_path: Path
     revision: str | None
     extra: dict[str, Any] = field(default_factory=dict)
 
+    def _active(self) -> tuple[TrainSpec, Path]:
+        for spec, d in self.candidates:
+            if (d / "done.json").exists():
+                return spec, d
+        for spec, d in self.candidates:
+            if not (d / OOM_MARKER).exists():
+                return spec, d
+        return self.candidates[-1]
+
+    @property
+    def spec(self) -> TrainSpec:
+        return self._active()[0]
+
+    @property
+    def out_dir(self) -> Path:
+        return self._active()[1]
+
 
 def plan_jobs(cfg: Any, artifacts_root: Path, ftdata_outputs: Sequence[str]) -> list[Job]:
-    """Every (model, regime, seed, split) job under `cfg`, ordered so u/h pairs are adjacent.
+    """Every (model, seed, regime, split) job under `cfg`, u/h pairs adjacent.
 
+    Order is seed-major (all regimes at seed 0 before any extra seed), so the D-042 cut
+    order (extra seeds first) can stop a session early without losing a core endpoint.
     `ftdata_outputs` are the upstream manifest's output paths (relative to the root);
     `stats.json` gives the dataset revision and `<split>_ids.json` the selected rows.
     """
@@ -635,28 +689,25 @@ def plan_jobs(cfg: Any, artifacts_root: Path, ftdata_outputs: Sequence[str]) -> 
     stats = json.loads(by_name["stats.json"].read_text())
     revision = stats.get("revision")
     t = cfg.get("train", {})
+    regimes = list(t.get("regimes", ["lora"]))
+    all_seeds = sorted({s for r in regimes for s in seeds_for(cfg, r)})
+    ids = {split: json.loads(by_name[f"{split}_ids.json"].read_text()) for split in SPLITS}
     jobs = []
     for entry in cfg.get("models", []):
-        for regime in t.get("regimes", ["lora"]):
-            for seed in t.get("seeds", [cfg.get("seed", 0)]):
+        for seed in all_seeds:
+            for regime in regimes:
+                if seed not in seeds_for(cfg, regime):
+                    continue
                 for split in SPLITS:
-                    ids_path = by_name[f"{split}_ids.json"]
-                    ids = json.loads(ids_path.read_text())
-                    spec = spec_from_config(
-                        cfg, entry, regime, split, seed, data_key(revision, split, ids)
-                    )
+                    dkey = data_key(revision, split, ids[split])
+                    candidates = []
+                    for layout in batch_layouts(t, regime):
+                        spec = spec_from_config(cfg, entry, regime, split, seed, dkey, layout)
+                        candidates.append((spec, job_dir(root, spec)))
                     jobs.append(
-                        Job(
-                            dict(entry),
-                            regime,
-                            split,
-                            int(seed),
-                            spec,
-                            job_dir(root, spec),
-                            ids_path,
-                            revision,
-                        )
-                    )
+                        Job(dict(entry), regime, split, int(seed), candidates,
+                            by_name[f"{split}_ids.json"], revision)
+                    )  # fmt: skip
     return jobs
 
 
@@ -671,25 +722,76 @@ def load_rows(cfg: Any, ids_path: Path, revision: str | None) -> list[dict[str, 
     return [{"prompt": r["prompt"], "response": r["response"]} for r in sub]
 
 
+def checkpoint_dir(cfg: Any, spec: TrainSpec, out_dir: Path) -> Path:
+    """Where trainer checkpoints go: `<job>/checkpoints` (default, synced, survives the
+    session) or, with `train.checkpoint_root: {<regime>: ephemeral}`, the ephemeral disk.
+
+    Full-FT checkpoints of 1B models hold fp32 weights plus optimizer state (≈ 7.5 GB per
+    job), so two parallel jobs would overflow /kaggle/working (D-072).
+    """
+    from rbbd.utils.env import ephemeral_dir
+
+    roots = cfg.get("train.checkpoint_root") or {}
+    if roots.get(spec.regime) == "ephemeral":
+        return ephemeral_dir() / "rbbd_ckpt" / spec.slug / spec.train_key
+    return Path(out_dir) / "checkpoints"
+
+
+def _is_oom(exc: BaseException) -> bool:
+    import torch
+
+    return isinstance(exc, torch.OutOfMemoryError) or "out of memory" in str(exc).lower()
+
+
 def run_job(cfg: Any, job: Job) -> dict[str, Any]:
-    """Load data, tokenizer and model for `job` and train it (`cli train-one`)."""
+    """Load data, tokenizer and model for `job` and train it (`cli train-one`).
+
+    Batch layouts are tried in order: a CUDA OOM writes `oom.json` into that layout's
+    directory and moves to the next layout with a freshly loaded model (D-072).
+    """
+    import gc
+
+    import torch
+
     from rbbd.models.loading import load_tokenizer
 
     rows = load_rows(cfg, job.ids_path, job.revision)
-    tokenizer = load_tokenizer(job.spec.model_id, job.spec.revision)
-    model = load_model(job.spec)
     t = cfg.get("train", {})
     guard = GuardSettings(**t.get("guard", {}))
-    return train_one(
-        job.spec,
-        rows,
-        tokenizer,
-        model,
-        job.out_dir,
-        save_minutes=float(t.get("save_minutes", 20)),
-        guard=guard,
-        max_minutes=t.get("max_minutes"),
-    )
+    last_error: BaseException | None = None
+    for spec, out_dir in job.candidates:
+        if (out_dir / "done.json").exists():
+            return json.loads((out_dir / "done.json").read_text())
+        if (out_dir / OOM_MARKER).exists():
+            continue
+        tokenizer = load_tokenizer(spec.model_id, spec.revision)
+        model = load_model(spec)
+        try:
+            return train_one(
+                spec,
+                rows,
+                tokenizer,
+                model,
+                out_dir,
+                save_minutes=float(t.get("save_minutes", 20)),
+                guard=guard,
+                max_minutes=t.get("max_minutes"),
+                ckpt_dir=checkpoint_dir(cfg, spec, out_dir),
+            )
+        except Exception as exc:
+            if not _is_oom(exc):
+                raise
+            last_error = exc
+            out_dir.mkdir(parents=True, exist_ok=True)
+            layout = [spec.per_device_batch, spec.grad_accum]
+            (out_dir / OOM_MARKER).write_text(
+                json.dumps({"layout": layout, "error": str(exc)[:500]})
+            )
+            log.warning("CUDA OOM at batch %d x %d; trying the next layout", *layout)
+            del model
+            gc.collect()
+            torch.cuda.empty_cache()
+    raise RuntimeError(f"every batch layout ran out of memory for {job.split}") from last_error
 
 
 def stage(ctx: Any) -> Any:
@@ -716,6 +818,26 @@ def stage(ctx: Any) -> Any:
         outputs[f"{name}/done"] = str(rel / "done.json")
     ctx.checkpoint({"done": sorted(outputs)})
     return StageResult(outputs=outputs)
+
+
+def sync_jobs(cfg: Any, artifacts_root: Path, jobs: Sequence[Job]) -> None:
+    """Upload finished job directories to the private store right after they finish (D-072).
+
+    A long Tier 2 session that dies at the 12 h limit then loses at most the pair in
+    progress; the next session restores them with `cli restore`. Upload failures are
+    logged, not raised: training results stay on local disk for the end-of-session sync.
+    """
+    from rbbd.utils.store import open_store
+
+    try:
+        store = open_store(cfg.get("store.repo_id"), cfg.get("store.repo_type", "auto"))
+        for job in jobs:
+            if (job.out_dir / "done.json").exists():
+                rel = job.out_dir.relative_to(artifacts_root).as_posix()
+                store.upload_dir(job.out_dir, rel, f"train {rel}")
+    except Exception as exc:  # noqa: BLE001 - never lose a finished run to a sync error
+        log.warning("per-pair sync failed (%s: %s); the end-of-session sync still applies",
+                    type(exc).__name__, exc)  # fmt: skip
 
 
 def _run_parallel(ctx: Any, jobs: Sequence[Job]) -> None:
@@ -746,7 +868,9 @@ def _run_parallel(ctx: Any, jobs: Sequence[Job]) -> None:
                 "--seed",
                 str(job.seed),
             ]
-            env = {**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu)}
+            # expandable_segments reduces fragmentation-driven OOMs; it does not change results.
+            env = {**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu),
+                   "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}  # fmt: skip
             logf = open(job.out_dir / "train.log", "a")  # noqa: SIM115 - closed after wait
             log.info("launching %s on cuda:%d -> %s", job.split, gpu, job.out_dir)
             procs.append(
@@ -761,3 +885,5 @@ def _run_parallel(ctx: Any, jobs: Sequence[Job]) -> None:
                 failed.append(f"{job.out_dir} (exit {proc.returncode}):\n" + "\n".join(tail))
         if failed:
             raise RuntimeError("train-one failed:\n" + "\n\n".join(failed))
+        if ctx.cfg.get("train.sync_each_pair", False):
+            sync_jobs(ctx.cfg, ctx.env.artifacts_root, [job for job, _, _ in procs])

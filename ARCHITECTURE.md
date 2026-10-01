@@ -107,7 +107,8 @@ artifacts/
 └── analysis/<run_key>/{joined.csv, stats.csv, tables/, figures/}
 ```
 
-- Same private repo, `ckpt_private/tier2/<model_slug>/full/<split>/seed<k>/model.safetensors` (+ config/tokenizer): Tier 2 full-FT endpoints (D-041).
+- Same private repo, same paths as local: `train/<model_slug>/full/<split>/seed<k>/<train_key>/final/` holds Tier 2 full-FT endpoints (fp16 safetensors + config/tokenizer); uploaded per finished u‖h pair and restored with `cli restore` (D-072, replacing D-041's `ckpt_private/…`).
+- Ephemeral: full-FT trainer checkpoints `<ephemeral>/rbbd_ckpt/<slug>/<train_key>/` (D-072).
 - Repo `results/<run_name>/`: public-safe aggregates only (DC-18). For example, `results/smoke/delta_b.csv`.
 - Ephemeral (`utils.env.ephemeral_dir()`, D-045): HF cache and materialised Tier 2 α-weights.
 
@@ -138,3 +139,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 - 2026-10-01 — Generation serves merged α-weights from ephemeral disk instead of vLLM LoRA — D-050.
 - 2026-10-01 — `embed` depends on `train` only for α-checkpoints; CLI gains `compare-embeddings` — D-057, D-058.
 - 2026-10-01 — `train` stage implemented: `finetune.sft` jobs run as `cli train-one` processes (u‖h on two GPUs); α endpoints are the trained adapters — D-065, D-066, D-067.
+- 2026-10-01 — Tier 2 training: batch-layout fallback, ephemeral full-FT checkpoints, per-pair store sync, CLI `restore`; full endpoints stored at their `train/` path — D-072.

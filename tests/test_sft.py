@@ -259,11 +259,12 @@ def _dotted(data, key, default):
 def test_plan_jobs_pairs_and_keys(tmp_path):
     cfg = _cfg({"regimes": ["lora", "full"], "seeds": [0, 1]})
     jobs = sft.plan_jobs(cfg, tmp_path, _ftdata(tmp_path))
+    # seed-major: every regime at seed 0 before any extra seed (D-072)
     assert [(j.regime, j.seed, j.split) for j in jobs[:4]] == [
         ("lora", 0, "unharmful"),
         ("lora", 0, "harmful"),
-        ("lora", 1, "unharmful"),
-        ("lora", 1, "harmful"),
+        ("full", 0, "unharmful"),
+        ("full", 0, "harmful"),
     ]
     assert len(jobs) == 8 and len({j.out_dir for j in jobs}) == 8
     u = jobs[0]
@@ -320,8 +321,11 @@ def test_runner_train_stage_end_to_end_and_cache_hit(config_dir, artifacts, monk
 
     def fake_ftdata(ctx):
         out = {}
-        for name, value in (("stats", {"revision": "r"}), ("unharmful_ids", [0, 1, 2, 3]),
-                            ("harmful_ids", [4, 5, 6, 7])):  # fmt: skip
+        for name, value in (
+            ("stats", {"revision": "r"}),
+            ("unharmful_ids", [0, 1, 2, 3]),
+            ("harmful_ids", [4, 5, 6, 7]),
+        ):
             path = ctx.stage_dir / f"{name}.json"
             path.write_text(json.dumps(value))
             out[name] = str(path.relative_to(ctx.env.artifacts_root))
@@ -378,8 +382,13 @@ def test_throughput_summary_skips_warmup_steps():
     cb = sft.ThroughputCallback(skip_steps=2)
     t0 = 1000.0
     # steps 1-2 are warm-up (slow); steady steps 3..5 process 400 tokens per 2 s
-    for step, t, n in [(1, t0 + 10, 300), (2, t0 + 20, 600), (3, t0 + 22, 1000),
-                       (4, t0 + 24, 1400), (5, t0 + 26, 1800)]:  # fmt: skip
+    for step, t, n in [
+        (1, t0 + 10, 300),
+        (2, t0 + 20, 600),
+        (3, t0 + 22, 1000),
+        (4, t0 + 24, 1400),
+        (5, t0 + 26, 1800),
+    ]:
         cb.clock = lambda t=t: t
         cb.on_log(None, SimpleNamespace(global_step=step), None, logs={"num_tokens": n})
     assert cb.summary() == {"tokens_per_second_steady": 200.0, "seconds_per_step_steady": 2.0}
@@ -391,18 +400,165 @@ def test_throughput_summary_skips_warmup_steps():
 def test_time_limit_stops_training_and_done_has_projection(tmp_path):
     """max_minutes=0 stops after the first optimizer step; done.json still carries the
     throughput fields and a projection keyed by epoch count."""
-    done = sft.train_one(_spec(), make_rows(16), make_chat_tokenizer(), make_tiny_model(),
-                         tmp_path / "job", save_minutes=1e6, max_minutes=0)  # fmt: skip
+    done = sft.train_one(
+        _spec(),
+        make_rows(16),
+        make_chat_tokenizer(),
+        make_tiny_model(),
+        tmp_path / "job",
+        save_minutes=1e6,
+        max_minutes=0,
+    )
     assert done["global_step"] == 1
     assert set(done["projected_hours"]) == {"2_epochs", "1_epochs"}
     assert {"tokens_per_second_steady", "seconds_per_step_steady", "peak_mem_gib"} <= set(done)
 
 
 def test_full_run_projection_uses_steady_rate(tmp_path):
-    done = sft.train_one(_spec(epochs=2, per_device_batch=1, grad_accum=1), make_rows(12),
-                         make_chat_tokenizer(), make_tiny_model(), tmp_path / "job",
-                         save_minutes=1e6)  # fmt: skip
+    done = sft.train_one(
+        _spec(epochs=2, per_device_batch=1, grad_accum=1),
+        make_rows(12),
+        make_chat_tokenizer(),
+        make_tiny_model(),
+        tmp_path / "job",
+        save_minutes=1e6,
+    )
     data = json.loads((tmp_path / "job" / "data.json").read_text())
     tps = done["tokens_per_second_steady"]
     assert tps and tps > 0
     assert done["projected_hours"]["1_epochs"] == round(data["n_tokens"] / tps / 3600, 2)
+
+
+# --- M3b: per-regime seeds, batch-layout fallback, checkpoint root (D-072) -------------------
+
+
+def test_seeds_by_regime_and_layout_candidates(tmp_path):
+    cfg = _cfg(
+        {
+            "regimes": ["full", "lora"],
+            "seeds_by_regime": {"full": [0, 1, 2], "lora": [0]},
+            "batch_layouts": {"full": [[4, 8], [2, 16], [1, 32]]},
+        }
+    )
+    jobs = sft.plan_jobs(cfg, tmp_path, _ftdata(tmp_path))
+    assert [(j.seed, j.regime) for j in jobs[::2]] == [
+        (0, "full"),
+        (0, "lora"),
+        (1, "full"),
+        (2, "full"),
+    ]
+    full = jobs[0]
+    assert [(s.per_device_batch, s.grad_accum) for s, _ in full.candidates] == [
+        (4, 8),
+        (2, 16),
+        (1, 32),
+    ]
+    assert len({d for _, d in full.candidates}) == 3
+    lora = jobs[2]
+    assert [(s.per_device_batch, s.grad_accum) for s, _ in lora.candidates] == [(4, 8)]
+
+
+def test_run_job_falls_back_to_next_layout_on_oom(tmp_path, monkeypatch):
+    cfg = _cfg({"regimes": ["full"], "batch_layouts": [[4, 8], [2, 16]]})
+    job = sft.plan_jobs(cfg, tmp_path, _ftdata(tmp_path))[0]
+    from rbbd.models import loading
+
+    monkeypatch.setattr(sft, "load_rows", lambda *a: make_rows(2))
+    monkeypatch.setattr(loading, "load_tokenizer", lambda *a: make_chat_tokenizer())
+    monkeypatch.setattr(sft, "load_model", lambda spec: object())
+    tried = []
+
+    def fake_train_one(spec, rows, tok, model, out_dir, **kw):
+        tried.append(spec.per_device_batch)
+        if spec.per_device_batch == 4:
+            raise torch.OutOfMemoryError("CUDA out of memory. Tried to allocate 1.96 GiB")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "done.json").write_text(json.dumps({"global_step": 1}))
+        return {"global_step": 1}
+
+    monkeypatch.setattr(sft, "train_one", fake_train_one)
+    assert sft.run_job(cfg, job) == {"global_step": 1} and tried == [4, 2]
+    first, second = (d for _, d in job.candidates)
+    assert json.loads((first / sft.OOM_MARKER).read_text())["layout"] == [4, 8]
+    assert job.out_dir == second and job.spec.per_device_batch == 2
+    # A re-run skips the OOM layout and returns the finished one without training.
+    assert sft.run_job(cfg, job) == {"global_step": 1} and tried == [4, 2]
+
+
+def test_run_job_reraises_other_errors(tmp_path, monkeypatch):
+    cfg = _cfg({"regimes": ["full"], "batch_layouts": [[4, 8], [2, 16]]})
+    job = sft.plan_jobs(cfg, tmp_path, _ftdata(tmp_path))[0]
+    from rbbd.models import loading
+
+    monkeypatch.setattr(sft, "load_rows", lambda *a: make_rows(2))
+    monkeypatch.setattr(loading, "load_tokenizer", lambda *a: make_chat_tokenizer())
+    monkeypatch.setattr(sft, "load_model", lambda spec: object())
+    monkeypatch.setattr(sft, "train_one", lambda *a, **k: (_ for _ in ()).throw(ValueError("boom")))
+    with pytest.raises(ValueError, match="boom"):
+        sft.run_job(cfg, job)
+    assert not any((d / sft.OOM_MARKER).exists() for _, d in job.candidates)
+
+
+def test_checkpoint_dir_ephemeral_for_full(tmp_path, monkeypatch):
+    monkeypatch.setenv("RBBD_EPHEMERAL", str(tmp_path / "eph"))
+    cfg = _cfg({"regimes": ["full", "lora"], "checkpoint_root": {"full": "ephemeral"}})
+    jobs = sft.plan_jobs(cfg, tmp_path, _ftdata(tmp_path))
+    full = next(j for j in jobs if j.regime == "full")
+    lora = next(j for j in jobs if j.regime == "lora")
+    assert sft.checkpoint_dir(cfg, lora.spec, lora.out_dir) == lora.out_dir / "checkpoints"
+    eph = sft.checkpoint_dir(cfg, full.spec, full.out_dir)
+    assert "rbbd_ckpt" in eph.parts and full.spec.train_key == eph.name
+    assert not eph.is_relative_to(tmp_path / "train")
+
+
+def test_full_resume_after_kill_is_bit_identical(tmp_path):
+    """DC-13 for the full-FT regime on CPU, with checkpoints in a separate directory."""
+    rows, tok = make_rows(16, seed=7), make_chat_tokenizer()
+    spec = _spec(regime="full", optim="adamw_torch", epochs=1)
+    ckpt = tmp_path / "eph"
+    sft.train_one(spec, rows, tok, make_tiny_model(), tmp_path / "ref", save_minutes=1e6)
+    with pytest.raises(sft.SimulatedKill):
+        sft.train_one(
+            spec,
+            rows,
+            tok,
+            make_tiny_model(),
+            tmp_path / "job",
+            save_steps=1,
+            extra_callbacks=[sft.KillAfterSave(2)],
+            ckpt_dir=ckpt,
+        )
+    assert not (tmp_path / "job" / "checkpoints").exists() and (ckpt / "checkpoint-2").is_dir()
+    done = sft.train_one(
+        spec, rows, tok, make_tiny_model(), tmp_path / "job", save_minutes=1e6, ckpt_dir=ckpt
+    )
+    assert done["resumed_from"] == "checkpoint-2" and done["global_step"] == 4
+    from safetensors.torch import load_file
+
+    a = load_file(str(tmp_path / "ref" / "final" / "model.safetensors"))
+    b = load_file(str(tmp_path / "job" / "final" / "model.safetensors"))
+    assert a.keys() == b.keys() and all(torch.equal(a[k], b[k]) for k in a)
+
+
+def test_sync_jobs_uploads_finished_jobs_and_swallows_errors(tmp_path, monkeypatch, caplog):
+    import logging
+
+    from rbbd.utils import store as store_mod
+
+    cfg = _cfg({"regimes": ["lora"]})
+    jobs = sft.plan_jobs(cfg, tmp_path, _ftdata(tmp_path))
+    jobs[0].out_dir.mkdir(parents=True)
+    (jobs[0].out_dir / "done.json").write_text("{}")
+    uploads = []
+    fake = SimpleNamespace(upload_dir=lambda local, rel, msg: uploads.append(rel))
+    monkeypatch.setattr(store_mod, "open_store", lambda *a, **k: fake)
+    sft.sync_jobs(cfg, tmp_path, jobs)
+    assert uploads == [jobs[0].out_dir.relative_to(tmp_path).as_posix()]
+
+    def broken(*a, **k):
+        raise store_mod.StoreError("unreachable")
+
+    monkeypatch.setattr(store_mod, "open_store", broken)
+    with caplog.at_level(logging.WARNING):
+        sft.sync_jobs(cfg, tmp_path, jobs)
+    assert "per-pair sync failed" in caplog.text

@@ -1,1 +1,15 @@
-# Placeholder — filled in M3. Schema and values: PLAN.md §3, §6 and DECISION.md.
+# Tier 2, Llama-3.2-1B-Instruct (PLAN §6; D-009, D-072). Full FT and LoRA, seed 0, 3 epochs
+# (App. C). Tied embeddings: interpolation handles the lm_head alias (models.interpolate).
+run_name: tier2_llama3.2-1b
+tier: 2
+models:
+  - {id: meta-llama/Llama-3.2-1B-Instruct, slug: llama3.2-1b-it, layer: 16, precision: fp16, placement: "cuda:0"}
+ftdata:
+  census_tokenizers: []
+train:
+  regimes: [full, lora]
+  batch_layouts:
+    full: [[4, 8], [2, 16], [1, 32]]
+    lora: [[4, 8], [2, 16]]
+  checkpoint_root: {full: ephemeral}
+  sync_each_pair: true

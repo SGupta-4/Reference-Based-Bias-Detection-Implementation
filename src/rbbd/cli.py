@@ -60,6 +60,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--path", required=True, help="path relative to the artifact root, e.g. env/<session>"
     )
 
+    rs = sub.add_parser("restore", help="download an artifact subfolder from the private store")
+    rs.add_argument("--config", type=Path, default=Path("configs/base.yaml"))
+    rs.add_argument(
+        "--path", required=True, help="path relative to the artifact root, e.g. train/<slug>"
+    )
+
     c = sub.add_parser("compare-embeddings", help="compare two configs' cached ref embeddings")
     c.add_argument("--a", type=Path, required=True, help="config whose embeddings are tested")
     c.add_argument("--b", type=Path, required=True, help="config used as the reference")
@@ -155,6 +161,15 @@ def _cmd_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_restore(args: argparse.Namespace) -> int:
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    local = _open_store(cfg).download_dir(args.path, env.artifacts_root)
+    n = sum(1 for p in local.rglob("*") if p.is_file()) if local.exists() else 0
+    print(json.dumps({"path": args.path, "files": n}))
+    return 0
+
+
 def _cmd_compare(args: argparse.Namespace) -> int:
     from rbbd.embed.extract import cached_ref_entry, compare_entries
 
@@ -214,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
         "sync": _cmd_sync,
         "compare-embeddings": _cmd_compare,
         "train-one": _cmd_train_one,
+        "restore": _cmd_restore,
         "vllm-case": _cmd_vllm_case,
     }
     return handlers[args.command](args)

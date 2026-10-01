@@ -1,0 +1,15 @@
+# M3b session probe (D-072): full FT of Qwen/Qwen2.5-0.5B-Instruct, u||h, 30 steps or 8 min, real WildGuardMix
+# splits. done.json's projected_hours bounds the session before the long run starts.
+run_name: m3b_probe_qwen2.5-0.5b
+tier: 2
+models:
+  - {id: Qwen/Qwen2.5-0.5B-Instruct, slug: qwen2.5-0.5b-it-probe, layer: 24, precision: fp16, placement: "cuda:0"}
+ftdata:
+  census_tokenizers: []
+train:
+  regimes: [full]
+  batch_layouts: {full: [[4, 8], [2, 16], [1, 32]]}
+  checkpoint_root: {full: ephemeral}
+  max_steps: 30
+  max_minutes: 8
+  save_minutes: 600

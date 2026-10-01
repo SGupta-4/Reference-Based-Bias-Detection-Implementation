@@ -1095,3 +1095,38 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: Llama training 6.6 h instead of 19.4 h at 3 epochs; the probe cost ≈ 0.6 session-h.
 - Paper deviation: **yes**, App. C epochs (3 → 1) for Llama-3.1-8B, plus the batch layout (no deviation in effective batch).
 - Revisit-if: real Llama training drifts > 15 % from the projection (D-070), or the weekly quota grows enough to afford 3 epochs (≈ +12.8 h).
+
+## D-072 M3b Tier 2 training design and the pre-registered session rule (implements D-008, D-009, D-033; amends D-041 store path, D-067)
+- Date: 2026-10-01 (written before any Tier 2 GPU data)
+- Context: M3b trains Qwen2.5-0.5B (full s0, LoRA s0, full s1, full s2) and Llama-3.2-1B (full s0, LoRA s0), each u‖h on the two T4s, at 3 epochs (Tier 2 keeps App. C epochs, D-071).
+  - Full FT of a 1.2B model holds fp32 masters, gradients and 8-bit optimizer state (≈ 12.4 GB, D-009). Its trainer checkpoints are ≈ 7.5 GB per job.
+  - Tier 2 throughput is unmeasured.
+  - Llama-3.2-1B ties `lm_head` to `embed_tokens`.
+- Choices:
+  1. **Batch-layout fallback:** `train.batch_layouts` (per regime) lists [b, g] pairs with b × g = 32; Tier 2 uses 4×8 → 2×16 → 1×32.
+     - Each layout has its own `train_key` and job directory.
+     - A CUDA OOM writes `oom.json` there and `run_job` retries the next layout with a freshly loaded model; any other error propagates.
+     - The job resolves to the first layout with `done.json`. The effective batch is unchanged (App. C).
+     - `group_by_length` puts the longest batch first, so an OOM appears in the first steps.
+  2. **Checkpoints:** `train.checkpoint_root: {full: ephemeral}` writes full-FT trainer checkpoints to `<ephemeral>/rbbd_ckpt/<slug>/<train_key>`. A crash can then resume within the session but not across sessions.
+     - The finals stay in `/kaggle/working`.
+     - LoRA checkpoints stay in the job directory.
+     - Train subprocesses set `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` (fragmentation only; results unchanged).
+  3. **Seeds:** `train.seeds_by_regime` gives the seeds ablation (D-033) to full FT only. Jobs run **seed-major** (every regime at seed 0 first), so a short session loses extra seeds before core endpoints (D-042 cut order).
+  4. **Store:**
+     - With `train.sync_each_pair: true`, each finished u‖h pair is uploaded right away (`sft.sync_jobs`). Failures are logged, not raised.
+     - A new session runs `cli restore --path train/<slug>` (`HFStore.download_dir`, private check first) to bring back finished jobs, which the stage then skips.
+     - Full-FT endpoints are stored at their job path `train/<slug>/full/<split>/seed<k>/<train_key>/final/` in the private repo. This replaces D-041's `ckpt_private/tier2/…` layout: one layout for every regime.
+  5. **Tied weights:** `interpolate.apply_alpha` accepts endpoints without a tied alias (`lm_head.weight`), writes the stored tensor, and the alias follows. Any other missing key still raises.
+  6. **Session probe and rule (pre-registered):**
+     - Each M3b session first runs `configs/m3b_probe_<model>.yaml`: full FT, u‖h, 30 steps or 8 min, separate `*-probe` slug, never synced.
+     - **Bound** = the harmful probe's `projected_hours["3_epochs"]` × pending u‖h pairs. LoRA and the unharmful split are bounded by the harmful full-FT rate.
+     - The long run starts only if the bound is ≤ 11 h (12 h session minus setup, tests and sync).
+     - Otherwise the notebook stops and I ask the user. Options would include D-042 cut item 2 (one extra seed instead of two) or a cross-session plan.
+  7. **DC-07 on real Tier 2 endpoints:** `test_real_full_endpoints` (exact α ∈ {0, 1} on the GPU model, finite α = 0.5 forward) and `test_real_tier2_lora_endpoints`, selected by `RBBD_M3B_CONFIG`.
+  8. **Execution:** `notebooks/m3b_train.ipynb` with `MODEL` = `qwen2.5-0.5b` (session 1) or `llama3.2-1b` (session 2), run as *Save & Run All* so it needs no open browser.
+- Why: The plan fits inside one session per model, survives a dead session at the cost of at most one pair, and never fills `/kaggle/working`.
+- Tradeoff accepted: A crash mid-pair in full FT restarts that pair from step 0 in the next session (its checkpoints were ephemeral). The probe's 8 minutes are a small sample.
+- Cost impact: ≈ 0.2 h per session for probe and setup. Training per D-055 ≈ 12.3 session-h for core Tier 2; the probes replace that estimate.
+- Paper deviation: no (Tier 2 is already an analogue, D-009).
+- Revisit-if: a session bound exceeds 11 h, or a full-FT layout fails even at 1×32 (then D-009's FSDP fallback).
