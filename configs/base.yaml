@@ -29,6 +29,20 @@ thresholds:
   decodingtrust: 0.1
   toxigen: 0.03
 
+# Fine-tuning data (App. C; D-010, D-011, D-040, D-042). The census tokenises every selected
+# example with each model's chat template; it runs on a Kaggle CPU session (M1-T8).
+ftdata:
+  dataset: allenai/wildguardmix
+  config: wildguardtrain
+  revision: null           # resolved to a commit sha at run time and recorded in stats.json
+  n_per_split: 8000
+  census_tokenizers:
+    - meta-llama/Llama-3.1-8B-Instruct
+    - mistralai/Mistral-7B-Instruct-v0.3
+    - google/gemma-3-4b-it
+    - Qwen/Qwen2.5-0.5B-Instruct
+    - meta-llama/Llama-3.2-1B-Instruct
+
 probe:
   # M0-T5: every HF repo in PLAN §5; auth_check only, nothing downloaded.
   access_repos:
@@ -45,9 +59,14 @@ probe:
     - {id: allenai/wildguardmix, type: dataset}
     - {id: tatsu-lab/alpaca, type: dataset}
     - {id: allenai/tulu-3-sft-mixture, type: dataset}
-  # M0-T6 (B-005, D-047): one fresh process per case.
+  # M0-T6 (B-005, D-047..D-050): one fresh process per case. vLLM LoRA does not compile
+  # on sm75, so α-checkpoints are served as merged fp16 weights from ephemeral disk
+  # (mode: merged). The LoRA case stays as a canary that is expected to fail.
   vllm_cases:
-    - {name: qwen05b_tp1_fp16_lora32, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, lora_rank: 32}
-    - {name: qwen05b_tp2_fp16_lora32, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 2, dtype: float16, lora_rank: 32}
-    - {name: gemma3_1b_tp1_fp16, model: google/gemma-3-1b-it, tp: 1, dtype: float16, lora_rank: null}
-    - {name: gemma3_1b_tp1_fp32, model: google/gemma-3-1b-it, tp: 1, dtype: float32, lora_rank: null}
+    - {name: qwen05b_tp1_fp16_plain, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, mode: plain}
+    - {name: qwen05b_tp2_fp16_plain, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 2, dtype: float16, mode: plain}
+    - {name: qwen05b_tp1_fp16_merged32, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, mode: merged, lora_rank: 32}
+    - {name: qwen05b_tp2_fp16_merged32, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 2, dtype: float16, mode: merged, lora_rank: 32}
+    - {name: qwen05b_tp1_fp16_lora32_canary, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, mode: lora, lora_rank: 32, expect_fail: true}
+    - {name: gemma3_1b_tp1_fp16, model: google/gemma-3-1b-it, tp: 1, dtype: float16, mode: plain}
+    - {name: gemma3_1b_tp1_fp32, model: google/gemma-3-1b-it, tp: 1, dtype: float32, mode: plain}

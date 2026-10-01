@@ -1,6 +1,6 @@
 # PLAN — Kaggle replication of "Reference-Based Bias Detection in LLMs via Relative Representations of Hidden States" (arXiv:2609.10060v1)
 
-Status: **M0 in progress** — CPU side done; Kaggle probe run pending. Written 2026-09-30 from `paper/2609.10060v1.pdf` only (27 pages, all sections and Appendices A–H read). The authors' code (https://github.com/NASK-AISafety/Reference-Based-Bias-Detection) was not public at planning time, so everything below is a from-scratch implementation.
+Status: **M0 done** (`m0-green`), **M1 done** (`m1-green`, 2026-10-01). Next: M2 (embedding extraction, first GPU milestone). Training budget re-baselined from the census (D-055). Generation uses merged weights because vLLM LoRA cannot compile on T4 (D-050). Written 2026-09-30 from `paper/2609.10060v1.pdf` only (27 pages, all sections and Appendices A–H read). The authors' code (https://github.com/NASK-AISafety/Reference-Based-Bias-Detection) was not public at planning time, so everything below is a from-scratch implementation.
 
 Citation convention: `§4.1` = paper section, `T1` = Table 1, `F4` = Figure 4, `App. C` = Appendix C. `[unspecified in paper]` marks a detail the PDF leaves open; each one has a `D-###` entry in `DECISION.md`.
 
@@ -169,7 +169,7 @@ No logic lives in notebooks.
 | E5 | Vectorised metrics | r(X) = normalize(E_X) @ normalize(E_A)ᵀ; distances via `torch.cdist` in fp32 on CPU/GPU; per-group reductions with index tensors; no Python loop over sentences | 1,200 × 200 distances in ms; all ablation cells in < 1 min CPU |
 | E6 | α sweep on one loaded base | LoRA: base loaded once (fp16, sharded); per α, activate a pre-built concatenated rank-2r adapter (D-007). Tier 2: endpoints held in CPU RAM (fp32), GPU weights overwritten in place per α (D-008) | 1 base load per model per session instead of 8 (≈ 3–5 min saved per α at 8B) |
 | E7 | Both T4s | 7–8B inference: `device_map` sharding (HF) or TP=2 (vLLM). Training: one split per GPU in parallel (u on cuda:0, h on cuda:1). Tier 2 benches: two small-model jobs in parallel | Kaggle bills session time, not GPU count, so parallel jobs halve quota use for training (D-002, D-003) |
-| E8 | vLLM multi-LoRA | One vLLM engine per Tier 1 model serves base + 7 α-adapters as LoRA requests (`max_lora_rank=32`, `max_loras=8`) | 1 engine start per model instead of 8 (~3–5 min each) |
+| E8 | ~~vLLM multi-LoRA~~ → merged weights per checkpoint (D-050) | vLLM LoRA does not compile on sm75 (B-005). Each α-checkpoint is merged in fp32, saved as fp16 to ephemeral disk, served without LoRA, then deleted; all benchmarks for a checkpoint run on one engine start | 1 engine start per checkpoint (not per benchmark); ≈ +1.5–2 h over the original E8 plan |
 | E9 | Reuse generations | Generations cached per (checkpoint, benchmark, prompt-subset hash, gen settings, seed); scorers (WildGuard, DT parser, ToxiGen RoBERTa) and all metric variants read them | Re-scoring or re-analysis without regeneration; the classifier model loads once per model batch |
 | E10 | Model weights from Kaggle Models mounts where they exist | Llama 3.1 8B Instruct, Gemma 3, Mistral on Kaggle Models, verified by config and tensor checksum against the HF revision | No 8–16GB download per session; does not count toward the 20GB output |
 | E11 | Length-grouped training | `group_by_length=True` in TRL | ~20–30% less padding at max len 1024 |
@@ -244,7 +244,7 @@ Conventions:
 - M0-T4 Kaggle install test: `pip install -e .[train]` and `.[bench]` on the Kaggle image. Record `pip freeze`. Resolve pin conflicts; each change gets a D-031 follow-up.
 - M0-T5 Gated-access check: for every repo in §5, call `huggingface_hub.model_info`/`dataset_info` with the token, without downloading weights. Record pass/fail per repo in `env.json`, without the token.
 - M0-T6 vLLM hello-world:
-  - Qwen2.5-0.5B, TP=1 and TP=2, `dtype=float16`, `enable_lora=True`, 4 prompts.
+  - Qwen2.5-0.5B, TP=1 and TP=2, `dtype=float16`, plain and as merged weights from ephemeral disk (D-050); vLLM-LoRA canary recorded; 4 greedy prompts.
   - Record which engine (V0/V1) and attention backend is used.
   - Try `dtype=float16` on Gemma-3-1B and record whether it is refused (B-005).
 - M0-T7 Artifact-store round trip (D-041): write a 1 MB file to `/kaggle/working/artifacts/env/<session>/`, upload it with `HfApi.upload_folder` to the private HF repo `SarthakGupta414/rbbd-artifacts` (after checking `private is True`), and read it back with a forced fresh download into an empty cache (D-045).
@@ -268,7 +268,7 @@ Conventions:
   - Bootstrap CIs for r and AUC, paired bootstrap for RR − SEAT, threshold sweep.
   - Stats tests.
 - M1-T8 `data/ft_data.py`: WGM split selection logic plus a CPU token-length census, run in a CPU Kaggle session (token counts drive the M3 budget; update §8 if mean tokens/example > 450).
-**Checks:** DC-01, DC-02, DC-03, DC-04, DC-05, DC-07, DC-08, DC-15, DC-17 (sentence-set validators).
+**Checks:** DC-01, DC-02, DC-03, DC-04, DC-05, DC-08, DC-09, DC-15, DC-17 (sentence-set validators), DC-19. (DC-07 is an M3 check, D-056.)
 **Rollback:** `m1-green`. Sentence-set hash changes invalidate the `embeddings/*` namespace via the key.
 
 ### M2 — Embedding extraction + cache (Tier 0, plus a Tier 1 timing probe) · S02 · 1.5 GPU-h · tag `m2-green`
@@ -328,7 +328,7 @@ Conventions:
 **Tasks:**
 - M5-T1 Pin the DT and ToxiGen commit SHAs. Fetch the DT stereotype prompts, system prompts and agreement parser. Fetch the ToxiGen prompt files for 9 groups. Record the SHAs in D-022 and D-025. Write the parity fixtures (DT parser on 200 canned responses).
 - M5-T2 `bench/generate.py`:
-  - vLLM engine factory (TP by model size, dtype per D-004/D-005, `enable_lora`, `max_lora_rank=32`).
+  - vLLM engine factory (TP by model size, dtype per D-004/D-005) serving merged α-checkpoints from ephemeral disk, one checkpoint at a time, temp copy deleted afterwards (D-050).
   - Chat-template prompts; seeded sampling (T=0.7, top-p 1.0).
   - Sharded JSONL output with resume.
   - HF-generate fallback behind a flag (B-005).
@@ -338,7 +338,7 @@ Conventions:
 - M5-T6 `bench/toxigen.py`: seeded prompt subset, user-turn format, first-statement extraction, RoBERTa scoring, toxic fraction per group.
 - M5-T7 Tier 0 harness run inside the smoke config (DC-11 now includes benchmark stages).
 - M5-T8 Tier 2 benches: 2 models × 2 regimes × (ref + 7), with two jobs in parallel on the two GPUs.
-- M5-T9 Tier 1 benches: one vLLM engine per model with LoRA requests (E8). WildGuard scoring is batched per model after generation.
+- M5-T9 Tier 1 benches: per checkpoint, merge → one vLLM engine for all three benchmarks → delete the merged copy (D-050). WildGuard scoring is batched per model after generation.
 **Checks:** DC-01, DC-02, DC-11, DC-13, DC-14 (bench timing logged), DC-15, DC-18 (no generated text in `results/` or git).
 **Rollback:** `m5*-green`. Generations are immutable per `gen_key`; scorer changes bump `score.schema_version` only.
 
@@ -392,6 +392,8 @@ Units: **Kaggle session-hours on the 2×T4 accelerator** (Kaggle bills session t
 | Contingency (15%) | 0.8 | 2.2 | 7.3 | | |
 | **Total** | **6** | **17** | **56** | | **≈ 79 session-h** |
 | Stretch (Tier 2 Qwen-1.5B + Gemma-1B) | – | +9 | – | | only if budget remains after W3 |
+
+**Re-baseline after the M1 census (D-055, 2026-10-01).** Measured examples average ≈ 545 tokens (harmful ≈ 650–730), not 400, so harmful runs train 1.5–1.65× the planned tokens. At the assumed 350 tok/s per T4: M3 Tier 1 training ≈ 32–40 session-h at 3 epochs (≈ 11.5–14 h at 1 epoch); M3 Tier 2 ≈ 12.3 h. Projected core total ≈ 96 session-h at 3 epochs, or ≈ 70 h if Tier 1 drops to 1 epoch (D-042). The 512-token fallback is excluded (29–68% of examples exceed 512). Final numbers are set after the M3c-T8 throughput probe.
 
 **Schedule within ~30 h/week** (with a 2 h reserve kept each week):
 

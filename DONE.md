@@ -37,7 +37,7 @@
 | Milestone | Required checks |
 |---|---|
 | M0 | DC-01, DC-02, DC-10 (unit), DC-15, DC-16, DC-19 |
-| M1 | DC-01–05, DC-07 (synthetic), DC-08, DC-09, DC-15, DC-17, DC-19 |
+| M1 | DC-01–05, DC-08, DC-09, DC-15, DC-17, DC-19 (DC-07 moved to M3 by D-056) |
 | M2 | DC-01, DC-02, DC-06, DC-09, DC-10, DC-11 (sentences+embed stages), DC-12, DC-15, DC-19 |
 | M3 | DC-01, DC-02, DC-07, DC-09, DC-11 (through train), DC-13, DC-15, DC-19 |
 | M4 | DC-01–05, DC-10, DC-11, DC-12, DC-15, DC-19 |

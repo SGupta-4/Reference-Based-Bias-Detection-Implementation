@@ -16,6 +16,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -237,7 +238,8 @@ def probe_hardware(run_cmd: CmdRunner = _run) -> dict[str, Any]:
         # Native bf16 needs Ampere (sm80+); T4 is sm75 (D-002, D-045).
         "bf16_supported": bool(caps) and min(caps) >= 8.0,
         "nvidia_smi_rc": rc,
-        "disk": parse_df(df_out),
+        # /tmp and / are often the same overlay mount; keep one row per mount point.
+        "disk": list({row["mounted_on"]: row for row in parse_df(df_out)}.values()),
         "ram": parse_free(free_out),
         "torch": _torch_info(),
         "ephemeral_dir": str(ephemeral_dir()),
@@ -368,25 +370,90 @@ def make_random_lora(model_id: str, rank: int, out_dir: Path) -> Path:
     return out_dir
 
 
-def vllm_case(case: Mapping[str, Any], work_dir: Path) -> dict[str, Any]:
-    """Run one vLLM case {name, model, tp, dtype, lora_rank|None} in-process; return a result.
+def materialize_merged(model_id: str, lora_dir: Path, out_dir: Path) -> Path:
+    """Fold a LoRA into its base weights and save a plain fp16 checkpoint to `out_dir`.
 
-    A constructor failure (e.g. Gemma 3 refusing float16) is recorded, not raised.
+    This is the D-050 generation path in miniature: vLLM's LoRA kernels do not compile
+    on sm75 (B-005), so each α-checkpoint is served as merged weights from ephemeral
+    disk. The merge here runs on CPU; M5's production merge computes
+    W0 + α·ΔWu + (1−α)·ΔWh in fp32 before casting.
     """
-    result: dict[str, Any] = {"case": dict(case), "ok": False}
+    import torch
+    from peft import PeftModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    base = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.float32)
+    merged = PeftModel.from_pretrained(base, str(lora_dir)).merge_and_unload()
+    merged = merged.to(torch.float16)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    merged.save_pretrained(str(out_dir), safe_serialization=True)
+    AutoTokenizer.from_pretrained(model_id).save_pretrained(str(out_dir))
+    return out_dir
+
+
+def _dir_bytes(path: Path) -> int:
+    return sum(p.stat().st_size for p in Path(path).rglob("*") if p.is_file())
+
+
+def _traceback_tail(lines: int = 40) -> list[str]:
+    """Last `lines` lines of the current exception's traceback, redacted."""
+    import traceback
+
+    return [redact(line)[:300] for line in traceback.format_exc().splitlines()[-lines:]]
+
+
+def vllm_case(case: Mapping[str, Any], work_dir: Path) -> dict[str, Any]:
+    """Run one vLLM case in-process and return a result dict.
+
+    `case` = {name, model, tp, dtype, lora_rank|None, mode}; `mode` is
+    - "plain":  the base model as downloaded;
+    - "lora":   vLLM LoRA serving of a random adapter (kept as a canary: it fails on
+                sm75, B-005; `expect_fail: true` marks that);
+    - "merged": a random adapter folded into fp16 weights on ephemeral disk, served
+                without LoRA (D-050). The temporary checkpoint is deleted afterwards.
+
+    Failures are recorded, not raised, with the stage that failed (`lora_build`,
+    `merge`, `construct`, `generate_base`, `generate_lora`) and a redacted traceback
+    tail. Decoding is greedy and texts are kept (Gemma fp16 vs fp32, B-001).
+    """
+    result: dict[str, Any] = {"case": dict(case), "ok": False, "failed_stage": None}
     start = time.time()
+    mode = case.get("mode") or ("lora" if case.get("lora_rank") else "plain")
+    merged_dir: Path | None = None
+
+    def fail(stage: str, exc: Exception) -> dict[str, Any]:
+        result["failed_stage"] = stage
+        result["refused"] = stage == "construct"
+        result["error"] = redact(f"{type(exc).__name__}: {exc}")[:2000]
+        result["traceback_tail"] = _traceback_tail()
+        result["seconds"] = round(time.time() - start, 1)
+        return result
+
     import vllm
     from vllm import LLM, SamplingParams
 
     result["vllm_version"] = vllm.__version__
-    lora_rank = case.get("lora_rank")
     lora_dir = None
-    if lora_rank:
-        lora_dir = make_random_lora(
-            case["model"], int(lora_rank), work_dir / f"lora_{case['name']}"
-        )
+    if mode in ("lora", "merged"):
+        try:
+            lora_dir = make_random_lora(
+                case["model"], int(case["lora_rank"]), work_dir / f"lora_{case['name']}"
+            )
+        except Exception as exc:
+            return fail("lora_build", exc)
+    model_path = case["model"]
+    if mode == "merged":
+        merged_dir = ephemeral_dir() / "rbbd_probe" / case["name"]
+        try:
+            t0 = time.time()
+            materialize_merged(case["model"], lora_dir, merged_dir)
+            result["merge_seconds"] = round(time.time() - t0, 1)
+            result["merged_bytes"] = _dir_bytes(merged_dir)
+        except Exception as exc:
+            return fail("merge", exc)
+        model_path = str(merged_dir)
     kwargs: dict[str, Any] = {
-        "model": case["model"],
+        "model": model_path,
         "tensor_parallel_size": int(case["tp"]),
         "dtype": case["dtype"],
         "max_model_len": 512,
@@ -394,33 +461,45 @@ def vllm_case(case: Mapping[str, Any], work_dir: Path) -> dict[str, Any]:
         "enforce_eager": True,
         "seed": 0,
     }
-    if lora_rank:
-        kwargs.update(enable_lora=True, max_lora_rank=int(lora_rank), max_loras=1)
+    if mode == "lora":
+        kwargs.update(enable_lora=True, max_lora_rank=int(case["lora_rank"]), max_loras=1)
     try:
-        llm = LLM(**kwargs)
-    except Exception as exc:
-        result["refused"] = True
-        result["error"] = redact(f"{type(exc).__name__}: {exc}")[:2000]
+        try:
+            llm = LLM(**kwargs)
+        except Exception as exc:
+            return fail("construct", exc)
+        result["refused"] = False
+        result["engine_module"] = type(llm.llm_engine).__module__
+        params = SamplingParams(temperature=0.0, max_tokens=16)
+        try:
+            base = llm.generate(list(PROBE_PROMPTS), params)
+        except Exception as exc:
+            return fail("generate_base", exc)
+        result["base_tokens"] = [len(o.outputs[0].token_ids) for o in base]
+        result["base_texts"] = [o.outputs[0].text[:80] for o in base]
+        ok = all(n > 0 for n in result["base_tokens"])
+        if mode == "lora":
+            from vllm.lora.request import LoRARequest
+
+            try:
+                with_lora = llm.generate(
+                    list(PROBE_PROMPTS),
+                    params,
+                    lora_request=LoRARequest("probe", 1, str(lora_dir)),
+                )
+            except Exception as exc:
+                return fail("generate_lora", exc)
+            result["lora_tokens"] = [len(o.outputs[0].token_ids) for o in with_lora]
+            ok = ok and all(n > 0 for n in result["lora_tokens"])
+        result["ok"] = ok
         result["seconds"] = round(time.time() - start, 1)
         return result
-    result["refused"] = False
-    result["engine_module"] = type(llm.llm_engine).__module__
-    params = SamplingParams(temperature=0.7, top_p=1.0, max_tokens=16, seed=0)
-    base = llm.generate(list(PROBE_PROMPTS), params)
-    result["base_tokens"] = [len(o.outputs[0].token_ids) for o in base]
-    result["base_sample"] = base[0].outputs[0].text[:80]
-    ok = all(n > 0 for n in result["base_tokens"])
-    if lora_dir is not None:
-        from vllm.lora.request import LoRARequest
-
-        with_lora = llm.generate(
-            list(PROBE_PROMPTS), params, lora_request=LoRARequest("probe", 1, str(lora_dir))
-        )
-        result["lora_tokens"] = [len(o.outputs[0].token_ids) for o in with_lora]
-        ok = ok and all(n > 0 for n in result["lora_tokens"])
-    result["ok"] = ok
-    result["seconds"] = round(time.time() - start, 1)
-    return result
+    finally:
+        # The merged checkpoint is a temporary copy this function created on
+        # ephemeral disk; removing it is part of the D-050 path (user-approved).
+        if merged_dir is not None and merged_dir.exists():
+            shutil.rmtree(merged_dir, ignore_errors=True)
+            result["merged_dir_removed"] = not merged_dir.exists()
 
 
 def probe_vllm(cases: Sequence[Mapping[str, Any]], out_dir: Path) -> list[dict[str, Any]]:

@@ -25,8 +25,10 @@ IDs are sequential and never reused.
 - Hypotheses tried: —
 - Fix: planned — D-005 (Gemma fp32 inference; fp32-compute fallback in training), D-006 (guard).
 - Verification: guard test passes (DC-09); the Gemma probe outcome is recorded in D-005.
+- Note 2026-10-01: vLLM 0.10.1.1 accepted Gemma-3-1B in fp16 and generated tokens (D-048). Whether those outputs are numerically sound is checked by comparing greedy fp16 and fp32 texts in the M0 rerun; until then D-005 (fp32 for Gemma inference) stands.
+- Note 2026-10-01 (S02): greedy Gemma-3-1B fp16 vs fp32 agree on 3/4 prompts, diverge after ~8 tokens on the 4th; fp16 text is coherent. D-005 stays until the Gemma-3-4B check in M2-T4 (D-049).
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-005, D-006
+- Linked commits and D-### entries: D-005, D-006, D-048, D-049
 
 ## B-002 Padding-side / pooling errors
 - Status: Open (pre-registered)
@@ -59,19 +61,18 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-036
 
 ## B-005 vLLM on T4 (Turing) fails or misbehaves
-- Status: Open (pre-registered)
-- How it was found or scoped: Planning. Known failure modes:
-  - V1 engine requires newer GPUs, so the fallback or removal of V0 depends on the version.
-  - gemma3 refuses fp16.
-  - LoRA (punica/triton) kernels on sm75.
-  - TP=2 NCCL hangs.
-  - FlashAttention is unavailable on sm75.
-- Reproduction command: M0-T6 hello-world: `pytest -q -m gpu tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora`
-- Hypotheses tried: —
-- Fix: planned — pin vLLM (D-031). Gemma fp32. HF-generate fallback flag (D-021). M0 probe cases defined in D-047.
-- Verification: the probe writes the engine and backend used. The smoke run passes with the vLLM path.
-- GPU-hours lost: 0
-- Linked commits and D-### entries: D-021, D-031
+- Status: Fixed (worked around) — vLLM's Triton LoRA kernels cannot be compiled for sm75 (S02); generation uses merged weights on ephemeral disk (D-050), verified in S03 (D-051). The LoRA canary stays in the probe.
+- How it was found or scoped: Planning listed V1 unsupported, gemma3 fp16 refusal, LoRA (Triton) kernels on sm75, TP=2 NCCL hangs, no FlashAttention on sm75. M0 Kaggle run S01 (session `20261001T091905Z`) confirmed the first and last, and hit the LoRA one.
+- Reproduction command: `pytest -q -m gpu tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora` (or `python -m rbbd.cli probe --vllm`) on Kaggle 2× T4.
+- Hypotheses tried:
+  - V1 engine on sm75: vLLM 0.10.1.1 falls back to V0 by itself ("Compute Capability < 8.0 is not supported by the V1 Engine. Falling back to V0"), attention backend XFormers. Not a blocker.
+  - Gemma 3 fp16 refused: **not** the case in 0.10.1.1 — the engine built and generated (see B-001 for numerics).
+  - LoRA kernels on sm75: both Qwen2.5-0.5B rank-32 LoRA cases (TP=1, TP=2) failed in `LLM(...)` with `RuntimeError: PassManager::run failed` after ~55–67 s. The message comes from Triton's MLIR compiler, and vLLM's LoRA (punica) kernels are Triton kernels compiled during the profile run, so LoRA is the leading suspect. Not yet isolated: there was no Qwen case without LoRA, and only the exception message (no traceback) was kept.
+- Fix: generation no longer uses vLLM LoRA. Each α-checkpoint is merged in fp32, saved as fp16 to ephemeral disk, served by vLLM without LoRA, then deleted (D-050). Probe cases: Qwen TP=1 and TP=2 plain and merged; a vLLM-LoRA canary expected to fail.
+- Verification (S02, session `20261001T094200Z`): Qwen TP=1 fp16 no-LoRA ok; LoRA rank 16 TP=1, rank 32 TP=1, rank 32 TP=2 all fail at `construct` with `RuntimeError: PassManager::run failed` raised in `triton/backends/nvidia/compiler.py::make_llir` (`pm.run(mod)`). Not yet tested: TP=2 without LoRA.
+- GPU-hours lost: ≈ 0.1 (five failed cases).
+- Verification (S03, commit `7d956c1`): Qwen TP=1/TP=2 plain and merged all ok, merged temp dirs removed; `test_vllm_hello_tp1_tp2_merged` → `1 passed in 378.52s`.
+- Linked commits and D-### entries: D-021, D-031, D-047, D-048, D-049, D-050, D-051; commits `c5c554b`, `7d956c1`
 
 ## B-006 Benchmark package / data drift
 - Status: Open (pre-registered)
@@ -104,7 +105,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-019, D-029
 
 ## B-009 Feature: M0 environment probe, artifact store and pipeline skeleton
-- Status: In progress — CPU-side code and tests done and pushed; Kaggle run (`notebooks/00_probe.ipynb`) pending, then `m0-green`.
+- Status: Fixed — M0 complete, tagged `m0-green` on `7d956c1` (D-051).
 - How it was found or scoped: PLAN §7 M0 (tasks M0-T1…T7), with the Q1–Q6 answers (D-041–D-044).
 - Reproduction command: `ruff check src tests && pytest -q -m "not gpu"` (CPU); on Kaggle, `notebooks/00_probe.ipynb`.
 - Hypotheses tried:
@@ -118,6 +119,31 @@ IDs are sequential and never reused.
   - `pytest -q -m "not gpu"` → `51 passed, 7 deselected in 0.27s`
   - `grep -rn "PLACEHOLDER(M0)" tests` → no output (exit 1)
   - `python -m rbbd.cli probe --no-require-gpu --skip-access` → exit 0, env.json written; without `--no-require-gpu` → exit 2, `expected >= 2 GPUs, found 0`, env.json still written.
-  - Kaggle (DC-16, GPU test, store round trip): pending.
+  - Kaggle S01 (`20261001T091905Z`, commit `93dbe07`), from the notebook summary cell:
+    - DC-16 **PASS**: 2× Tesla T4, compute cap 7.5, 15,360 MiB each; `bf16_supported: false`; `requirements.ok: true`; RAM 31 GiB; `/kaggle/working` 20G; `access_all_ok: true` (no failures).
+    - Store round trip **PASS**: `ok: true`, `private: true`, repo type `model`, commit `594c0470b4d638349cdf9f8a6d6bbaf6fc3b4f45`.
+    - vLLM GPU test **FAIL**: Qwen LoRA cases `RuntimeError: PassManager::run failed` (B-005); Gemma fp16 and fp32 cases ok.
+  - Kaggle S02 (`20261001T094200Z`, commit `c5c554b`): DC-16 PASS again; store PASS (commit `494d1593…`); Kaggle `ruff` → `All checks passed!`; Kaggle `pytest -q -m "not gpu"` → `52 passed, 7 deselected in 2.63s`; `pip check` conflicts only among unused preinstalled packages (D-049); vLLM GPU test still FAIL (LoRA, B-005).
+  - Diagnostics change (D-048): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `52 passed, 7 deselected in 0.27s`.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-041, D-042, D-043, D-044, D-045, D-046, D-047
+  - Kaggle S03 (commit `7d956c1`): DC-16 PASS; store PASS (commit `a3d5ae3a…`); `pytest -q -m gpu …::test_vllm_hello_tp1_tp2_merged` → `1 passed in 378.52s`.
+  - Local at close: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `53 passed, 7 deselected`; `grep -rn "PLACEHOLDER(M0)" tests` → no output.
+- GPU-hours lost (B-009 total): ≈ 0.1 (failed LoRA cases).
+- Linked commits and D-### entries: D-041–D-051; commits `2df82d9`, `93dbe07`, `c5c554b`, `e73077d`, `7d956c1`
+
+## B-010 Feature: M1 sentence sets, metrics and statistics on CPU
+- Status: Fixed — M1 complete, `m1-green` on `8277155` (D-055, D-056).
+- How it was found or scoped: PLAN §7 M1 (M1-T1…T8).
+- Reproduction command: `ruff check src tests && pytest -q -m "not gpu"`; on Kaggle CPU: `python -m rbbd.cli run --config configs/base.yaml --stages sentences,ftdata`.
+- Hypotheses tried:
+  - First validation: targets averaged 5.96 words (window 6–8) → lengthened 19 templates, passives kept in sync (mean now 6.78).
+  - Multi-word slot options ("relied on", "worn out") put function words on the neutral-sentence ban list → stopword filter on slot words.
+  - Passive forms reused P/N slot words ("worn", "relied", "celebrated") → reworded T07, T16, T40.
+  - Anchor balancing dropped the App. F anchor "Homosexuals speak multiple languages and dialects." → drop offset (5i + 7).
+  - Review of all rendered sentences found "felt humiliated of", a mid-sentence "he" and an object "her" that the subject rules would garble → five source sentences rewritten.
+  - The first sign-convention test used P and N drawn from the same distribution, so moving toward N's centroid was not guaranteed to reduce ΔB → the test now uses separated P/N clusters. This was an ill-posed test, not a metric bug.
+- Fix: `src/rbbd/data/{groups,hashing,sentences,ft_data}.py`, `src/rbbd/resources/sentences/*`, `src/rbbd/metrics/*`, `src/rbbd/analysis/stats.py`, stage registry in `runner.py`, configs, tests.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `67 passed, 7 deselected in 4.24s`; `grep -rn "PLACEHOLDER(M1)" tests` → no output.
+- GPU-hours lost: 0
+  - Kaggle CPU (commit `8277155`, config hash `b4a36d44ede276ec`): `run --config configs/base.yaml --stages sentences,ftdata` → `"sentences": "ran"` (0.9 s), `"ftdata": "ran"` (205.3 s); `status` → both `valid`. Census results in D-055.
+- Linked commits and D-### entries: D-052, D-053, D-054, D-055, D-056; commit `8277155`

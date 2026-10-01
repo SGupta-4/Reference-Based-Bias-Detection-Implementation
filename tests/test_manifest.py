@@ -83,10 +83,27 @@ def test_missing_upstream_raises(cfg, artifacts):
 
 def test_stub_names_its_milestone(cfg, artifacts):
     """Unimplemented stages fail loudly with their milestone and leave an incomplete manifest."""
-    with pytest.raises(NotImplementedError, match="implemented in M1"):
-        runner.run(cfg, env_mod.detect(), ["sentences"])
+    fns = {"ftdata": _writer([]), "train": runner.DEFAULT_STAGE_FNS["train"]}
+    with pytest.raises(NotImplementedError, match="implemented in M3"):
+        runner.run(cfg, env_mod.detect(), ["ftdata", "train"], stage_fns=fns)
     rows = {r["stage"]: r["status"] for r in runner.stage_status(cfg, env_mod.detect())}
-    assert rows["sentences"] == "incomplete" and rows["train"] == "missing"
+    assert rows["ftdata"] == "valid" and rows["train"] == "incomplete"
+    assert rows["embed"] == "missing"
+
+
+def test_sentences_stage_runs_and_caches(cfg, artifacts, caplog):
+    """The real `sentences` stage writes union.json; an identical second run is a cache hit."""
+    import json
+    import logging
+
+    env = env_mod.detect()
+    assert runner.run(cfg, env, ["sentences"]) == {"sentences": "ran"}
+    union = json.loads(next(artifacts.rglob("union.json")).read_text())
+    assert union["stats"]["anchor_group_sizes"] == {"min": 41, "max": 42}
+    assert len(union["index"]["targets/base/Women"]) == 50
+    with caplog.at_level(logging.INFO, logger="rbbd"):
+        assert runner.run(cfg, env, ["sentences"]) == {"sentences": "cache hit"}
+    assert "cache hit: stage sentences" in caplog.text
 
 
 def test_upstream_change_invalidates_downstream(cfg, artifacts):

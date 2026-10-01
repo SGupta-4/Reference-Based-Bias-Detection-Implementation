@@ -17,6 +17,7 @@ DF = (
     "Filesystem      Size  Used Avail Use% Mounted on\n"
     "overlay         8.0T  6.1T  1.9T  77% /\n"
     "/dev/nvme0n1    20G   1.0G   19G   5% /kaggle/working\n"
+    "overlay         8.0T  6.1T  1.9T  77% /\n"
 )
 FREE = (
     "               total        used        free      shared  buff/cache   available\n"
@@ -72,7 +73,8 @@ def test_probe_output_schema(tmp_path, monkeypatch):
     assert written["gpu_count"] == 2 and written["compute_cap_min"] == 7.5
     assert written["bf16_supported"] is False  # sm75: no native bf16 even if torch emulates it
     assert written["gpus"][0] == {"name": "Tesla T4", "memory_total_mib": 15360, "compute_cap": 7.5}
-    assert {d["mounted_on"] for d in written["disk"]} == {"/", "/kaggle/working"}
+    # `df -h /tmp /` reports the same overlay twice; one row per mount point is kept.
+    assert sorted(d["mounted_on"] for d in written["disk"]) == ["/", "/kaggle/working"]
     assert written["ram"]["total_gib"] == 31 and written["ram"]["available_gib"] == 28
     assert written["access"] == {r["id"]: "ok" for r in REPOS} and written["access_all_ok"]
     assert written["requirements"] == {"checked": True, "ok": True, "failures": []}
@@ -147,3 +149,79 @@ def test_detect_paths(monkeypatch, tmp_path):
     env = env_mod.detect()
     assert env.artifacts_root == tmp_path / "a" and env.ephemeral_dir == tmp_path / "e"
     assert FAKE_TOKEN not in json.dumps(env.summary())
+
+
+def _fake_vllm(fail_with_lora: bool):
+    """A stand-in `vllm` module: LLM() raises a Triton-style error when LoRA is enabled."""
+
+    class Out:
+        def __init__(self, text):
+            self.outputs = [types.SimpleNamespace(token_ids=[1, 2, 3], text=text)]
+
+    class LLM:
+        calls = []
+
+        def __init__(self, **kwargs):
+            LLM.calls.append(kwargs)
+            if fail_with_lora and kwargs.get("enable_lora"):
+                raise RuntimeError("PassManager::run failed")
+            self.llm_engine = types.SimpleNamespace()
+
+        def generate(self, prompts, params, lora_request=None):
+            return [Out(f"out {i}") for i, _ in enumerate(prompts)]
+
+    lora_mod = types.SimpleNamespace(LoRARequest=lambda *a: a)
+    mod = types.SimpleNamespace(LLM=LLM, SamplingParams=lambda **kw: kw, __version__="fake")
+    return {
+        "vllm": mod,
+        "vllm.lora": types.SimpleNamespace(request=lora_mod),
+        "vllm.lora.request": lora_mod,
+    }
+
+
+def test_vllm_case_records_failed_stage(tmp_path, monkeypatch):
+    """A constructor failure is recorded with its stage and traceback; a clean case keeps texts."""
+    for name, mod in _fake_vllm(fail_with_lora=True).items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    monkeypatch.setattr(env_mod, "make_random_lora", lambda model, rank, out: out)
+
+    case = {"name": "q", "model": "m", "tp": 1, "dtype": "float16", "lora_rank": 32}
+    failed = env_mod.vllm_case(case, tmp_path)
+    assert failed["ok"] is False and failed["failed_stage"] == "construct"
+    assert failed["error"] == "RuntimeError: PassManager::run failed"
+    assert any("PassManager::run failed" in line for line in failed["traceback_tail"])
+
+    clean = env_mod.vllm_case({**case, "lora_rank": None}, tmp_path)
+    assert clean["ok"] is True and clean["failed_stage"] is None
+    assert clean["base_texts"] == ["out 0", "out 1", "out 2", "out 3"]
+
+
+def test_vllm_case_merged_serves_local_weights_and_cleans_up(tmp_path, monkeypatch):
+    """Merged mode loads the folded checkpoint from ephemeral disk without LoRA, then removes it."""
+    fake = _fake_vllm(fail_with_lora=True)
+    for name, mod in fake.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    monkeypatch.setenv("RBBD_EPHEMERAL", str(tmp_path / "eph"))
+    monkeypatch.setattr(env_mod, "make_random_lora", lambda model, rank, out: out)
+
+    def fake_merge(model_id, lora_dir, out_dir):
+        out_dir.mkdir(parents=True)
+        (out_dir / "model.safetensors").write_bytes(b"x" * 10)
+        return out_dir
+
+    monkeypatch.setattr(env_mod, "materialize_merged", fake_merge)
+    case = {
+        "name": "m",
+        "model": "m",
+        "tp": 2,
+        "dtype": "float16",
+        "mode": "merged",
+        "lora_rank": 32,
+    }
+    result = env_mod.vllm_case(case, tmp_path)
+    merged_dir = tmp_path / "eph" / "rbbd_probe" / "m"
+    assert result["ok"] is True and result["merged_bytes"] == 10
+    assert result["merged_dir_removed"] is True and not merged_dir.exists()
+    kwargs = fake["vllm"].LLM.calls[-1]
+    assert kwargs["model"] == str(merged_dir) and "enable_lora" not in kwargs
+    assert kwargs["tensor_parallel_size"] == 2

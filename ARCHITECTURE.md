@@ -67,7 +67,7 @@ Training sits upstream of the spectrum:
 | `rbbd.data.anchors` | Build word/Alpaca/Tulu anchor pools and nested size subsets. |
 | `rbbd.data.ft_data` | Select the WGM train splits (D-010, D-011) and render SFT examples. |
 | `rbbd.models.loading` | Load tokenizer and model at a given precision, placement and pad policy. |
-| `rbbd.models.adapters` | Build exact α-combined LoRA adapters (D-007). |
+| `rbbd.models.adapters` | Build exact α-combined LoRA adapters (D-007) and materialise merged α-weights for generation (D-050). |
 | `rbbd.models.interpolate` | In-memory full-weight interpolation for Tier 2 (D-008). |
 | `rbbd.models.spectrum` | Define the α list and checkpoint slugs; iterate checkpoints on one base. |
 | `rbbd.embed.pooling` | Mask-aware mean/max/last pooling. |
@@ -78,7 +78,7 @@ Training sits upstream of the spectrum:
 | `rbbd.metrics.cka` | Linear CKA and drift. |
 | `rbbd.metrics.delta_b` | ΔB per (checkpoint, group, method, ablation cell) (Eq. 7). |
 | `rbbd.finetune.sft` | TRL SFT for LoRA, QLoRA and full FT, resumable. |
-| `rbbd.bench.generate` | vLLM (or HF fallback) sampling with resumable shards. |
+| `rbbd.bench.generate` | vLLM sampling on merged α-checkpoints from ephemeral disk, with resumable shards (D-050). |
 | `rbbd.bench.wildguard` | WGM subcategory prompts; WildGuard scoring; per-topic rates. |
 | `rbbd.bench.topic_map` | One-off, frozen WGM prompt → topic mapping (D-024). |
 | `rbbd.bench.decodingtrust` | DT stereotype prompts and agreement scoring (D-022). |
@@ -135,3 +135,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 ## Changelog
 - 2026-09-30 — Initial planned architecture — D-019, D-029, D-030, D-032.
 - 2026-09-30 — Store moved to a private HF repo; `utils/store.py` added; CLI gains `sync` — D-041, D-046.
+- 2026-10-01 — Generation serves merged α-weights from ephemeral disk instead of vLLM LoRA — D-050.

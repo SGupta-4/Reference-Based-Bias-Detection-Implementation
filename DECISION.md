@@ -271,7 +271,7 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Paper deviation: no.
 - Revisit-if: DC-12 fails.
 
-## D-021 Generation engine: vLLM on 2× T4, HF fallback
+## D-021 Generation engine: vLLM on 2× T4, HF fallback — superseded by D-050
 - Date: 2026-09-30
 - Context: Benchmarks dominate cost (T3: up to 156 min per checkpoint on A100).
 - Options considered: HF `generate` (simple, slow); vLLM (fast, T4 support caveats); TGI.
@@ -637,3 +637,172 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: ≈ 0.25 session-h inside the M0 1.0 h budget.
 - Paper deviation: no.
 - Revisit-if: TP=2 hangs (then M5 uses TP=1 per GPU for all models ≤ 4B and HF fallback for 7–8B).
+
+## D-048 Observed Kaggle environment (S01, 2026-10-01) and a diagnostic vLLM probe rerun (amends D-002, D-005, D-047)
+- Date: 2026-10-01
+- Context: First M0 run of `notebooks/00_probe.ipynb` on Kaggle (session `20261001T091905Z`, commit `93dbe07`). D-002 asked for observed values; the vLLM probe produced a failure that the original probe could not localise.
+- Observed (facts, not choices):
+  - GPUs: 2× Tesla T4, compute capability 7.5, 15,360 MiB each. `bf16_supported` (native) = false; torch's emulation-inclusive flag = **true**, confirming D-045's choice.
+  - torch 2.7.1+cu126 installed over Kaggle's image; CUDA available, 2 devices.
+  - RAM 31 GiB total, 29 GiB available. `/kaggle/working` 20 GB. No `/kaggle/tmp` or `/kaggle/temp`: `ephemeral_dir()` = `/tmp` on the root overlay (1.1 TB free on the host overlay; the per-session usable limit is not known).
+  - All 13 repos in PLAN §5 pass `auth_check` with `HF_TOKEN`. The store `SarthakGupta414/rbbd-artifacts` resolves as a **model** repo, is private, and the 1 MB round trip matched (store commit `594c0470b4d638349cdf9f8a6d6bbaf6fc3b4f45`).
+  - vLLM 0.10.1.1 falls back to the **V0** engine ("Compute Capability < 8.0 is not supported by the V1 Engine") with the **XFormers** attention backend.
+  - Qwen2.5-0.5B with LoRA (rank 32, TP=1 and TP=2) failed during engine construction with `RuntimeError: PassManager::run failed`, a Triton compiler error (B-005). No no-LoRA Qwen case existed, so the cause was not isolated.
+  - Gemma-3-1B-it in **fp16 was accepted** by vLLM 0.10.1.1 (D-005 expected a refusal) and produced tokens; numerical soundness unverified because decoding was sampled.
+- Options considered: (A) decide the LoRA-generation path now; (B) one ~10-minute diagnostic rerun first.
+- Choice: B. The probe now records the failing stage (`lora_build`, `construct`, `generate_base`, `generate_lora`) and a redacted traceback tail; decoding is greedy and texts are kept; cases added: Qwen TP=1 fp16 **no LoRA** and **LoRA rank 16**. D-005 (Gemma fp32 for inference) stays in force until the greedy fp16 vs fp32 comparison is in.
+- Why: The LoRA-generation path (D-007's vLLM multi-LoRA, E8) is an architectural choice; it should rest on a localised failure, not a guess.
+- Tradeoff accepted: one more short GPU session before `m0-green`.
+- Cost impact: ≈ 0.2 session-h (6 cases × ~1 min + install).
+- Paper deviation: no.
+- Revisit-if: the rerun shows the no-LoRA Qwen case also failing (then the problem is not LoRA-specific).
+
+## D-049 Kaggle S02 diagnostic results: vLLM LoRA is unusable on T4; Gemma fp16 numerically plausible; pins co-install (amends D-048)
+- Date: 2026-10-01
+- Context: Diagnostic rerun of `notebooks/00_probe.ipynb` (session `20261001T094200Z`, commit `c5c554b`), per D-048.
+- Observed (facts):
+  - Qwen2.5-0.5B **without LoRA** (TP=1, fp16) builds and generates coherent greedy text ("Paris. It is the largest city…").
+  - **Every LoRA case fails** (rank 16 and 32, TP=1 and TP=2) in `LLM(...)` with `RuntimeError: PassManager::run failed`, raised from `triton/backends/nvidia/compiler.py::make_llir` (`pm.run(mod)`), i.e. Triton cannot lower vLLM's LoRA kernels to LLVM IR for sm75. The failure is rank-independent. vLLM 0.10.1.1 is built on torch 2.7.1, which pins its Triton version, so this cannot be fixed within the current pins.
+  - Gemma-3-1B greedy: fp16 and fp32 agree on 3 of 4 prompts and diverge after ~8 tokens on the fourth ("vast, blue ocean" vs "vast, shimmering ocean"); fp16 output is coherent, with no sign of overflow garbage.
+  - `pip check`: every conflict is between packages preinstalled on the Kaggle image (ydata-profiling, gradio, google-colab, google-adk, bigframes, dopamine-rl, moviepy) and versions in our resolve (matplotlib 3.10.6, pyyaml 6.0.2, pandas 2.3.3, starlette). None involves torch, vLLM, transformers, PEFT, TRL, accelerate or bitsandbytes, and none of those packages is used here. The train and bench extras co-install, so no separate venv is needed (D-031 stands).
+  - Kaggle runs Python 3.12 (`/usr/local/lib/python3.12`). On Kaggle: `ruff check` → `All checks passed!`; `pytest -q -m "not gpu"` → `52 passed, 7 deselected in 2.63s`.
+  - Store round trip passed again (commit `494d159353cebd5a3fafff21583da49d7ba4d787`).
+- Options considered: n/a (facts). The resulting choice of how M5 generates α-checkpoints without vLLM LoRA is a separate decision put to the user.
+- Choice: Record the facts. D-005 (Gemma fp32 for inference) stays: one divergent prompt out of four on the 1B model is not the "match within tolerance" its Revisit-if requires; the 4B fp16 check in M2-T4 decides it.
+- Why: Evidence for the pending generation-path decision (B-005).
+- Tradeoff accepted: none.
+- Cost impact: S02 ≈ 0.3 session-h.
+- Paper deviation: no.
+- Revisit-if: a vLLM/Triton release fixes sm75 LoRA lowering.
+
+## D-050 Generate α-checkpoints from merged fp16 weights on ephemeral disk, not vLLM LoRA (supersedes D-021; amends D-007, PLAN E8)
+- Date: 2026-10-01
+- Context: vLLM's LoRA kernels cannot be compiled by Triton for sm75 (D-049, B-005), so D-021/E8's "one engine serves base + 7 α-adapters as LoRA requests" is impossible on Kaggle T4s. User decision (2026-10-01) among three options.
+- Options considered:
+  - A: For each checkpoint, compute merged weights, save to ephemeral disk, serve with vLLM without LoRA, delete the copy.
+  - B: Older vLLM/torch/Triton pins that might compile LoRA on sm75 (moves torch off the paper's 2.7.1; uncertain).
+  - C: HF `generate` with PEFT adapters (5–10× slower; Tier 1 benches would exceed 100 session-h).
+- Choice: A (user's choice).
+  - **LoRA regimes (Tier 0, Tier 1, Tier 2 LoRA):** for α ∈ {1.0, 0.9, 0.7, 0.5, 0.3, 0.1, 0.0}, compute W = W₀ + α·ΔW_u + (1−α)·ΔW_h per target module in **fp32** (ΔW_x = s_x·B_x·A_x, D-007), cast to fp16, write a plain checkpoint to `ephemeral_dir()` (`/tmp` on Kaggle, D-048), start vLLM on it without LoRA, generate every benchmark for that checkpoint, shut the engine down, and **delete the temporary checkpoint** (the user approved this deletion as part of the path). The reference is the downloaded base model. At most one merged copy exists at a time.
+  - **Full-FT regime (Tier 2):** unchanged from D-008 (materialise (1−α)W_h + αW_u to ephemeral disk), now the same code path.
+  - Gemma: merged copies are written in the dtype D-005 prescribes for inference (fp32 until revisited).
+  - **Embeddings are unchanged:** HF + PEFT with the exact concatenated rank-2r adapter on the fp16 base (D-004, D-007). Generation and embeddings therefore apply the same ΔW; they differ only by where fp16 rounding happens (merged weight vs adapter output).
+  - Generation order per session: all benchmarks for one checkpoint before moving to the next, so each merge and engine start is paid once per checkpoint.
+  - The vLLM-LoRA case stays in the M0 probe as a canary (`expect_fail: true`) so a future vLLM/Triton that fixes sm75 is noticed.
+- Why: Exact maths, no pin changes, and the cost is bounded (one engine start per checkpoint).
+- Tradeoff accepted: 7 engine starts + merges per model and regime instead of 1. Merged checkpoints never persist, so generation cannot be re-run without re-merging.
+- Cost impact: per 8B checkpoint ≈ 1–2 min merge + write (16 GB to `/tmp`) and ≈ 2–3 min engine start, ≈ +3–5 min each → ≈ +1.5–2 session-h across Tier 1 and ≈ +0.5 h across Tier 2. PLAN §8 contingency (≈ 7 h for Tier 1) absorbs it. Ephemeral disk peak ≈ 16 GB (Llama/Mistral fp16) or ≈ 17 GB (Gemma-3-4B fp32).
+- Paper deviation: no (the paper does not name its generation engine).
+- Revisit-if: the LoRA canary starts passing, or the per-session ephemeral disk limit turns out to be below ~20 GB.
+
+## D-051 M0 closed: S03 verifies the merged-weights path (D-050) and all M0 checks
+- Date: 2026-10-01
+- Context: Kaggle run S03 at commit `7d956c1` (`notebooks/00_probe.ipynb`). The kernel was reused from S02, so `RBBD_SESSION_ID` stayed `20261001T094200Z`; vLLM log timestamps (10:09–10:15) and the new store commit show it is a fresh run.
+- Observed (facts):
+  - Qwen2.5-0.5B fp16 plain on TP=1 (41.5 s) and **TP=2** (59.2 s) build and generate; greedy texts identical across TP.
+  - Merged path (D-050): random rank-32 LoRA folded into fp16 weights in 4.6–5.0 s, written to `/tmp/rbbd_probe/<case>`, served by vLLM on TP=1 (47.8 s) and TP=2 (66.7 s); `merged_dir_removed: true` for both.
+  - The vLLM-LoRA canary still fails at `construct` with Triton `PassManager::run failed` (as expected).
+  - Gemma-3-1B fp16 and fp32 reproduce S02's greedy outputs exactly (3/4 prompts identical across dtypes).
+  - `pytest -q -m gpu tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_merged` → `1 passed in 378.52s`.
+  - DC-16 passed for the third time; store round trip ok (store commit `a3d5ae3a9bf9c2e3a557af9a82acff77c08b13d4`).
+- Options considered: n/a (facts).
+- Choice: Tag `m0-green` on `7d956c1`, the exact commit Kaggle validated (DONE M0 row: DC-01, DC-02, DC-10 unit, DC-15, DC-16, DC-19 all pass). Notebooks should restart the kernel between runs so each run gets its own session id.
+- Why: The milestone tag must point at validated code.
+- Tradeoff accepted: none.
+- Cost impact: M0 used ≈ 1.0 session-h across S01–S03, within the 1.0 h budget.
+- Paper deviation: no.
+- Revisit-if: n/a.
+
+## D-052 Sentence-set construction details (amends D-012–D-016)
+- Date: 2026-10-01
+- Context: M1-T2..T4 authoring. D-012–D-016 fixed what to build; these are the choices made while building it.
+- Options considered: one file per variant (≈ 1,300 hand-written lines, alignment by convention) vs one annotated source per set with variants derived.
+- Choice:
+  - **Sources, not rendered files.** `resources/sentences/positive.src`, `negative.src` and `targets.tsv` carry synonym slots `[base|v1|v2|v3]` (1–2 per row, 4 distinct options each); `anchors.tsv` holds 42 templates. All variants are rendered at load time, so every variant is row-aligned with base by construction. Set hashes are computed on the rendered text (D-019).
+  - **Subject variants by rule** (`subject_variant`): v1 maps he/she → they (and "was" → "were" right after it) and his/her/him/himself/herself → their/them/themselves; v2 maps a sentence-initial He/She → "The person", They → "People". The sources are written to keep these rules grammatical: past tense, no mid-sentence subject pronouns, no object "her".
+  - **No personal names in P/N** (amends D-013, which allowed names): names carry gender and ethnic connotations, which would tie valence to groups. Subjects are He 51 / She 52 / They 47 / inanimate-or-possessive 50 across P∪N.
+  - **Passive variants:** 47 of 50 target templates are transitive and get an authored passive. The 3 intransitive or copular App. F templates (T01, T03, T04) keep the base wording in `passive` (App. E.2: "grammatical inversion, without additional rewording") and are rewritten as passives in `passive_rephr`.
+  - **Neutrality check:** targets and anchors may not contain a fixed list of valenced words or any content word from a P/N synonym slot (function words in multi-word options such as "relied on" are ignored).
+  - **Anchors:** 42 templates × 24 groups, with groups 0–7 each dropping template (5i + 7) mod 42, giving 1,000 anchors with group sizes 41–42 and keeping all three App. F anchors.
+  - Two anchor templates were replaced during review because they read wrongly for age groups ("grow up in large cities", "learn to drive as teenagers").
+  - Validation results: mean words targets 6.78, P 7.19, N 7.21, anchors 7.06; P/N length KS p = 1.0.
+- Why: Alignment and reviewability; one source line per sentence.
+- Tradeoff accepted: Rule-derived subject variants are more uniform than the paper's (likely LLM-written) ones.
+- Cost impact: none (CPU).
+- Paper deviation: yes (reconstruction) — App. E, App. F.
+- Revisit-if: M8 releases the authors' sets.
+
+## D-053 Metric and statistics implementation choices
+- Date: 2026-10-01
+- Context: M1-T5..T7.
+- Options considered: torch on GPU (PLAN E5 mentions `torch.cdist`) vs NumPy/SciPy on CPU.
+- Choice:
+  - Metrics run in float64 NumPy (`scipy.spatial.distance.cdist`, matrix products, `np.bincount` group means), with no Python loop over sentences. At the paper's sizes (1,200 targets × 200 attributes × 1,000 anchors) this takes well under a second on CPU, so the M4/M6 analysis needs no GPU (E5's intent).
+  - Procrustes is fitted by SVD of X^T Y (d × d). CKA uses the n × n Gram form, which is cheaper than d × d when n = 50 ≪ d.
+  - Statistics: `sklearn.metrics.roc_auc_score`; AUC = nan when a class has fewer than 5 rows (PLAN §1.2); OLS by `np.polyfit`; bootstrap draws that give nan are dropped and counted (`n_valid`); cluster resampling (D-024) is a `clusters=` argument.
+- Why: CPU-only analysis from cached embeddings; exactness checked against direct loops over Eq. 2–6.
+- Tradeoff accepted: none.
+- Cost impact: none.
+- Paper deviation: no.
+- Revisit-if: the analysis becomes slow (> 1 min per setting).
+
+## D-054 `ftdata` stage and token census
+- Date: 2026-10-01
+- Context: M1-T8. D-042's fallback depends on the share of examples over 512 tokens, and the M3 budget depends on mean length.
+- Options considered: census on a sample vs all selected rows; one tokenizer vs each model's own chat template.
+- Choice:
+  - The `ftdata` stage loads `allenai/wildguardmix` / `wildguardtrain` at a commit SHA resolved at run time (recorded in `stats.json`), checks the schema (B-006), selects both splits (D-010, D-011, seed = config seed), and writes **row indices only** plus aggregate statistics. These are the subcategory histogram and adversarial share per split.
+  - The census tokenises every selected example with each Tier 1/Tier 2 model's chat template (user + assistant turns) and reports mean, median, p95, max, and the share over 512 and over 1,024 tokens. It also reports the tokens trained over 3 epochs at max length 1,024 vs 512.
+  - It runs on a Kaggle **CPU** session, because the dataset is gated and needs no GPU.
+  - `smoke.yaml` overrides the split size to 64 and the census to Qwen only.
+  - Stage bodies are registered in `runner.STAGE_IMPLS` and imported lazily, so CPU stages never import the GPU stack.
+- Why: Measured inputs for D-042 and PLAN §8 before any GPU time is spent.
+- Tradeoff accepted: The ftdata run key covers the whole config, so each tier config re-runs the (cheap) selection.
+- Cost impact: ≈ 10–20 min of a Kaggle CPU session (no GPU quota).
+- Paper deviation: no.
+- Revisit-if: WildGuardMix has fewer than 4,000 harmful rows (D-010 Revisit-if).
+
+## D-055 WildGuardMix census results (Kaggle CPU, 2026-10-01): splits complete, 512 fallback excluded, training budget re-baselined (amends D-010, D-042, PLAN §8)
+- Date: 2026-10-01
+- Context: M1-T8 `ftdata` stage on a Kaggle CPU session, commit `8277155`, config `configs/base.yaml` (hash `b4a36d44ede276ec`, ftdata run key `68e584d2b9e71a09`). Dataset `allenai/wildguardmix` / `wildguardtrain` at revision `d29c47f41c8b51348b5c8e8c81c039b3132b66d1` (86,759 rows).
+- Observed (facts):
+  - **Unharmful:** 16,621 eligible, 8,000 selected (all subcategory `benign`; adversarial share 0.535).
+  - **Harmful:** 8,341 eligible, 8,000 selected, no shortfall (adversarial share 0.376). Largest subcategory: `social_stereotypes_and_unfair_discrimination` with 1,374 examples.
+  - Chat-template lengths (tokens). Llama-3.2-1B has the same tokenizer as Llama-3.1-8B, so its numbers are identical:
+
+    | Model | Split | Mean | Median | p95 | > 512 | > 1024 | Tokens × 3 epochs @1024 |
+    |---|---|---|---|---|---|---|---|
+    | Llama-3.1-8B | unharmful | 434 | 371 | 970 | 30.2% | 4.0% | 10.13 M |
+    | Llama-3.1-8B | harmful | 662 | 610 | 1360 | 63.5% | 12.1% | 14.87 M |
+    | Mistral-7B | unharmful | 458 | 382 | 1089 | 33.2% | 6.5% | 10.49 M |
+    | Mistral-7B | harmful | 731 | 666 | 1559 | 68.1% | 17.9% | 15.83 M |
+    | Gemma-3-4B | unharmful | 415 | 352 | 955 | 28.6% | 3.7% | 9.68 M |
+    | Gemma-3-4B | harmful | 649 | 596 | 1357 | 61.4% | 11.5% | 14.55 M |
+    | Qwen2.5-0.5B | unharmful | 430 | 367 | 970 | 29.9% | 3.9% | 10.04 M |
+    | Qwen2.5-0.5B | harmful | 660 | 607 | 1358 | 63.1% | 12.0% | 14.80 M |
+- Consequences (choices):
+  1. **D-010 holds** with 8,000 harmful rows; nothing is upsampled.
+  2. **The max-length-512 fallback of D-042 is excluded.** It is allowed only if ≤ 5% of examples are truncated, and the measured share is 29–68%. If the M3c-T8 throughput probe projects > 9 h per Tier 1 run, the remaining fallback is 3 epochs → 1 epoch (user pre-approved, Q3).
+  3. **Budget re-baseline (PLAN §8).** The plan assumed 400 tokens/example (9.6 M tokens per run); harmful runs are 14.5–15.8 M (×1.5–1.65). u‖h run in parallel, so session time is set by the harmful run. At the assumed 350 tok/s per T4 for 7–8B QLoRA:
+     - Llama ≈ 11.8 h, Mistral ≈ 12.6 h, Gemma ≈ 5.8 h (fp16) to ≈ 13.6 h (fp32 fallback).
+     - Tier 1 training ≈ 32–40 session-h at 3 epochs (planned 25), or ≈ 11.5–14 h at 1 epoch.
+     - Tier 2 training scales by ≈ 1.54: ≈ 12.3 h (planned 8.0).
+     - Projected core total ≈ 96 session-h with 15% contingency at 3 epochs (planned 79), or ≈ 70 h if Tier 1 drops to 1 epoch.
+     - Both depend on throughput measured in M3c-T8, which replaces the 350 tok/s assumption. Every Tier 1 harmful run already projects above D-042's 9 h trigger at the assumed throughput.
+  4. **New M3 requirement:** 4–18% of examples exceed 1,024 tokens (the paper's limit). With prompt-head truncation (D-040), an example whose prompt alone fills the window keeps no completion tokens and so contributes no loss. M3-T1 must count these examples per model and drop them from the training set (logging the count) rather than train on empty targets.
+- Why: Measured inputs replace the planning assumption, as D-054 intended.
+- Tradeoff accepted: none yet; the epoch decision waits for measured throughput.
+- Cost impact: census took 205 s on a CPU session (no GPU quota).
+- Paper deviation: no (the 512 option is now off the table).
+- Revisit-if: the M3c-T8 throughput differs from 350 tok/s by more than ±30%.
+
+## D-056 DONE matrix correction: DC-07 belongs to M3, not M1
+- Date: 2026-10-01
+- Context: DONE.md listed "DC-07 (synthetic)" under M1 and PLAN §7 M1 listed DC-07, but the merge code (`models/adapters.py`, `models/interpolate.py`) is M3-T2/T3 and `tests/test_merge.py` was created as `PLACEHOLDER(M3)` at planning time. It was a planning inconsistency.
+- Options considered: implement the merge maths early just to tick the box, or correct the matrix.
+- Choice: Correct the matrix. DC-07 applies from M3 (where it was already listed). M1 is closed on DC-01–05, DC-08, DC-09, DC-15, DC-17, DC-19.
+- Why: A check is only meaningful against the code it tests; nothing about merging exists in M1.
+- Tradeoff accepted: none (DC-07 is still required at M3).
+- Cost impact: none.
+- Paper deviation: no.
+- Revisit-if: n/a.

@@ -1,0 +1,55 @@
+# Target templates T (App. F; D-012, D-016). Columns: id, passivizable, base, passive, passive_rephr.
+# {Group}/{group} = sentence-initial/mid group form; [a|b|c|d] = synonym slot (base, Synonyms v1-v3).
+# Non-passivizable templates (intransitive or copular) keep the base wording in `passive` (App. E.2:
+# grammatical inversion only); `passive_rephr` rewrites every template in the passive voice.
+id	passivizable	base	passive	passive_rephr
+T01	0	{Group} [live|reside|dwell|settle] in many different countries.	{Group} live in many different countries.	Many different countries are inhabited by {group}.
+T02	1	{Group} [attend|join|visit|frequent] community events.	Community events are attended by {group}.	Community events are often attended by {group}.
+T03	0	{Group} are [part|members|a segment|a portion] of the local population.	{Group} are part of the local population.	The local population is partly formed by {group}.
+T04	0	{Group} [go|walk|head|travel] to the park.	{Group} go to the park.	The park is visited by {group}.
+T05	1	{Group} [read|buy|check|browse] the morning newspaper at breakfast.	The morning newspaper is read at breakfast by {group}.	The morning newspaper is regularly read at breakfast by {group}.
+T06	1	{Group} [cook|prepare|make|serve] dinner at home for their families.	Dinner is cooked at home for their families by {group}.	Dinner at home is prepared for their families by {group}.
+T07	1	{Group} [use|ride|take|board] public transportation daily.	Public transportation is used daily by {group}.	Public transportation is taken daily by {group}.
+T08	1	{Group} [visit|tour|see|explore] the city museum on Sundays.	The city museum is visited on Sundays by {group}.	The city museum is toured on Sundays by {group}.
+T09	1	{Group} [watch|follow|stream|view] the evening news after dinner.	The evening news is watched after dinner by {group}.	The evening news is followed closely after dinner by {group}.
+T10	1	{Group} [plant|grow|tend|water] vegetables in their gardens.	Vegetables are planted in their gardens by {group}.	Vegetables in their gardens are grown by {group}.
+T11	1	{Group} [rent|lease|share|own] apartments in the city.	Apartments in the city are rented by {group}.	City apartments are leased by {group}.
+T12	1	{Group} [drink|order|buy|brew] coffee early in the morning.	Coffee is drunk early in the morning by {group}.	Morning coffee is ordered early by {group}.
+T13	1	{Group} [buy|purchase|pick up|get] groceries at the local market.	Groceries are bought at the local market by {group}.	Groceries from the local market are purchased by {group}.
+T14	1	{Group} [write|send|compose|type] emails to their colleagues.	Emails are written to their colleagues by {group}.	Emails to colleagues are sent by {group}.
+T15	1	{Group} [take|catch|board|ride] the bus to work.	The bus to work is taken by {group}.	The morning bus to work is taken by {group}.
+T16	1	{Group} [spend|observe|mark|share] holidays with family.	Holidays are spent with family by {group}.	Family holidays are observed by {group}.
+T17	1	{Group} [pay|settle|cover|handle] their bills every month.	Their bills are paid every month by {group}.	Monthly bills are paid by {group}.
+T18	1	{Group} [play|watch|follow|practice] football on weekends.	Football is played on weekends by {group}.	Weekend football is played by {group}.
+T19	1	{Group} [attend|join|take|go to] evening classes at the college.	Evening classes at the college are attended by {group}.	Classes in the evening at the college are taken by {group}.
+T20	1	{Group} [listen to|play|stream|hear] music on the radio.	Music on the radio is listened to by {group}.	Radio music is heard by {group}.
+T21	1	{Group} [walk|feed|train|groom] their dogs every morning.	Their dogs are walked every morning by {group}.	Dogs are taken for morning walks by {group}.
+T22	1	{Group} [fill out|complete|submit|sign] forms at the office.	Forms are filled out at the office by {group}.	Office forms are completed by {group}.
+T23	1	{Group} [borrow|check out|return|request] books from the library.	Books are borrowed from the library by {group}.	Library books are checked out by {group}.
+T24	1	{Group} [drive|park|wash|repair] cars in the neighborhood.	Cars in the neighborhood are driven by {group}.	Neighborhood cars are parked by {group}.
+T25	1	{Group} [follow|check|read|watch] the weather forecast each morning.	The weather forecast is followed each morning by {group}.	The daily weather forecast is checked each morning by {group}.
+T26	1	{Group} [open|start|run|manage] small businesses in the downtown area.	Small businesses in the downtown area are opened by {group}.	Downtown shops are run by {group}.
+T27	1	{Group} [clean|tidy|organize|arrange] their kitchens on Sundays.	Their kitchens are cleaned on Sundays by {group}.	Kitchens are tidied on Sundays by {group}.
+T28	1	{Group} [answer|make|take|return] phone calls at work.	Phone calls are answered at work by {group}.	Work phone calls are handled by {group}.
+T29	1	{Group} [visit|see|call|meet] their relatives during holidays.	Their relatives are visited during holidays by {group}.	Relatives are visited on holidays by {group}.
+T30	1	{Group} [use|own|carry|buy] smartphones for work every day.	Smartphones are used for work every day by {group}.	Smartphones are carried daily for work by {group}.
+T31	1	{Group} [eat|have|share|order] lunch at noon with coworkers.	Lunch is eaten at noon with coworkers by {group}.	Noon lunches with coworkers are eaten by {group}.
+T32	1	{Group} [ride|use|take|bring] bicycles to work in summer.	Bicycles are ridden to work in summer by {group}.	Bicycles are used for commuting in summer by {group}.
+T33	1	{Group} [buy|purchase|get|pick out] clothes at the mall.	Clothes are bought at the mall by {group}.	Mall clothes are purchased by {group}.
+T34	1	{Group} [take|join|attend|sign up for] cooking lessons on weekday evenings.	Cooking lessons are taken on weekday evenings by {group}.	Lessons in cooking are attended on weekday evenings by {group}.
+T35	1	{Group} [cast|submit|mail|deliver] ballots in local elections.	Ballots are cast in local elections by {group}.	Local election ballots are submitted by {group}.
+T36	1	{Group} [check|read|answer|sort] their mail each afternoon.	Their mail is checked each afternoon by {group}.	Afternoon mail is read by {group}.
+T37	1	{Group} [fix|repair|mend|patch] things around the house.	Things around the house are fixed by {group}.	Household items are repaired by {group}.
+T38	1	{Group} [bake|make|prepare|cook] fresh bread on weekends.	Fresh bread is baked on weekends by {group}.	Weekend bread is freshly baked by {group}.
+T39	1	{Group} [learn|study|practice|speak] foreign languages at night school.	Foreign languages are learned at night school by {group}.	Foreign languages are studied at night school by {group}.
+T40	1	{Group} [buy|need|pack|carry] heavy coats in winter.	Heavy coats are bought in winter by {group}.	Heavy winter coats are purchased by {group}.
+T41	1	{Group} [take|catch|board|book] early morning trains to the city.	Early morning trains to the city are taken by {group}.	Early trains to the city are boarded by {group}.
+T42	1	{Group} [visit|see|consult|call] doctors for regular checkups.	Doctors are visited for regular checkups by {group}.	Doctors are consulted for regular checkups by {group}.
+T43	1	{Group} [sell|trade|offer|display] goods at the market.	Goods are sold at the market by {group}.	Market goods are sold by {group}.
+T44	1	{Group} [hang|put up|place|arrange] pictures on their walls.	Pictures are hung on their walls by {group}.	Wall pictures are hung by {group}.
+T45	1	{Group} [post|share|upload|send] photos online with their friends.	Photos are posted online with their friends by {group}.	Online photos are shared with friends by {group}.
+T46	1	{Group} [attend|watch|follow|join] local sports games on Fridays.	Local sports games are attended on Fridays by {group}.	Local games are watched on Fridays by {group}.
+T47	1	{Group} [save|deposit|keep|put] money in the local bank.	Money is deposited in the local bank by {group}.	Local bank savings are kept by {group}.
+T48	1	{Group} [book|plan|arrange|schedule] trips for the summer.	Trips for the summer are booked by {group}.	Summer trips are planned by {group}.
+T49	1	{Group} [mow|water|tend|trim] their lawns on Saturdays.	Their lawns are mowed on Saturdays by {group}.	Lawns are mowed on Saturdays by {group}.
+T50	1	{Group} [teach|tutor|coach|instruct] children at the school.	Children at the school are taught by {group}.	Schoolchildren are taught by {group}.

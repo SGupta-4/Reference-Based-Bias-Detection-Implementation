@@ -51,7 +51,10 @@ python -m rbbd.cli probe [--config configs/base.yaml] [--no-require-gpu] [--skip
      │    └─ raise HardwareError if < 2 GPUs / sm < 7.5 / < 14 GiB   (exit code 2)
      ├─ --vllm: utils.env.probe_vllm(cfg.probe.vllm_cases, out_dir)
      │    └─ per case: subprocess `python -m rbbd.cli vllm-case --json <case> --out vllm_<name>.json`
-     │         └─ utils.env.vllm_case(): make_random_lora() (CPU) → vllm.LLM(...) → generate base + LoRA
+     │         └─ utils.env.vllm_case(): mode plain | merged | lora (canary)
+     │              merged: make_random_lora() → materialize_merged() → <ephemeral>/rbbd_probe/<name>
+     │                      → vllm.LLM(model=<that dir>) → greedy generate → temp dir removed (D-050)
+     │            on failure records failed_stage + traceback tail (D-048)
      │       → vllm_<name>.log, vllm_probe.json
      ├─ --check-store: utils.store.open_store(repo_id, "auto") → roundtrip(): write roundtrip.bin,
      │    upload_dir(env/<session>) [private check first] → forced download into empty cache → sha256 compare
@@ -64,19 +67,25 @@ The GPU test `tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora` call
 
 `python -m rbbd.cli status --config C` → `runner.stage_status()` prints `valid | incomplete | missing | stale (reason)` per stage.
 
-## Stage: sentences
-Entry: `run --stages sentences`
-1. `data.sentences.load_sets(cfg.sentences)` → {targets[variant][group], pos[variant], neg[variant], anchors[source]} [reads `resources/sentences/**`]
-2. `data.sentences.validate(sets)` → raises on count/length/overlap violations (App. F stats; PLAN §2)
-3. `data.anchors.subsets(anchors, sizes, seeds)` → nested index lists
-4. `data.sentences.build_union(sets)` → SentenceUnion(texts, hashes, index maps) [writes `manifests/sentences/<key>.json` with per-set hashes]
-Skip condition: all set hashes unchanged.
-Failure modes: validation error → fix the text files, not the checks.
+## Stage: sentences (implemented, M1)
+Entry: `run --stages sentences` → `runner.STAGE_IMPLS["sentences"]` → `data.sentences.stage(ctx)`
+1. `data.sentences.load_sets()` → `SentenceSets` [reads `resources/sentences/{targets.tsv, anchors.tsv, positive.src, negative.src}`]
+   - `render_slots(src, k)` (k = 0 base, 1–3 Synonyms v1–v3), `render_template(tpl, group)`, `subject_variant(s, "subj_v1"|"subj_v2")`, `anchor_assignment(42, 24, 1000)`
+2. `data.sentences.validate(sets)` → stats dict, or `SentenceValidationError` listing every failed check (PLAN §2; D-052)
+3. `data.sentences.build_union(sets)` → `SentenceUnion(texts, hashes, index[(set, variant[, group])] → row ids)`
+4. Writes `sentences/<run_key>/union.json` {union_hash, set_hashes, stats, texts, hashes, index}
+Anchor ablation pools (word / Alpaca / Tulu) and size subsets: `data.anchors` (M6).
+Skip condition: valid manifest (any edit to a source file changes the union hash and the downstream keys).
+Failure modes: validation error → fix the source files, not the checks.
 
-## Stage: ftdata
-1. `data.ft_data.load_wgm_train(revision)` → rows (HF datasets, gated; token from env)
-2. `data.ft_data.select_split(rows, "unharmful"|"harmful", n=8000, seed)` → row IDs (D-010, D-011) [writes `ftdata/<split>/<data_key>/ids.json, stats.json`]
-3. `data.ft_data.render(rows, tokenizer)` → prompt–completion records (in-memory only; no text persisted outside the HF cache)
+## Stage: ftdata (implemented, M1; runs on a Kaggle CPU session)
+Entry: `run --stages ftdata` → `data.ft_data.stage(ctx)`
+1. `data.ft_data.load_wgm_train(dataset, config, revision)` → (HF dataset, commit sha) [gated; token from `$HF_TOKEN`]
+2. `data.ft_data.check_schema(columns)` (B-006)
+3. `data.ft_data.select_split(rows, "unharmful"|"harmful", n_per_split, seed)` → indices + aggregate stats (D-010, D-011)
+4. For each `ftdata.census_tokenizers` model: `token_lengths(rows, tokenizer)` via the chat template → `census(lengths)` (D-042, D-054)
+5. Writes `ftdata/<run_key>/{unharmful_ids.json, harmful_ids.json, stats.json}` (indices and aggregates only; no text, D-037)
+M3 renders training records with `to_messages(row)` (TRL prompt–completion, D-040).
 
 ## Stage: train
 1. `finetune.sft.train(cfg.model, cfg.regime, split, data_key, seed, device)` → endpoint dir

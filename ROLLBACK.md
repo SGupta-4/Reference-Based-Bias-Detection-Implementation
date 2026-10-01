@@ -38,10 +38,13 @@
 
 | Tag | Commit | Kaggle notebook (version) | Store commit (rbbd-artifacts, D-041) | Date |
 |---|---|---|---|---|
-| *(none yet — `m0-green` waits for the Kaggle probe run)* | | | | |
+| `m0-green` | `7d956c162e9c6dfec9872104c7951a67d0f9e1d4` | `00_probe.ipynb` (Kaggle version not reported; session `20261001T094200Z`, run S03) | `a3d5ae3a9bf9c2e3a557af9a82acff77c08b13d4` | 2026-10-01 |
+| `m1-green` | `8277155ce97e4ca95388fd1c1399fdc5f389769a` | `run_stage.ipynb` (CPU; Kaggle version not reported; config hash `b4a36d44ede276ec`) | not reported (sync output not pasted) | 2026-10-01 |
+
+Note: `m0-green` and `m1-green` were created as annotated tags in the agent session, but pushing tags is blocked by that session's git policy (HTTP 403). Until the user pushes it (`git tag -a m0-green 7d956c162e9c6dfec9872104c7951a67d0f9e1d4 -m "M0 green" && git push origin m0-green`, or a GitHub release on that commit), roll back to the commit SHAs above. To push both: `git tag -a m1-green 8277155ce97e4ca95388fd1c1399fdc5f389769a -m "M1 green" && git push origin m1-green` (and the `m0-green` command above).
 
 ## Pre-edit rollback targets
 
 | Date | Planned change | Rollback tag | Files expected to change | Namespaces invalidated | Outcome |
 |---|---|---|---|---|---|
-| 2026-09-30 | M0: first implementation of cli/config/runner/utils + notebooks (touches > 3 modules) | none yet — commit `2df82d9` (docs-only state before M0 code) | `src/rbbd/{cli,config,runner}.py`, `src/rbbd/utils/*`, `configs/{base,smoke}.yaml`, `notebooks/*`, `tests/*`, `.gitignore`, `pyproject.toml` untouched | none (no artifacts exist yet) | CPU checks green; Kaggle pending |
+| 2026-09-30 | M0: first implementation of cli/config/runner/utils + notebooks (touches > 3 modules) | none yet — commit `2df82d9` (docs-only state before M0 code) | `src/rbbd/{cli,config,runner}.py`, `src/rbbd/utils/*`, `configs/{base,smoke}.yaml`, `notebooks/*`, `tests/*`, `.gitignore`, `pyproject.toml` untouched | none (no artifacts exist yet) | Done: M0 green, tagged `m0-green` |
