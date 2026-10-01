@@ -1065,3 +1065,33 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: ≈ 0.6–0.8 session-h (download ≈ 2 min, data selection ≈ 20 s, ≤ 20 min training per tried layout).
 - Paper deviation: no (the probe itself). The epoch fallback, if taken, gets its own D entry.
 - Revisit-if: the probe's two splits disagree by > 20 % in tok/s at similar lengths (suggests contention), or real runs drift > 15 % from the probe.
+
+## D-071 Llama-3.1-8B Tier 1 trains for 1 epoch at batch 2×16: D-070 rule applied to the measured probe (amends D-003, D-042, D-055; PLAN §8)
+- Date: 2026-10-01
+- Context: Probe run of `notebooks/m3c_probe.ipynb` on Kaggle 2×T4 (session `20261001T171846Z`, commit `c44ecaf`). Store commits: manifests `cf24d67a`, ftdata `4b9d42b4`, env `1500ad17`. Splits are the same 8,000 ids per split as the full run.
+- Observed (facts):
+  - **Batch 4×8:** `torch.OutOfMemoryError` after 131 s. It happened in TRL's token-accuracy metric (`outputs.logits[..., :-1, :].contiguous()`, +1.96 GiB) with 12.94 GiB already in use on a 14.56 GiB T4.
+  - **Batch 2×16:** completed. The 20-minute cap stopped it at 9 steps (unharmful) and 8 steps (harmful); no scaler-skipped steps.
+
+    | Split | n_tokens (1 epoch) | Truncated | Dropped | Steady tok/s | s/step | Peak GiB | Projected 3 ep | Projected 1 ep |
+    |---|---|---|---|---|---|---|---|---|
+    | unharmful | 3,375,072 | 319 | 0 | 204.7 | 116.7 | 9.91 | 13.74 h | 4.58 h |
+    | harmful | 4,955,020 | 965 | 0 | 214.8 | 149.6 | 9.91 | 19.22 h | 6.41 h |
+
+  - The two splits agree within 5 % in tok/s: no sign of contention (D-070 Revisit-if not met).
+  - No example's prompt filled the 1,024-token window, so D-055 item 4's drop path removes nothing for Llama.
+- Choice (mechanical application of D-070):
+  1. **Batch layout** 2 × grad-acc 16 (effective 32, App. C), written into `configs/tier1_llama3.1-8b.yaml`.
+  2. **Epochs: 1** for both Llama endpoints. The harmful run projects 19.22 h at 3 epochs (> 9 h) and 6.41 h at 1 epoch (≤ 9 h). This is D-042's pre-approved Q3 fallback; the 512-token option is excluded by D-055. The linear schedule and 3 % warm-up now span one epoch.
+  3. **Budget re-baseline:** the measured rate (≈ 210 tok/s) is −39 % against the assumed 350 tok/s (D-055 Revisit-if: ±30 %).
+     - Llama ≈ 6.6 session-h: 6.41 h training plus ≈ 10 min of load, data and checkpoint overhead.
+     - Mistral-7B (1 epoch, ≈ 5.28 M harmful tokens) ≈ 6.8 h if it runs at Llama's rate, probably less (smaller model and 32k vocabulary).
+     - Gemma-3-4B: unknown until its D-005 probe. If fp16 compute holds, roughly 3–4 h. If it needs fp32 compute (likely, given D-062), it may exceed 9 h even at 1 epoch, and D-070 then requires asking the user.
+     - Tier 1 training ≈ 17–21 h if Gemma stays ≤ 9 h; D-055 had 11.5–14 h at 1 epoch. The core total moves from ≈ 70 to ≈ 77–81 session-h (15 % contingency included). At 26 usable h/week that is about 3 weeks; D-042's cut order applies if a week overruns.
+- Why: Pre-registered rule (D-070) and pre-approved fallback (D-042/Q3).
+- Tradeoff accepted:
+  - Llama's endpoints see 1/3 of the paper's training passes, so the u–h gap may be smaller than in the paper. ΔB and the benchmark deltas are computed on the same endpoints, so the correlation test stays internally consistent.
+  - Tier 2 keeps 3 epochs (small models, D-009), so tiers differ in epochs.
+- Cost impact: Llama training 6.6 h instead of 19.4 h at 3 epochs; the probe cost ≈ 0.6 session-h.
+- Paper deviation: **yes**, App. C epochs (3 → 1) for Llama-3.1-8B, plus the batch layout (no deviation in effective batch).
+- Revisit-if: real Llama training drifts > 15 % from the projection (D-070), or the weekly quota grows enough to afford 3 epochs (≈ +12.8 h).

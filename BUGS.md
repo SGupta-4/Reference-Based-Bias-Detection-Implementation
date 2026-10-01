@@ -278,7 +278,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `ec87d99`; D-003, D-068; B-015
 
 ## B-018 Feature: M3c-T8 throughput probe (Llama-3.1-8B QLoRA)
-- Status: In progress. CPU side done; the Kaggle run (`notebooks/m3c_probe.ipynb`) is pending.
+- Status: **Done.** Kaggle probe at `c44ecaf` (session `20261001T171846Z`): batch 4×8 OOM, 2×16 fits; harmful run 214.8 tok/s → 19.22 h at 3 epochs → Llama trains 1 epoch (D-071).
 - How it was found or scoped: PLAN §7 M3c-T8; the user chose to run it before M3b (2026-10-01).
 - Reproduction command: CPU: `python -m pytest -q tests/test_sft.py -k "throughput or time_limit or projection"`; Kaggle: `notebooks/m3c_probe.ipynb`.
 - Hypotheses tried:
@@ -289,6 +289,6 @@ IDs are sequential and never reused.
   - `train.max_minutes` config key.
   - `configs/m3c_probe_llama3.1-8b_b{4,2,1}.yaml` and `notebooks/m3c_probe.ipynb`.
   - Decision rule fixed in D-070.
-- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `102 passed, 10 deselected in 14.35s`, including the 3 new probe tests; all notebook code cells parse. Kaggle: pending.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `102 passed, 10 deselected in 14.35s`, including the 3 new probe tests; all notebook code cells parse. Kaggle: the 4×8 layout OOMed in TRL's token-accuracy logits copy (+1.96 GiB at 12.94 GiB in use), as the fallback loop anticipates; 2×16 completed. Full numbers in D-071.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-042, D-055, D-070
+- Linked commits and D-### entries: `c44ecaf`; D-042, D-055, D-070, D-071
