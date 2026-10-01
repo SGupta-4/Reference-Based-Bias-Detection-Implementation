@@ -18,9 +18,11 @@ by `metrics.delta_b` (M4) through the index maps of `SentenceUnion`.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -203,7 +205,7 @@ class SentenceSets:
         """Content hash of every (set, variant) list, used in cache keys (D-019)."""
         out = {}
         for v, by_group in self.targets.items():
-            out[f"targets/{v}"] = set_hash(s for g in GROUP_NAMES for s in by_group[g])
+            out[f"targets/{v}"] = set_hash(s for g in by_group for s in by_group[g])
         for v, rows in self.positives.items():
             out[f"positive/{v}"] = set_hash(rows)
         for v, rows in self.negatives.items():
@@ -459,13 +461,40 @@ def build_union(sets: SentenceSets) -> SentenceUnion:
     pos: dict[str, int] = {}
     for src, rows in sets.anchors.items():
         union._add(("anchors", src), rows, pos)
-    for v in ATTR_VARIANTS:
+    for v in sets.positives:
         union._add(("positive", v), sets.positives[v], pos)
         union._add(("negative", v), sets.negatives[v], pos)
-    for v in TARGET_VARIANTS:
-        for g in GROUP_NAMES:
-            union._add(("targets", v, g), sets.targets[v][g], pos)
+    for v, by_group in sets.targets.items():
+        for g, rows in by_group.items():
+            union._add(("targets", v, g), rows, pos)
     return union
+
+
+def subset_sets(sets: SentenceSets, spec: Mapping[str, Any]) -> SentenceSets:
+    """A smaller copy of validated `sets` for the Tier 0 smoke run (PLAN §6, D-038).
+
+    spec = {groups: [...], n_targets, n_attr, n_anchors, variants (default ["base"])};
+    the first rows of each set are kept, so a subset is a prefix of the full sets and
+    its sentences are ones the full validation already passed.
+    """
+    groups = list(spec["groups"])
+    variants = list(spec.get("variants", ["base"]))
+    unknown = set(groups) - set(GROUP_NAMES)
+    if unknown:
+        raise ValueError(f"unknown groups in subset: {sorted(unknown)}")
+    nt, na, nn = int(spec["n_targets"]), int(spec["n_attr"]), int(spec["n_anchors"])
+    return dataclasses.replace(
+        sets,
+        targets={
+            v: {g: sets.targets[v][g][:nt] for g in groups} for v in variants if v in sets.targets
+        },
+        target_template_ids=sets.target_template_ids[:nt],
+        positives={v: sets.positives[v][:na] for v in variants if v in sets.positives},
+        negatives={v: sets.negatives[v][:na] for v in variants if v in sets.negatives},
+        anchors={"neutral": sets.anchors["neutral"][:nn]},
+        anchor_groups=sets.anchor_groups[:nn],
+        anchor_templates=sets.anchor_templates[:nn],
+    )
 
 
 def stage(ctx: Any) -> Any:
@@ -477,7 +506,11 @@ def stage(ctx: Any) -> Any:
     from rbbd.runner import StageResult
 
     sets = load_sets()
-    stats = validate(sets)
+    stats = validate(sets)  # the full sets are always validated, also for a smoke subset
+    subset = ctx.cfg.get("sentences.subset")
+    if subset:
+        sets = subset_sets(sets, subset)
+        stats["subset"] = dict(subset)
     union = build_union(sets)
     payload = {
         "union_hash": union.union_hash,

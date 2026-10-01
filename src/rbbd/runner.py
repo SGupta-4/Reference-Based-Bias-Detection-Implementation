@@ -114,6 +114,8 @@ def _stub(stage: str) -> StageFn:
 STAGE_IMPLS: dict[str, str] = {
     "sentences": "rbbd.data.sentences:stage",
     "ftdata": "rbbd.data.ft_data:stage",
+    "train": "rbbd.finetune.sft:stage",
+    "embed": "rbbd.embed.extract:stage",
 }
 
 
@@ -143,15 +145,27 @@ def topo_order(requested: Iterable[str]) -> list[str]:
     return [s for s in STAGES if s in requested]
 
 
-def stage_run_keys(config_hash: str) -> dict[str, str]:
+def stage_deps(stage: str, cfg: Config) -> tuple[str, ...]:
+    """Upstream stages of `stage` under `cfg`.
+
+    `embed` needs `train` only when α-checkpoints are configured; extracting the
+    reference model alone (M2, and the reference half of every later run) depends on
+    `sentences` only (D-057).
+    """
+    if stage == "embed" and list(cfg.get("embed.checkpoints", ["ref"])) == ["ref"]:
+        return ("sentences",)
+    return DEPENDS[stage]
+
+
+def stage_run_keys(cfg: Config) -> dict[str, str]:
     """Run key for every stage: content key of (config hash, stage, upstream run keys)."""
     keys: dict[str, str] = {}
     for stage in STAGES:
         keys[stage] = make_key(
             {
-                "config_hash": config_hash,
+                "config_hash": cfg.hash,
                 "stage": stage,
-                "upstream": {d: keys[d] for d in DEPENDS[stage]},
+                "upstream": {d: keys[d] for d in stage_deps(stage, cfg)},
             }
         )
     return keys
@@ -165,7 +179,7 @@ def _input_hashes(upstream: Mapping[str, mf.Manifest]) -> dict[str, str]:
 
 def stage_status(cfg: Config, env: Env) -> list[dict[str, str]]:
     """Per-stage manifest status for `cli status`: valid / incomplete / missing / stale(reason)."""
-    keys = stage_run_keys(cfg.hash)
+    keys = stage_run_keys(cfg)
     rows = []
     for stage in STAGES:
         path = mf.manifest_path(env.artifacts_root, stage, keys[stage])
@@ -176,7 +190,8 @@ def stage_status(cfg: Config, env: Env) -> list[dict[str, str]]:
             status = "incomplete"
         else:
             upstream = {
-                d: mf.read(mf.manifest_path(env.artifacts_root, d, keys[d])) for d in DEPENDS[stage]
+                d: mf.read(mf.manifest_path(env.artifacts_root, d, keys[d]))
+                for d in stage_deps(stage, cfg)
             }
             if any(u is None for u in upstream.values()):
                 status = "stale (upstream missing)"
@@ -206,14 +221,14 @@ def run(
     fns = {**DEFAULT_STAGE_FNS, **(stage_fns or {})}
     order = topo_order(stages if stages is not None else STAGES)
     forced = set(topo_order(force))
-    keys = stage_run_keys(cfg.hash)
+    keys = stage_run_keys(cfg)
     root = env.artifacts_root
     outcome: dict[str, str] = {}
     sha = mf.git_sha()
 
     for stage in order:
         upstream: dict[str, mf.Manifest] = {}
-        for dep in DEPENDS[stage]:
+        for dep in stage_deps(stage, cfg):
             dep_m = mf.read(mf.manifest_path(root, dep, keys[dep]))
             if dep_m is None or not dep_m.complete:
                 if dry_run:

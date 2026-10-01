@@ -60,6 +60,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "--path", required=True, help="path relative to the artifact root, e.g. env/<session>"
     )
 
+    c = sub.add_parser("compare-embeddings", help="compare two configs' cached ref embeddings")
+    c.add_argument("--a", type=Path, required=True, help="config whose embeddings are tested")
+    c.add_argument("--b", type=Path, required=True, help="config used as the reference")
+
+    t = sub.add_parser("train-one", help="train one endpoint (launched by the train stage)")
+    t.add_argument("--config", type=Path, required=True)
+    t.add_argument("--model", required=True, help="model slug from the config")
+    t.add_argument("--regime", required=True, choices=["lora", "qlora", "full"])
+    t.add_argument("--split", required=True, choices=["unharmful", "harmful"])
+    t.add_argument("--seed", type=int, required=True)
+
     v = sub.add_parser("vllm-case", help=argparse.SUPPRESS)
     v.add_argument("--json", required=True)
     v.add_argument("--out", type=Path, required=True)
@@ -144,6 +155,48 @@ def _cmd_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_compare(args: argparse.Namespace) -> int:
+    from rbbd.embed.extract import cached_ref_entry, compare_entries
+
+    cfg_a, cfg_b = config_mod.load(args.a), config_mod.load(args.b)
+    env = env_mod.detect(cfg_a.get("paths.artifacts"))
+    slug_a, slug_b = cfg_a["models"][0]["slug"], cfg_b["models"][0]["slug"]
+    a, union_a = cached_ref_entry(cfg_a, env, slug_a)
+    b, union_b = cached_ref_entry(cfg_b, env, slug_b)
+    if union_a["union_hash"] != union_b["union_hash"]:
+        raise SystemExit("the two configs embedded different sentence unions")
+    result = {"a": str(args.a), "b": str(args.b), **compare_entries(a, b, union_b)}
+    out = env.artifacts_root / "env" / env_mod.session_id() / f"compare_{cfg_a['run_name']}.json"
+    env_mod.write_json(out, result)
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def _cmd_train_one(args: argparse.Namespace) -> int:
+    # One endpoint, in its own process with one visible GPU (D-003). The job is
+    # re-derived from the config and the ftdata manifest, so the parent passes names only.
+    from rbbd.finetune import sft
+    from rbbd.utils import manifest as mf
+
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    seed_all(args.seed)
+    keys = runner.stage_run_keys(cfg)
+    ft = mf.read(mf.manifest_path(env.artifacts_root, "ftdata", keys["ftdata"]))
+    if ft is None or not ft.complete:
+        raise SystemExit("train-one needs a complete ftdata manifest; run the ftdata stage first")
+    jobs = sft.plan_jobs(cfg, env.artifacts_root, list(ft.output_hashes))
+    match = [j for j in jobs if (j.spec.slug, j.regime, j.split, j.seed)
+             == (args.model, args.regime, args.split, args.seed)]  # fmt: skip
+    if len(match) != 1:
+        raise SystemExit(
+            f"no unique job for {args.model}/{args.regime}/{args.split}/seed{args.seed}"
+        )
+    done = sft.run_job(cfg, match[0])
+    print(json.dumps(done, indent=2))
+    return 0
+
+
 def _cmd_vllm_case(args: argparse.Namespace) -> int:
     case = json.loads(args.json)
     result = env_mod.vllm_case(case, args.out.parent)
@@ -159,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
         "run": _cmd_run,
         "status": _cmd_status,
         "sync": _cmd_sync,
+        "compare-embeddings": _cmd_compare,
+        "train-one": _cmd_train_one,
         "vllm-case": _cmd_vllm_case,
     }
     return handlers[args.command](args)

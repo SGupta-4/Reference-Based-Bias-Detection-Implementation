@@ -352,7 +352,7 @@ def make_random_lora(model_id: str, rank: int, out_dir: Path) -> Path:
     from peft import LoraConfig, get_peft_model
     from transformers import AutoModelForCausalLM
 
-    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.float16)
+    model = AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.float16)
     cfg = LoraConfig(
         r=rank,
         lora_alpha=rank,
@@ -382,7 +382,7 @@ def materialize_merged(model_id: str, lora_dir: Path, out_dir: Path) -> Path:
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    base = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.float32)
+    base = AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.float32)
     merged = PeftModel.from_pretrained(base, str(lora_dir)).merge_and_unload()
     merged = merged.to(torch.float16)
     out_dir.mkdir(parents=True, exist_ok=True)

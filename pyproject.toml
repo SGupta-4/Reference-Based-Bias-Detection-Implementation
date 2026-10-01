@@ -25,6 +25,9 @@ dependencies = [
 # GPU stack shared by embedding extraction and fine-tuning (paper stack, App. C).
 train = [
     "torch==2.7.1",
+    # Paired with torch 2.7.1. Kaggle preinstalls a torchvision built for its own torch;
+    # transformers imports it and fails on the ABI mismatch (B-012, D-060).
+    "torchvision==0.22.1",
     "transformers==4.57.3",
     "peft==0.18.0",
     "trl==0.25.1",
@@ -36,6 +39,7 @@ train = [
 # Generation + scoring. vLLM 0.10.1.1 is built against torch 2.7.1 (D-021, D-031).
 bench = [
     "torch==2.7.1",
+    "torchvision==0.22.1",
     "transformers==4.57.3",
     "peft==0.18.0",
     "datasets==4.1.1",

@@ -147,3 +147,132 @@ IDs are sequential and never reused.
 - GPU-hours lost: 0
   - Kaggle CPU (commit `8277155`, config hash `b4a36d44ede276ec`): `run --config configs/base.yaml --stages sentences,ftdata` → `"sentences": "ran"` (0.9 s), `"ftdata": "ran"` (205.3 s); `status` → both `valid`. Census results in D-055.
 - Linked commits and D-### entries: D-052, D-053, D-054, D-055, D-056; commit `8277155`
+
+## B-011 Feature: M2 embedding extraction and cache
+- Status: In progress. The second Kaggle run (session `20261001T113125Z`, commit `64498de`) passed DC-09, DC-10 and DC-12 and settled the Gemma probe (D-062). DC-06 failed its D-058 rule (B-013). Under D-061 (session `20261001T122025Z`), the fp16 part passed and the fp32 part failed on a test-measurement bug (B-014), which was then fixed. **Done:** all M2 checks pass (D-064); tagged `m2-green`.
+- How it was found or scoped: PLAN §7 M2 (M2-T1…T4).
+- Reproduction command: CPU: `pytest -q -m "not gpu"`; Kaggle: `notebooks/m2_extract.ipynb`.
+- Hypotheses tried:
+  - `embed` could not run before `train` existed → config-dependent dependencies (D-057).
+  - `ExtractSettings`'s loader closure captured a loop variable (ruff B023) → bound as a default argument.
+  - Adding `download()` made the stage tests touch the network → stubbed in tests like the loader.
+  - Local environment: the PyTorch CPU wheel index was unreachable, and `accelerate` pulled an unpinned torch 2.14.1; it was replaced by the pinned 2.7.1 before any test ran (D-059).
+- Fix: `src/rbbd/models/loading.py`, `src/rbbd/embed/{pooling,extract}.py`, `src/rbbd/metrics/delta_b.py` (`from_union`), runner deps, CLI `compare-embeddings`, configs, `notebooks/m2_extract.ipynb`, tests.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `76 passed, 7 deselected in 8.20s`; `grep -rn "PLACEHOLDER(M2)" tests` → no output.
+- Verification (Kaggle 2×T4, session `20261001T113125Z`, commit `64498de`; store commits: manifests `2fcc96a8`, embed `fb5226a5`, embeddings `a9babfcb`, env `0752f031`):
+  - DC-10: smoke run 1 → `embed: resumed` (an incomplete manifest from the B-012 run was still in `/kaggle/working`; the resume path re-extracted all 85 texts); run 2 → `cache hit: stage embed`, no load and no forward. **Pass.**
+  - DC-09 (GPU): `test_guard_active_on_real_model` passed; `m2_extract_gpu.json` → `"guard_on_gpu": "raised NonFiniteError, nothing cached"`. **Pass.**
+  - DC-12: Llama-3.1-8B fp16 balanced, 9,197 texts, post- and pre-norm: load 73.4 s + extraction 71.4 s = 144.8 s ≤ 900 s; peak 7.43 / 9.21 GiB; padding waste 1.6 %. **Pass.**
+  - Gemma-3-4B fp32: load 22.2 s + extraction 191.0 s; peak 9.07 / 9.92 GiB. fp16 probe: guard fired on batch 0, all values NaN → stays fp32 (D-062).
+  - DC-06 (GPU): **fail** under D-058 (B-013). Rule replaced by D-061; rerun pending.
+- GPU-hours lost: ≈ 0.2 (first Kaggle run, B-012)
+- Linked commits and D-### entries: `92e836e`, `64498de`, `ac0f1ce`; D-057, D-058, D-059, D-060, D-061, D-062, D-063; B-012, B-013, B-014
+
+## B-012 Bug: every M2 model load fails on Kaggle — torchvision does not match the pinned torch
+- Status: Fixed and verified on Kaggle (session `20261001T113125Z`).
+- How it was found or scoped: First M2 Kaggle run of `notebooks/m2_extract.ipynb` at `92e836e`. Qwen (smoke), Llama-3.1-8B and Gemma-3-4B all downloaded (≈ 9 s, 69 s, 34 s) and then failed in `AutoModelForCausalLM.from_pretrained`.
+- Reproduction command: on Kaggle, `pip install -e ".[train,dev]"` at `92e836e`, then `python -c "from transformers import Qwen2ForCausalLM"`.
+- Observed: `RuntimeError: operator torchvision::nms does not exist` (raised while importing `transformers.image_utils` → torchvision) → `ModuleNotFoundError: Could not import module 'Qwen2ForCausalLM'` (likewise `LlamaForCausalLM`, `Gemma3ForConditionalGeneration`). Downstream:
+  - the GPU tests errored in fixture setup;
+  - `compare-embeddings` found no manifests;
+  - the second smoke run logged `resuming` (the first left an incomplete manifest), not `cache hit`.
+  - Also: the warning "`torch_dtype` is deprecated! Use `dtype` instead!"
+- Hypotheses tried:
+  - Model or revision problem → rejected: three different architectures failed identically, and all after a successful download.
+  - Torch/torchvision ABI mismatch → confirmed. The `train` extra reinstalls torch 2.7.1 but not torchvision, so Kaggle's image keeps a torchvision compiled for its own torch. M0 installed `bench`, whose `vllm` pulls a matching torchvision, so it never saw this.
+- Fix: Pin `torchvision==0.22.1` in `train` and `bench` (D-060). Add a preflight import cell to `m2_extract.ipynb`. Switch `from_pretrained` to `dtype=` in `models/loading.py` and `utils/env.py`. Add tests `test_torchvision_pinned_with_torch` and `test_transformers_model_classes_import`.
+- Verification (CPU, this container): `pip install -e ".[train,dev]"` resolves `torch 2.7.1+cu126`, `torchvision 0.22.1+cu126`, `transformers 4.57.3`. `python -c "from transformers import Qwen2ForCausalLM, LlamaForCausalLM, Gemma3ForConditionalGeneration; import transformers.image_utils"` → ok. `ruff check src tests` → `All checks passed!`. `python -m pytest -q -m "not gpu"` → `78 passed, 7 deselected in 8.97s`. Kaggle (commit `64498de`): preflight printed `preflight ok 2.7.1+cu126 0.22.1+cu126 4.57.3`, and Qwen, Llama-3.1-8B and Gemma-3-4B all loaded.
+- GPU-hours lost: ≈ 0.2 (one 2×T4 session spent on downloads and failed loads)
+- Linked commits and D-### entries: `92e836e` (failing run), `64498de` (fix, verified); D-031, D-060; B-011
+
+## B-013 Bug: DC-06 fp16 padding-invariance rule (D-058) cannot be met by fp16 arithmetic
+- Status: **Closed.** Both parts of D-061 pass on Kaggle (B-014 fixed the part-1 measurement).
+- How it was found or scoped: `test_padding_invariance_fp16` failed on Kaggle (session `20261001T113125Z`, commit `64498de`): `1 failed, 1 passed in 13.09s`.
+- Reproduction command: `pytest -q -m gpu tests/gpu/test_extract_gpu.py::test_padding_invariance_fp16` at `64498de` on 2×T4.
+- Observed (`m2_extract_gpu.json`), max |alone − batched| with max |value|: mean 0.146 / 124.7; max 0.625 / 183.1; last 0.156 / 146.8. The fp16 step in [128, 256) is 0.125, so these gaps are 1–5 ulps.
+- Hypotheses tried:
+  - Padding leaks into real positions. Unlikely: with right padding and causal attention, pads come after every real token. Pooling over masks is covered on CPU in fp32 (`test_padding_invariance_cpu`, `test_last_token_index`, where 1e6 at pad positions never leaks). Not yet proven on the real model → D-061 part 1 checks fp32 on Qwen.
+  - fp16 rounding from different GEMM shapes and attention kernels (masked batch vs single sequence). Consistent with gaps of a few ulps at the largest coordinates. D-058 assumed values in [8, 16), which made the tolerance look feasible; real values reach 183.
+- Fix: D-061 replaces the rule. `test_padding_invariance_fp16` is replaced by `test_padding_invariance_fp32` and `test_padding_cosine_fp16_smoke` (85 smoke sentences, cosine ≥ 0.9999). The latter also records fp16-vs-fp32 error. The notebook's pytest cell prints full failure lines (`-rfE --tb=short`).
+- Verification (CPU, this container): both new tests ran end to end with the tiny conftest model standing in for Qwen (`load_for_inference` monkeypatched); `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `78 passed, 8 deselected in 10.51s`. Kaggle: pending.
+- Kaggle under D-061 (session `20261001T122025Z`, commit `ac0f1ce`): `1 failed, 2 passed in 31.80s`. Part 2 (85 smoke texts) passed. min cosine alone vs batched in fp16: mean 0.9999973, max 0.9999936, last 0.9999967 (≥ 0.9999). Recorded for comparison:
+  - Padding error (relative L2): mean 0.0014 / max 0.0023.
+  - fp16 vs fp32, sentence alone: mean 0.0039 / max 0.0072.
+  - fp16 vs fp32, sentence in its batch: mean 0.0039 / max 0.0075.
+  - So padding adds less error than fp16 itself; fp16 batched vs fp32 is no worse than alone vs fp32.
+  - Max-pooling, fp16 vs fp32: min cosine 0.99993, the least precise pooling.
+  - Part 1 failed: see B-014.
+- GPU-hours lost: ≈ 0 (the test took 13 s; the rest of the run produced usable results)
+- Linked commits and D-### entries: `64498de`, `ac0f1ce`; D-058, D-061, D-063; B-011, B-014
+
+## B-014 Bug: DC-06's fp32 check compared fp16-rounded outputs
+- Status: **Closed.** Fixed and verified on Kaggle.
+- How it was found or scoped: `test_padding_invariance_fp32` failed on Kaggle (session `20261001T122025Z`, commit `ac0f1ce`). `m2_extract_gpu.json` shows `padding_invariance_fp32` max_abs: last 0.00390625, max 0.00390625, mean 0.001953125; max_rel ≈ 1.6e-3–1.8e-3; max |value| 146.75 / 182.75 / 124.56.
+- Reproduction command: `pytest -q -m gpu tests/gpu/test_extract_gpu.py::test_padding_invariance_fp32` at `ac0f1ce` on 2×T4.
+- Hypotheses tried:
+  - Padding leak in fp32. Rejected: a leak would give O(1) errors. These gaps are 1–2 fp16 ulps, 160× below the fp16-compute gap.
+  - fp16 output cast. Confirmed: the gaps are exactly 2⁻⁸ and 2⁻⁹, the fp16 rounding steps in [4, 8) and [2, 4). `encode` casts every pooled vector to fp16 before returning, so the test never saw fp32 values.
+- Fix: `encode(..., keep_fp32=True)` returns the pre-cast pooled vectors, and the fp16 guard still runs. `test_padding_invariance_fp32` uses it. New CPU test `test_encode_keep_fp32_matches_cached_fp16` checks that casting the kept vectors reproduces the default fp16 output exactly. Thresholds are unchanged (D-063).
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `79 passed, 8 deselected in 16.45s`. A dry run of `test_padding_invariance_fp32` with the tiny model gives max_abs 2.2e-8 / 6.0e-8 / 1.2e-7 (mean/max/last): fp32-level values, no fp16 steps. Kaggle (session `20261001T122025Z`, commit `8e26c8d`): `3 passed in 20.53s`. `padding_invariance_fp32` max_abs is last 1.36e-4, max 7.31e-4, mean 1.83e-4. These are non-power-of-two values, which confirms the comparison now sees fp32 values. Store commit `1eeebb91`.
+- GPU-hours lost: ≈ 0.1 (one short session)
+- Linked commits and D-### entries: `ac0f1ce`, `8e26c8d`; D-061, D-063, D-064; B-013
+
+## B-015 Feature: M3a fine-tuning (SFT endpoints, α-merges, train stage)
+- Status: **Done** (M3a). Run 1 (`ec87d99`) found B-016 and B-017. Run 2 (`7b41de1`, session `20261001T154608Z`) passed everything (D-069); tagged `m3a-green`.
+- How it was found or scoped: PLAN §7 M3 (M3-T1–T3, M3a-T4).
+- Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3a_train.ipynb`.
+- Hypotheses tried:
+  - D-006 taken literally would abort fp16 training on scaler-skipped steps → D-065 (user-approved).
+  - Concatenated adapters are not guaranteed to be bit-equal to the endpoints at α ∈ {0, 1} → D-066 (user-approved).
+  - TRL infers `completion_only_loss` from a `prompt` column, which pre-tokenised data lacks → set explicitly (D-067).
+  - TRL requires a real `PreTrainedTokenizerBase` → CPU tests use an offline word-level fast tokenizer with a chat template (`tests/conftest.make_chat_tokenizer`).
+  - The data-leak assertion in a test first matched the field name `n_dropped_prompt_fills_window` → it now checks that no row text appears.
+  - `test_stub_names_its_milestone` used `train` as its stub → retargeted to `generate` (M5).
+- Fix:
+  - Code: `src/rbbd/finetune/sft.py`, `src/rbbd/models/{adapters,interpolate}.py`, `runner.STAGE_IMPLS["train"]`, `cli train-one`.
+  - Config: `train:` sections in `configs/{base,smoke}.yaml`.
+  - Tests: `tests/{test_merge,test_sft}.py`, `tests/gpu/test_train_gpu.py`.
+  - Notebook: `notebooks/m3a_train.ipynb`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `96 passed, 9 deselected in 13.30s`; `grep -rn "PLACEHOLDER(M3)" tests` → no output.
+  - DC-13 on CPU: after a kill at checkpoint 3 the run resumes to the same step with bit-identical adapter tensors.
+  - DC-07 on CPU: α ∈ {0, 1} are bit-identical to the endpoints, and combined ΔW is linear within float64 rtol 1e-6.
+  - A CPU dry run of `test_real_adapter_endpoints` (tiny model trained into the smoke layout) passed, with max relative linearity error 5.1e-8.
+  - Kaggle run 1 (session `20261001T132720Z`, commit `ec87d99`; store commits: train `d72b5580`, env `44b5b73c`):
+    - DC-11 (through train): `smoke ftdata+train wall-clock: 96 s` (< 15 min). The rerun gave `ftdata: cache hit, train: cache hit`. **Pass.**
+    - Training: both endpoints 24 steps, 3 epochs, 0 scaler-skipped steps, 64/64 rows kept, 0 dropped, 5 truncated each.
+      - Unharmful: train loss 1.813, final 1.526, 1,946 tok/s.
+      - Harmful: train loss 2.106, final 1.775, 2,181 tok/s.
+    - GPU tests `1 failed… 2 failed, 1 passed`: `test_real_adapter_endpoints` raised `AdapterError` (B-016). `test_resume_after_kill` got `assert 3 == 6` (B-017).
+  - Kaggle run 2 (session `20261001T154608Z`, `7b41de1`): `4 passed in 161.27s`; DC-11 112 s; see D-069 for every number.
+- GPU-hours lost: ≈ 0.15 (run 1's GPU tests)
+- Linked commits and D-### entries: `ec87d99`, `7b41de1`; D-065, D-066, D-067, D-068, D-069; B-016, B-017
+
+## B-016 Bug: `combine` rejected real endpoints because PEFT's `target_modules` order varies by process
+- Status: **Closed.** Verified on Kaggle (session `20261001T154608Z`): `test_real_adapter_endpoints` passed on adapters trained in two processes.
+- How it was found or scoped: `test_real_adapter_endpoints` on Kaggle (session `20261001T132720Z`, commit `ec87d99`) failed with `rbbd.models.adapters.AdapterError`.
+- Reproduction command: save two PEFT adapters from two processes with `PYTHONHASHSEED=1` and `=2`, then `adapters.combine(u, h, 0.5)` → `AdapterError: endpoint configs differ in 'target_modules'`. Reproduced in this container: `["q_proj","o_proj","up_proj",…]` vs `["k_proj","o_proj","up_proj",…]`.
+- Hypotheses tried:
+  - Rank or DoRA mismatch. Rejected: both configs have r 16, DoRA off and empty patterns.
+  - Set ordering. Confirmed: PEFT stores `target_modules` as a set, and JSON order follows each process's string-hash seed. The CPU tests trained both endpoints in one process, so they never saw it.
+- Fix: `combine` compares `target_modules` as sorted lists and writes them sorted. Regression test `test_combine_accepts_target_modules_in_any_order`.
+- Verification (CPU): `python -m pytest -q -m "not gpu"` → `99 passed`. Kaggle: pending.
+- GPU-hours lost: included in B-015.
+- Linked commits and D-### entries: `ec87d99`; D-066; B-015
+
+## B-017 Bug: two visible GPUs made the HF Trainer use DataParallel; LoRA init not seeded per spec
+- Status: **Closed.** Verified on Kaggle (session `20261001T154608Z`): resume test 6 = 6 steps with adapter diff 0.0, and the trainer refused two visible GPUs.
+- How it was found or scoped: `test_resume_after_kill` on Kaggle (session `20261001T132720Z`, `ec87d99`): `assert 3 == 6`; `m3a_train_gpu.json` → `ref_global_step 3`, `resumed_global_step 3`, `max_abs_adapter_diff 0.0668`.
+- Reproduction command: `pytest -q -m gpu tests/gpu/test_train_gpu.py::test_resume_after_kill` at `ec87d99` on 2×T4.
+- Hypotheses tried:
+  - Resume logic. Rejected: the run resumed from `checkpoint-3`, and on CPU resume is bit-identical.
+  - Effective batch doubled. Confirmed: with `device_map={"": 0}` and the args' device also cuda:0, transformers 4.57 sets `is_model_parallel=False` and keeps `n_gpu=2`. It wraps the model in `nn.DataParallel` with batch 4 × 2 GPUs × grad-acc 2 = 16, so 48 rows give 3 steps. The kill hook therefore fired at the last step, and the "resume" had nothing left to do. The train stage was unaffected because each `train-one` process sees one GPU (24 steps, as computed).
+  - The 0.067 adapter gap is the unseeded LoRA A init: each run drew it from a different global RNG state.
+- Fix (D-068): `train_one` refuses more than one visible GPU, and seeds `set_seed(spec.seed)` right before building the trainer. `sft.SCHEMA_VERSION` → 2. The GPU DC-13 test runs ref/kill/resume as child processes with `CUDA_VISIBLE_DEVICES=0`, and a new GPU test checks the refusal. `test_real_adapter_endpoints` finds the smoke jobs by `train_key`, not by glob.
+- Verification (CPU, this container):
+  - `test_train_one_refuses_more_than_one_visible_gpu` passes.
+  - `test_adapter_init_depends_on_spec_seed_only` fails with `set_seed` removed and passes with it.
+  - A CPU dry run of the three child phases with the tiny model gives `ref exit 0` / `kill exit 3` / `resume exit 0` and `ref 6 resumed 6 checkpoint-3`, with losses at steps 4–6 identical to ref.
+  - `python -m pytest -q -m "not gpu"` → `99 passed, 10 deselected`.
+  - Kaggle: pending.
+- GPU-hours lost: included in B-015.
+- Linked commits and D-### entries: `ec87d99`; D-003, D-068; B-015

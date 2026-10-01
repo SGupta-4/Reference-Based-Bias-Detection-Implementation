@@ -225,3 +225,32 @@ def test_vllm_case_merged_serves_local_weights_and_cleans_up(tmp_path, monkeypat
     kwargs = fake["vllm"].LLM.calls[-1]
     assert kwargs["model"] == str(merged_dir) and "enable_lora" not in kwargs
     assert kwargs["tensor_parallel_size"] == 2
+
+
+def test_torchvision_pinned_with_torch():
+    """B-012: every extra that reinstalls torch pins the matching torchvision.
+
+    Kaggle preinstalls a torchvision built for its own torch. When an extra replaces
+    torch without replacing torchvision, `transformers` fails to import any model
+    class (`operator torchvision::nms does not exist`).
+    """
+    from pathlib import Path
+
+    import tomllib
+
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    extras = tomllib.loads(pyproject.read_text())["project"]["optional-dependencies"]
+    for name, pins in extras.items():
+        if "torch==2.7.1" in pins:
+            assert "torchvision==0.22.1" in pins, f"extra '{name}' pins torch but not torchvision"
+
+
+def test_transformers_model_classes_import():
+    """B-012: the installed torch/torchvision pair lets transformers import model classes."""
+    import importlib.metadata as md
+
+    from transformers import Gemma3ForConditionalGeneration, LlamaForCausalLM, Qwen2ForCausalLM
+
+    assert Qwen2ForCausalLM and LlamaForCausalLM and Gemma3ForConditionalGeneration
+    assert md.version("torch").startswith("2.7.1")
+    assert md.version("torchvision").startswith("0.22.1")

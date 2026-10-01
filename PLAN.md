@@ -1,6 +1,6 @@
 # PLAN — Kaggle replication of "Reference-Based Bias Detection in LLMs via Relative Representations of Hidden States" (arXiv:2609.10060v1)
 
-Status: **M0 done** (`m0-green`), **M1 done** (`m1-green`, 2026-10-01). Next: M2 (embedding extraction, first GPU milestone). Training budget re-baselined from the census (D-055). Generation uses merged weights because vLLM LoRA cannot compile on T4 (D-050). Written 2026-09-30 from `paper/2609.10060v1.pdf` only (27 pages, all sections and Appendices A–H read). The authors' code (https://github.com/NASK-AISafety/Reference-Based-Bias-Detection) was not public at planning time, so everything below is a from-scratch implementation.
+Status: **M0 done** (`m0-green`), **M1 done** (`m1-green`, 2026-10-01). **M2 in progress**: CPU side done; Kaggle run of `notebooks/m2_extract.ipynb` pending. Training budget re-baselined from the census (D-055). Generation uses merged weights because vLLM LoRA cannot compile on T4 (D-050). Written 2026-09-30 from `paper/2609.10060v1.pdf` only (27 pages, all sections and Appendices A–H read). The authors' code (https://github.com/NASK-AISafety/Reference-Based-Bias-Detection) was not public at planning time, so everything below is a from-scratch implementation.
 
 Citation convention: `§4.1` = paper section, `T1` = Table 1, `F4` = Figure 4, `App. C` = Appendix C. `[unspecified in paper]` marks a detail the PDF leaves open; each one has a `D-###` entry in `DECISION.md`.
 

@@ -14,7 +14,7 @@ Skip condition: ...
 Resume behaviour: ...
 Failure modes: ... (link B-###)
 ```
-Status: Entrypoint, probe and sync are **implemented (M0)**; stage bodies are stubs that raise `NotImplementedError` naming their milestone. Function names below are the intended public API and are fixed when implemented.
+Status: Entrypoint, probe and sync are **implemented (M0)**; `sentences`/`ftdata` (M1), `embed` for ref (M2) and `train` (M3a) are implemented; other stage bodies are stubs that raise `NotImplementedError` naming their milestone. Function names below are the intended public API and are fixed when implemented.
 
 ---
 
@@ -87,28 +87,46 @@ Entry: `run --stages ftdata` → `data.ft_data.stage(ctx)`
 5. Writes `ftdata/<run_key>/{unharmful_ids.json, harmful_ids.json, stats.json}` (indices and aggregates only; no text, D-037)
 M3 renders training records with `to_messages(row)` (TRL prompt–completion, D-040).
 
-## Stage: train
-1. `finetune.sft.train(cfg.model, cfg.regime, split, data_key, seed, device)` → endpoint dir
-   - `models.loading.load_for_training(...)` (QLoRA NF4 | fp16 LoRA | fp32-master full FT)
-   - TRL `SFTTrainer.train(resume_from_checkpoint=latest)`; guard on loss and grad-norm (D-006)
-   [writes `train/<model>/<regime>/<split>/seed<k>/<train_key>/`; Tier 2 full endpoints are pushed to `rbbd-ckpt-private`]
-2. Runner launches u and h as two processes, on `cuda:0` and `cuda:1` (D-003).
-Resume behaviour: `checkpoint-*` every ~20 min of wall-clock. `complete=false` manifests trigger resume.
+## Stage: train (implemented, M3a green — D-069; Tier 1/2 runs in M3b/M3c)
+Entry: `run --stages ftdata,train` → `runner.STAGE_IMPLS["train"]` → `finetune.sft.stage(ctx)`
+1. `sft.plan_jobs(cfg, root, ftdata outputs)` → one `Job` per (model, regime, seed, split), u/h adjacent
+   - reads `ftdata/<run_key>/{stats.json (dataset revision), <split>_ids.json}`
+   - `spec_from_config` → `TrainSpec` (App. C hyperparameters, `data_key` = revision + split + ids) → `train_key`
+   - job dir `train/<slug>/<regime>/<split>/seed<k>/<train_key>/`
+2. `train.parallel: true`: each u/h pair runs as two processes `python -m rbbd.cli train-one --config C --model S --regime R --split X --seed K` with `CUDA_VISIBLE_DEVICES` 0 / 1 (D-003); logs → `<job>/train.log`. Jobs with `done.json` are skipped. (`parallel: false` runs `run_job` in-process: CPU tests.)
+3. `cli._cmd_train_one` → re-plans from the config + ftdata manifest → `sft.run_job(cfg, job)`:
+   - `load_rows` (WildGuardMix at the recorded revision, selected ids; text stays in the HF cache) → `models.loading.load_tokenizer` → `load_model(spec)` (lora fp16 | qlora NF4 | full fp32 masters; `device_map {"": 0}`)
+   - `train_one(spec, rows, tok, model, job_dir)` (refuses > 1 visible GPU; `set_seed(spec.seed)` before the trainer, D-068):
+     - `build_examples` → [{input_ids, completion_mask}] ≤ max_length; drops prompt-fills-window rows (D-055) → `data.json`
+     - TRL `SFTTrainer(sft_config(spec), peft_config if LoRA/QLoRA, callbacks=[GuardCallback (D-065), WallClockSaveCallback (20 min)])`
+     - `trainer.train(resume_from_checkpoint=latest_checkpoint(job/checkpoints))`
+     - writes `final/` (PEFT adapter, or fp16 full model), `train_log.json`, `done.json` {global_step, losses, resumed_from, tokens_per_second, scaler_skipped_steps}
+4. Stage outputs: every job's `final/` and `done.json` (directory hashes in the manifest).
+Skip condition: valid manifest; per job, `done.json`.
+Resume behaviour: a killed job restarts from its newest `checkpoints/checkpoint-N` (DC-13).
+Failure modes: `NonFiniteError` from the guard (B-001, D-065); `DataBuildError` if a chat template breaks the prompt prefix; a failed subprocess raises with its log tail.
 
-## Stage: embed
-1. `models.loading.load_for_inference(model_cfg)` → base (fp16 sharded | fp32 Gemma), tokenizer (right pad)
-2. `models.spectrum.iter_checkpoints(base, cfg)` yields (ckpt_slug, context manager):
-   - `ref`: adapters disabled / base weights
-   - LoRA `aXXX`: `models.adapters.build_combined(u, h, α)` → set_adapter
-   - full `aXXX`: `models.interpolate.apply(base, W_h, W_u, α)` (in place)
-3. For each ckpt: `utils.cache.lookup(embed_key)` → hit: log `cache hit`, no forward pass
-   miss: `embed.extract.encode(model, tok, union, poolings, layer_site)`:
-   - batches sorted by length (token budget)
-   - forward on the base transformer only → last_hidden_state [B, T, d] (+ pre-norm hook if enabled)
-   - `utils.guards.assert_finite(hidden)`
-   - `embed.pooling.pool(hidden, attention_mask, kind)` → [B, d] fp32 → fp16
-   - `utils.cache.write(embed_key, {mean,max,last}: [N, d], sidecar)` [writes `embeddings/.../<embed_key>.safetensors`]
-Invariant: ref and every aXXX key differ only in checkpoint spec (asserted).
+## α-merges (implemented, M3a; used from M4)
+- LoRA: `models.adapters.read_adapter(final)` ×2 → `adapter_for_alpha(u, h, α)`: u at α=1, h at α=0, else `combine` = rank-2r concatenation, scaling 1 (D-007, D-066) → `write_adapter` (PEFT dir + `rbbd_meta.json`).
+- Full FT: `models.interpolate.load_endpoint` ×2 (fp32 CPU) → `apply_alpha(model, w_h, w_u, α)` in place, or `materialize(...)` to ephemeral disk only (D-008, D-050).
+
+## Stage: embed (implemented for `ref`, M2 green — D-064; α-checkpoints M4)
+Entry: `run --stages sentences,embed` → `runner.STAGE_IMPLS["embed"]` → `embed.extract.stage(ctx)`
+Depends on `sentences` only while `embed.checkpoints == [ref]` (`runner.stage_deps`, D-057).
+1. Read `sentences/<run_key>/union.json` from the upstream manifest → texts, union_hash, index
+2. `embed.extract.ExtractSettings.from_config(cfg.embed)` (poolings, layer sites, max length, token budget)
+3. Per model in `cfg.models`: `LoadSpec(id, resolve_revision(id), precision, placement)`; key fields = {model spec, checkpoint ref, layer, settings + tokenizer policy, union_hash, schema_version.embed} → `make_key`
+4. `extract_cached(cache, "embeddings/<slug>/base/ref", key_fields, texts, settings, load)`:
+   - hit → `TensorCache.read` (logs `cache hit`; `load` is never called, so there is no download and no forward)
+   - miss → `load()` = `models.loading.download(spec)` [timed] + `load_for_inference(spec)` [timed] + layer-count check (D-017) → `encode(model, tok, texts, settings)`:
+     - `token_lengths` → `make_batches` (longest first, batch × longest ≤ token_budget)
+     - per batch: tokenizer (right pad, BOS, truncation) → `base_decoder(model)(input_ids, attention_mask)` → `last_hidden_state` [B, T, d] (+ pre-norm via a forward hook on the last layer when requested)
+     - `assert_finite(hidden)` → `pool_all(hidden, mask, poolings)` [B, d] fp32 → fp16 → `assert_finite(fp16)` → scatter to input order
+   - `TensorCache.write(...)` {mean, max, last[, pre_norm/*]}: [N, d] fp16 + sidecar {fields, text_hashes, stats}
+5. Writes `embed/<run_key>/timing.json` {download, load, extraction seconds, padding waste, peak GiB per GPU, cache hit}
+`python -m rbbd.cli compare-embeddings --a <cfg> --b <cfg>` → `cached_ref_entry` ×2 → `compare_entries` (cosine per pooling; per-group B under RR and SEAT via `metrics.delta_b.from_union`) → `env/<session>/compare_<run_name>.json` (D-058).
+Invariant (M4): ref and every aXXX key differ only in the checkpoint field.
+GPU checks (`tests/gpu/test_extract_gpu.py`): DC-06 per D-061 calls `load_for_inference` (fp16 on cuda:0, fp32 on cuda:1) → `encode(keep_fp32=True)` on the short sentence alone vs in a padded batch (fp32, before the fp16 cast; D-063), and on the 85-text smoke union alone vs batched (fp16) → `m2_extract_gpu.json`. DC-09 hooks the last decoder layer and calls `extract_cached`.
 
 ## Stage: deltab
 1. `utils.cache.read(embed_key_ref)`, `read(embed_key_aud)` → E_ref, E_aud (CPU fp32)

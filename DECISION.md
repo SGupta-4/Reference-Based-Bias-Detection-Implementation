@@ -92,6 +92,7 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: +≈ 5 h training and +≈ 3 h benches versus fp16 (included in PLAN §8).
 - Paper deviation: yes — App. C precision.
 - Revisit-if: the fp16 probes pass cleanly (guard never fires and outputs match fp32 on 50 prompts within tolerance). Then switch to fp16 via a superseding entry.
+- M2-T4 extraction probe outcome (2026-10-01): fp16 fails. The guard fired on batch 0 with every value NaN, so Gemma-3-4B embeddings stay fp32 (D-062).
 
 ## D-006 Mandatory NaN/Inf guard on every hidden-state extraction and training step
 - Date: 2026-09-30
@@ -806,3 +807,230 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: none.
 - Paper deviation: no.
 - Revisit-if: n/a.
+
+## D-057 Reference-only `embed` stage for M2; config-dependent stage dependencies
+- Date: 2026-10-01
+- Context: M2 extracts reference embeddings before any fine-tuning exists, but the stage graph had `embed` depend on `train` (FLOW.md). M2-T4's DC-12 command referred to checkpoint `a050`, which does not exist until M3/M4.
+- Options considered: a separate probe command outside the runner; or making `embed`'s dependencies follow the configured checkpoints.
+- Choice:
+  - **Dependencies.** `runner.stage_deps(stage, cfg)`: `embed` depends on `sentences` only when `embed.checkpoints == [ref]` (the M2 default in `base.yaml`), and on `sentences` + `train` otherwise. Run keys use these dependencies.
+  - **Stage scope.** The M2 `embed` stage extracts `ref` only and raises `NotImplementedError` (M4) for α-checkpoints. It writes `embed/<run_key>/timing.json` and records the cache files as stage outputs.
+  - **Timing.** The stage times `download` (`snapshot_download` of weights, config and tokenizer files into `$HF_HOME`) separately from `load` and extraction. DC-12 = load + extraction seconds; the cost of one α-checkpoint equals the reference's, so DC-12 is measured on `ref` in M2 and re-measured on `a050` in M4.
+  - **Loading.** Models load with `AutoModelForCausalLM`; `base_decoder` finds the inner text transformer (Llama/Mistral/Qwen `model.model`; Gemma 3's text `language_model`). The stage asserts that the configured layer index equals the decoder depth (D-017).
+  - **Smoke subset.** `sentences.subset` (`smoke.yaml`: 3 groups × 5 targets, 10 P, 10 N, 50 anchors, base variants) is cut from the fully validated sets.
+  - **Tests.** The CPU tests run the whole stage on a 2-layer random Llama built from a config, with a word-level fake tokenizer (no downloads).
+- Why: Keeps the runner as the only way stages execute, and keeps cache keys honest about what each extraction depended on.
+- Tradeoff accepted: The `embed` run key changes when α-checkpoints are added (as it should).
+- Cost impact: none.
+- Paper deviation: no.
+- Revisit-if: M4 needs reference and α-checkpoints in one stage run (it will reuse the cached `ref` entry either way).
+
+## D-058 Pre-registered M2 acceptance rules: DC-06 tolerance and the Gemma fp16 criterion (amends DONE DC-06, D-005) — DC-06 rule superseded by D-061 (the Gemma fp16 criterion stays in force)
+- Date: 2026-10-01 (written before any M2 GPU result)
+- Context: DC-06 said "atol 1e-3 in fp16". Embeddings are cached in fp16, whose rounding step is ≈ 0.008 for values in [8, 16) (Qwen and Llama post-norm hidden states reach such values), so a pure absolute tolerance of 1e-3 cannot be met even by identical computations that round differently. D-005 needed an explicit rule for when Gemma may run in fp16.
+- Options considered: atol only; atol + rtol; cosine-only.
+- Choice:
+  - **DC-06:** pass if `torch.testing.assert_close(..., atol=1e-3, rtol=1e-3)` holds for mean, max and last pooling (rtol 1e-3 is torch's default for fp16). The GPU test also records max absolute and relative differences in `m2_extract_gpu.json`.
+  - **Gemma fp16 criterion:** Gemma-3-4B may move from fp32 to fp16 (superseding D-005) only if all three hold for the full sentence union:
+    1. the fp16 extraction completes with the NaN/Inf guard never firing;
+    2. per-sentence cosine(fp16, fp32) has mean ≥ 0.999 and minimum ≥ 0.99 for every pooling;
+    3. the largest per-group |B_fp16 − B_fp32| under RR and SEAT is ≤ 5% of the spread of B across groups in fp32.
+    The numbers come from `python -m rbbd.cli compare-embeddings`. Otherwise Gemma stays fp32.
+- Why: Rules fixed before the data cannot be tuned to the data.
+- Tradeoff accepted: The 5% threshold is a judgment call; it is about one tenth of the group-to-group variation ΔB has to detect.
+- Cost impact: Gemma in fp16 would halve its inference memory and roughly double throughput.
+- Paper deviation: no.
+- Revisit-if: n/a.
+
+## D-059 Local CPU test environment needs the `train` extra
+- Date: 2026-10-01
+- Context: M2's CPU tests run a real (tiny) transformers model, so `pytest -q -m "not gpu"` now needs torch and transformers. Installing them here, the PyTorch CPU wheel index was unreachable, and `pip install accelerate` pulled an **unpinned** torch 2.14.1 from PyPI as a dependency. It was replaced at once by the pinned `torch==2.7.1`; no test ever ran on the unpinned version.
+- Options considered: separate CPU-only pins; skip torch tests without torch; require `.[train,dev]` for the CPU suite.
+- Choice: DC-02's environment is `pip install -e ".[train,dev]"`. Tests are never skipped for a missing dependency. When adding packages, install the pinned extra as one command so pip resolves torch to the pin.
+- Why: One environment definition; no silently skipped tests.
+- Tradeoff accepted: The CPU environment is a few GB larger.
+- Cost impact: none on Kaggle (it installs `train` anyway).
+- Paper deviation: no.
+- Revisit-if: CI is added (out of scope per the brief).
+
+## D-060 Pin torchvision 0.22.1 next to torch 2.7.1 (follow-up to D-031)
+- Date: 2026-10-01
+- Context: The first M2 Kaggle run (`notebooks/m2_extract.ipynb` at `92e836e`) failed on every model load (B-012). `pip install -e ".[train,dev]"` replaced Kaggle's torch with 2.7.1 but left Kaggle's preinstalled torchvision, built for a different torch. `transformers` imports torchvision through `image_utils` while resolving any model class. The torchvision C++ ops then fail to register (`RuntimeError: operator torchvision::nms does not exist`), which surfaces as `ModuleNotFoundError: Could not import module 'Qwen2ForCausalLM'` (also Llama, Gemma3). M0 never hit this because `vllm` (in `bench`) pulls a matching torchvision.
+- Options considered: (a) pin `torchvision==0.22.1` (the release built against torch 2.7.1) in every extra that pins torch; (b) `pip uninstall -y torchvision` in each notebook; (c) leave Kaggle's torch alone. The user chose (a) on 2026-10-01.
+- Choice: `train` and `bench` both pin `torchvision==0.22.1`. `m2_extract.ipynb` runs a preflight import of the three model classes right after install, so a mismatch fails in the install cell, not inside a stage. A CPU test (`tests/test_env.py`) checks that the pins stay paired and that the installed pair imports the model classes. Also in this commit: `from_pretrained(torch_dtype=…)` → `dtype=…` (deprecated in transformers 4.57). This changes no cache key, because the key records `precision`.
+- Why: The environment is the same in every session and identical to what `pip` resolves locally. Removing packages from the image is less reproducible.
+- Tradeoff accepted: The install downloads one more wheel (≈ 7 MB for cu126).
+- Cost impact: ≈ +10 s setup per session. The failed run cost one T4×2 session of ≈ 0.2 h (downloads only).
+- Paper deviation: no. The paper stack (App. C) does not list torchvision; it is a transitive dependency.
+- Revisit-if: The torch pin changes (re-pair torchvision), or `vllm` requires a different torchvision.
+
+## D-061 DC-06 rule replaced: fp32 exact padding check plus fp16 per-sentence cosine (supersedes the DC-06 part of D-058)
+- Date: 2026-10-01 (written after the first DC-06 result, before any data under the new rule)
+- Context: The first Kaggle run of `test_padding_invariance_fp16` (session `20261001T113125Z`, commit `64498de`) failed the D-058 rule `assert_close(atol=1e-3, rtol=1e-3)`. Max |alone − batched|: mean 0.146, max 0.625, last 0.156, on values up to 124.7 / 183.1 / 146.8. D-058's premise was wrong: post-norm Qwen values reach ~183, not [8, 16). In [128, 256), fp16's rounding step is 0.125, so rtol 1e-3 is about one ulp. The rule therefore demanded bit-identical results from different GEMM shapes after 24 fp16 layers. With right padding and causal attention, pad positions come after every real token and cannot reach it, so a mathematical leak is impossible in the forward pass. A leak can only come from pooling (covered on CPU by `tests/test_pooling.py`) or from mask/position handling, which an fp32 run exposes.
+- Options considered: (a) fp32 exact check + fp16 per-sentence cosine; (b) loosen the fp16 rtol to 1e-2; (c) keep D-058, leaving M2 red (fp32 for Llama-8B does not fit 2×T4). The user chose (a) on 2026-10-01.
+- Choice: DC-06 on GPU passes only if both tests in `tests/gpu/test_extract_gpu.py` pass:
+  1. `test_padding_invariance_fp32`: Qwen2.5-0.5B in fp32. The short sentence pooled alone vs inside a padded batch of three passes `assert_close(atol=1e-3, rtol=1e-4)` for mean, max and last.
+  2. `test_padding_cosine_fp16_smoke`: Qwen2.5-0.5B in fp16. For each of the 85 smoke-union sentences, compare the sentence pooled alone with the same sentence inside its production batch (the smoke `embed` settings). Per-sentence cosine ≥ 0.9999 for mean, max and last.
+  The test also records, without asserting, the cosine and relative L2 error of fp16 (alone and batched) against fp32. Those numbers set padding noise against fp16's own error.
+- Why: (1) proves the padding logic is exact; any leak shows up as an O(1) error, far above fp32 rounding. (2) bounds fp16 padding noise at the level that matters downstream: RR uses cosines, and SEAT uses cosines too. 0.9999 means the angle stays within 0.81°.
+- Tradeoff accepted: The fp16 bound is on direction, not on single coordinates. Ref and audited checkpoints share the same tokenizer, texts and `make_batches` plan, so they see the same batch composition, and the residual noise does not differ systematically between them.
+- Cost impact: GPU test time grows from ~13 s to ~1–2 min: 85 + 85 single-sentence forwards on 0.5B plus one fp32 load (~2 GB on cuda:1).
+- Paper deviation: no. The paper does not describe its batching [unspecified in paper].
+- Revisit-if: Part 1 fails (then it is a real bug: open a B entry), or Part 2's recorded fp16-vs-fp32 error turns out larger than the padding error by orders of magnitude (then precision, not padding, is the risk to watch in M4).
+
+## D-062 Gemma-3-4B fp16 extraction probe failed: embeddings stay fp32 (outcome of D-005 / D-058 criterion)
+- Date: 2026-10-01
+- Context: M2-T4 ran `configs/m2_gemma3-4b_fp16_probe.yaml` on Kaggle 2×T4 (session `20261001T113125Z`, commit `64498de`). The NaN/Inf guard fired on the first batch: `non-finite values at embed.post_norm: nan=10485760 inf=0 shape=(256, 16, 2560)`. Every value was NaN. Under D-058 criterion 1 (guard never fires) fp16 fails, and criteria 2–3 cannot be evaluated. `compare-embeddings` had no fp16 manifest to read.
+- Options considered: none open under the pre-registered rule.
+- Choice: Gemma-3-4B (and Gemma-3-1B in Tier 2) embeddings stay fp32, as D-005 states. The fp32 reference run passed: `configs/tier1_gemma3-4b.yaml`, all 9,197 union texts, load 22.2 s, extraction 191.0 s, peak 9.07 / 9.92 GiB on cuda:0 / cuda:1, no guard event. `m2_extract.ipynb` now runs the comparison only when the fp16 run completes.
+- Why: Pre-registered rule; the guard did its job.
+- Tradeoff accepted: Gemma extraction takes ~3.2 min per checkpoint against Llama-8B fp16's 1.2 min. Over 8 checkpoints that is ~26 min of extraction.
+- Cost impact: within PLAN §8 (D-005 already budgeted Gemma in fp32).
+- Paper deviation: yes, App. C precision, as already logged in D-005.
+- Revisit-if: never for M2. Training precision is decided separately by D-005's 50-step probe in M3.
+
+## D-063 DC-06 part 1 measures the pooled vectors before the fp16 cache cast (implements D-061; thresholds unchanged)
+- Date: 2026-10-01 (after the first run under D-061)
+- Context: The first run under D-061 (session `20261001T122025Z`, commit `ac0f1ce`) passed part 2 and failed part 1. Part 1's measured gaps were max_abs 0.00390625 (last, max) and 0.001953125 (mean): exactly 2⁻⁸ and 2⁻⁹, which are fp16 rounding steps. `encode` always cast its output to fp16, the cache dtype. The test therefore compared fp16-rounded copies of fp32 results, and a sub-ulp fp32 gap that crossed a rounding boundary became a whole fp16 step (max_rel 1.6e-3 ≈ 2 fp16 ulps). D-061 states part 1 as a check of fp32 arithmetic, so the test did not implement the decision (B-014).
+- Options considered: (a) compare the pooled vectors before the cast, thresholds unchanged; (b) loosen part 1's tolerance to cover fp16 output rounding. Option (b) would change a pre-registered threshold after seeing data.
+- Choice: (a). `encode(..., keep_fp32=True)` returns the pooled vectors before the cast; the fp16 guard still runs. Only `test_padding_invariance_fp32` uses it, and the cache stays fp16. Tolerance stays `atol=1e-3, rtol=1e-4`.
+- Why: It measures exactly what D-061 specifies. This fix is chosen after seeing a failure, so it is logged with the evidence that justifies it: the observed gaps are exact powers of two, matching fp16 rounding steps rather than fp32 compute error. Even before the fix, the fp32-compute gap (≤ 0.0039) was 160× smaller than the fp16-compute gap (0.625). A padding leak would give O(1) errors.
+- Tradeoff accepted: One test-only keyword on `encode`.
+- Cost impact: none (same GPU test).
+- Paper deviation: no.
+- Revisit-if: Part 1 fails with pre-cast vectors. That would be a real padding bug.
+
+## D-064 M2 closed: every M2 DONE check passes; `m2-green` = `8e26c8d`
+- Date: 2026-10-01
+- Context: DONE requires DC-01, DC-02, DC-06, DC-09, DC-10, DC-11 (sentences+embed), DC-12, DC-15 and DC-19 for M2. Evidence comes from Kaggle 2×T4 sessions `20261001T113125Z` (commit `64498de`; pipeline runs) and `20261001T122025Z` (commits `ac0f1ce` → `8e26c8d`; GPU tests). The code paths behind the pipeline runs did not change after `64498de`. `8e26c8d` added only `keep_fp32` (default off) and test code.
+- Results:
+  - DC-01: `ruff check src tests` → `All checks passed!`.
+  - DC-02: `python -m pytest -q -m "not gpu"` → `79 passed, 8 deselected in 11.18s`.
+  - DC-06 (D-061/D-063): `3 passed, 14 warnings in 20.53s`.
+    - fp32 pre-cast max_abs: last 1.36e-4, max 7.31e-4, mean 1.83e-4, all within `atol=1e-3, rtol=1e-4`. The tightest is max pooling, at 7.31e-4 against an allowance of ≥ 1e-3.
+    - fp16 min cosine: mean 0.9999973, max 0.9999936, last 0.9999967 (threshold 0.9999).
+  - DC-09: `test_guard_active_on_real_model` passed in both sessions.
+  - DC-10: second smoke run → `cache hit: stage embed`, with no load and no forward.
+  - DC-11 (sentences+embed): smoke embed stage done in 15.2 s.
+  - DC-12: Llama-3.1-8B load 73.4 s + extraction 71.4 s = 144.8 s ≤ 900 s.
+  - DC-15: docs in the same commits. DC-19: `grep -rn "PLACEHOLDER(M2)" tests` → no output.
+- Choice: M2 is green. Tag `m2-green` on `8e26c8d75dfe64dc26e3fb6b1e834f038dbb46dd` (the exact commit run on Kaggle).
+- Why: Every check passes with its stated output.
+- Tradeoff accepted: DC-06's fp32 margin for max pooling is modest (7.3e-4 vs 1e-3). It is recorded so that a future drift is noticed.
+- Cost impact: M2 used ≈ 0.6 session-h on Kaggle in total (three sessions).
+- Paper deviation: no (precision deviations are logged in D-005/D-062).
+- Revisit-if: an `embed.schema_version` bump (ROLLBACK lists DC-06, 09, 10, 11, 12 to re-run).
+
+## D-065 Training guard under fp16 mixed precision: scaler-skipped steps are tolerated within limits (refines D-006)
+- Date: 2026-10-01
+- Context: D-006 says training aborts on a non-finite loss or grad-norm. Every T4 run uses fp16 autocast with a dynamic gradient scaler. The scaler starts at 2¹⁶ and deliberately overflows on some steps, mostly early. On those steps the unscaled grad-norm is inf/NaN and the optimizer step is skipped, so nothing reaches the weights. Applied literally, D-006 would abort every fp16 run. The user chose this refinement on 2026-10-01.
+- Options considered: (a) tolerate scaler-skipped steps within limits; (b) strict D-006, which would force fp32 compute everywhere (QLoRA 7–8B ≈ 2–3× slower).
+- Choice (a), implemented in `finetune.sft.GuardCallback`, with `logging_steps=1` so every step is checked:
+  - A non-finite **loss** always aborts (`NonFiniteError`), on any step.
+  - A non-finite **grad-norm** is tolerated only on a step the scaler skipped (`accelerator.optimizer_step_was_skipped`); on an applied step it aborts.
+  - More than **25 consecutive** skipped steps aborts: the scale has collapsed by a factor of 2²⁵.
+  - More than **5 %** skipped steps aborts once the run has at least **100** steps. A short run is exempt because its early skips while the scaler calibrates would dominate.
+  - In fp32 compute the scaler is off and nothing is ever skipped, so any non-finite value aborts.
+  - `done.json` records `scaler_skipped_steps`. Limits live in `train.guard` (config) and are part of nothing's cache key.
+- Why: Keeps D-006's intent (no silent NaN can reach weights or results) while allowing the standard fp16 recipe.
+- Tradeoff accepted: A run can still finish after a few skipped steps; the count is recorded.
+- Cost impact: none (one check per logged step).
+- Paper deviation: no.
+- Revisit-if: a run aborts on the skip limits; then switch that model to fp32 compute per D-005 and log it.
+
+## D-066 Spectrum endpoints are the trained adapters themselves; interior α uses the rank-2r concatenation (refines D-007)
+- Date: 2026-10-01
+- Context: DC-07 requires α=1 and α=0 to reproduce the endpoints exactly (`torch.equal`). D-007's concatenated adapter is exact in arithmetic, but its ΔW is a matmul over 2r ranks (half of them zero blocks). That may round differently from the endpoint's rank-r matmul, so bit equality of ΔW is not guaranteed. The user chose this option on 2026-10-01.
+- Options considered: (a) a100 = u and a000 = h as trained, with concatenation only for α ∈ {0.9, 0.7, 0.5, 0.3, 0.1}; (b) concatenation for every α.
+- Choice: (a). `models.adapters.adapter_for_alpha` returns the endpoint adapter objects at α ∈ {1, 0} and `combine(u, h, α)` otherwise. `combine` is still tested at every α including 0 and 1. ΔW linearity is checked with float64 evaluation of the stored fp32 tensors, rtol 1e-6 with atol 1e-6·max|ΔW|; elements near zero have no meaningful relative error. A combined adapter keeps PEFT's config format (r = lora_alpha = 2r, scaling 1). Its provenance (α, s_u, s_h) goes to a sidecar `rbbd_meta.json`, because PEFT warns on unknown config keys.
+- Why: The endpoints are exact by construction, and interior points are exact up to fp32 rounding (measured ≤ 5e-8 relative on CPU).
+- Tradeoff accepted: Endpoints are served at rank r and interior points at rank 2r. The two paths differ only by fp32 rounding.
+- Cost impact: none.
+- Paper deviation: no (App. C merging, implemented exactly).
+- Revisit-if: vLLM ever serves adapters directly again (D-050); then check that rank-r and rank-2r adapters coexist in one engine.
+
+## D-067 M3a implementation choices for `finetune.sft` and the train stage (implements D-003, D-009, D-040, D-055)
+- Date: 2026-10-01
+- Context: M3-T1–T3 and M3a-T4. Details the plan left open.
+- Choices:
+  - **Tokenisation** reproduces TRL 0.25.1's prompt–completion path:
+    - The prompt is rendered with `add_generation_prompt=True`, then prompt + completion.
+    - `completion_mask` covers the assistant tokens.
+    - The pair is truncated from the right at `max_length`.
+    - Doing this in `build_examples` lets us **drop and count examples whose prompt fills the window** (D-055 item 4; `data.json` → `n_dropped_prompt_fills_window`).
+    - It fails loudly (`DataBuildError`) if a chat template breaks the prompt-prefix property. TRL only warns in that case.
+    - The pre-tokenised dataset is passed to `SFTTrainer` with `completion_only_loss=True` set explicitly; TRL cannot infer it without a `prompt` column.
+  - **Hyperparameters** (App. C):
+    - 3 epochs, per-device batch 4 × grad-acc 8, warmup 0.03, linear schedule, max length 1,024.
+    - LoRA r 16, α 32, dropout 0.05 on all 7 projections; lr 1e-4 (LoRA/QLoRA) and 2e-5 (full).
+    - `group_by_length`; seed = data seed = the job seed.
+    - [unspecified in paper], TrainingArguments defaults: `max_grad_norm` 1.0, `weight_decay` 0.
+    - Optimizer: `adamw_torch` for LoRA/QLoRA (App. C AdamW); `paged_adamw_8bit` for full FT (D-009).
+  - **Precision:**
+    - LoRA: fp16 base with fp32 LoRA weights (PEFT autocast).
+    - QLoRA: NF4 + double quantisation, compute fp16 (D-003).
+    - Full: fp32 masters with fp16 autocast. The endpoint is saved as fp16 safetensors (D-008).
+    - A `models:` entry may set `train_compute: fp32` (D-005).
+  - **Checkpoints:**
+    - A trainer checkpoint is written every 20 min of wall-clock time (`WallClockSaveCallback`), and a job resumes from the newest one.
+    - `save_total_limit=1`: the trainer itself replaces the previous checkpoint. This is the library's normal rotation of transient training state inside the job directory, not an ad hoc deletion of artifacts.
+    - A job with `done.json` is never retrained.
+  - **Jobs:**
+    - One per (model, regime, seed, split), in `train/<slug>/<regime>/<split>/seed<k>/<train_key>/`.
+    - Each job directory holds `checkpoints/`, `final/`, `data.json`, `train_log.json`, `done.json` and `train.log`. Everything is aggregate-only: no row text is written (D-037).
+    - u‖h run as two `cli train-one` processes with `CUDA_VISIBLE_DEVICES` 0/1 (D-003).
+    - `done.json` records `tokens_per_second` for the M3c-T8 throughput probe.
+  - **Smoke** (Tier 0 only): effective batch 8 (4 × 2) instead of 32, so 64 rows × 3 epochs give 24 optimizer steps rather than 6, and the adapters move measurably for DC-07.
+  - **Config hash:** adding the `train:` section to `base.yaml` changes every config's hash, so the M2 configs' `sentences`/`embed` manifests re-run once. The embedding tensor cache is keyed by content, not by config hash, so nothing is re-extracted.
+  - **Full-FT merges** (`models.interpolate`): `materialize` refuses any path under the artifact root or `/kaggle/working`. It uses `utils.env.ephemeral_dir()` (D-050), not D-008's `/kaggle/tmp`, which does not exist on current Kaggle images (M0 probe).
+- Why: Each item follows the paper where it speaks and records the choice where it does not.
+- Tradeoff accepted: The smoke run's batch differs from the paper's; smoke results are pipeline checks only.
+- Cost impact: Smoke training ≈ 2–5 min on 2×T4 (estimate; measured in M3a).
+- Paper deviation: smoke batch only (Tier 0). Otherwise no.
+- Revisit-if: TRL's tokenisation changes (pinned 0.25.1), or M3c-T8 shows checkpointing overhead > 5 %.
+
+## D-068 One visible GPU per training process, per-spec LoRA init seed, train schema v2 (refines D-003, D-067)
+- Date: 2026-10-01
+- Context: The first M3a Kaggle run (session `20261001T132720Z`, commit `ec87d99`) found two training-path defects (B-017).
+  - Under pytest, both T4s were visible. The HF Trainer then wrapped a `device_map={"": 0}` model in DataParallel and doubled the effective batch: 3 steps instead of 6.
+  - The LoRA A init came from whatever global RNG state preceded `SFTTrainer`. The test's two "identical" runs therefore differed by up to 0.067 in adapter weights.
+  - The train stage itself was unaffected by DataParallel: each `train-one` process sees one GPU. Both smoke endpoints ran 24 steps, as planned.
+- Options considered: force `args._n_gpu = 1` (a private field) vs. refuse multi-GPU visibility; seed in `cli train-one` only vs. inside `train_one`.
+- Choice:
+  - `train_one` raises unless at most one CUDA device is visible. The App. C effective batch can then never change silently.
+  - The GPU DC-13 test runs each phase in a child process with `CUDA_VISIBLE_DEVICES=0`, so the "kill" is a real process exit.
+  - `train_one` calls `transformers.set_seed(spec.seed)` immediately before building the trainer, so the initial adapter depends only on the spec.
+  - `sft.SCHEMA_VERSION` 1 → 2: the same spec now yields different (reproducible) weights, so every `train_key` changes. The smoke endpoints retrain once (≈ 90 s); no Tier 1/2 training had run.
+- Why: Hyperparameters and initialisation must be functions of the spec alone.
+- Tradeoff accepted: A single process can no longer train on two GPUs. Nothing planned needs that (D-003).
+- Cost impact: ≈ 2 min to retrain the smoke endpoints.
+- Paper deviation: no.
+- Revisit-if: FSDP/DDP training becomes necessary (D-009 Revisit-if), which would launch through `accelerate`/`torchrun` instead.
+
+## D-069 M3a closed: every M3a DONE check passes; `m3a-green` = `7b41de1`
+- Date: 2026-10-01
+- Context: DONE lists DC-01, DC-02, DC-07, DC-09, DC-11 (through train), DC-13, DC-15 and DC-19 for M3. M3a covers them for Tier 0. Evidence is Kaggle 2×T4 session `20261001T154608Z` at commit `7b41de1`; store commits: train `797549be`, env `ed4766fb`.
+- Results:
+  - **DC-01:** `ruff check src tests` → `All checks passed!`.
+  - **DC-02:** `python -m pytest -q -m "not gpu"` → `99 passed, 10 deselected in 80.20s`.
+  - **DC-07:**
+    - CPU (`tests/test_merge.py`): α ∈ {0, 1} are `torch.equal` to the endpoints.
+    - GPU (`test_real_adapter_endpoints`, real smoke adapters, 168 modules, r 16): both endpoints trained (max|ΔW| 5.5e-4 for u and 5.4e-4 for h). Linearity max relative error is 4.9e-8 at α 0.1, 5.0e-16 at 0.5 and 4.8e-8 at 0.9 (bound 1e-6). The a050 adapter gives a finite forward on the fp16 base.
+  - **DC-09 (training):** the guard tests in `tests/test_sft.py` pass. Both smoke runs had 0 scaler-skipped steps.
+  - **DC-11 (through train):** `smoke ftdata+train wall-clock: 112 s` (< 15 min); the identical rerun → `ftdata: cache hit, train: cache hit`.
+  - **DC-13:**
+    - CPU: a run resumed after a kill at checkpoint-3 is bit-identical to an uninterrupted one.
+    - GPU (child processes, one visible GPU): uninterrupted run 6 steps; killed run exit 3 after checkpoint-3; resumed run 6 steps from `checkpoint-3`. Adapter difference 0.0 (max |value| 0.034).
+    - `test_train_one_refuses_two_visible_gpus` passed.
+  - **DC-15:** docs updated in the same commits. **DC-19:** `grep -rn "PLACEHOLDER(M3)" tests` → no output.
+  - **Training record (aggregates):**
+    - Unharmful: train loss 1.813, final 1.526, 1,911 tok/s.
+    - Harmful: train loss 2.106, final 1.775, 2,149 tok/s.
+    - 24 steps each; 64/64 rows kept, 0 dropped, 5 truncated.
+    - These match run 1 (`ec87d99`) to 4 decimals. The only change between the runs was the init seeding.
+- Choice: M3a is green. Tag `m3a-green` on `7b41de1964d6509b34ccfa4e00bcf245d1c77552`, the exact commit run on Kaggle.
+- Why: Every check passes with its stated output.
+- Tradeoff accepted: Tier 1/2 training (M3b, M3c) is still ahead; `m3-green` as a whole needs M3b and M3c.
+- Cost impact: M3a used ≈ 0.6 session-h (two runs).
+- Paper deviation: smoke batch only (D-067).
+- Revisit-if: `train` schema bump; then re-run DC-07, DC-11 and DC-13 (ROLLBACK).

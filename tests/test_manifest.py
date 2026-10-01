@@ -62,7 +62,7 @@ def test_incomplete_manifest_resumes(cfg, artifacts):
 
     with pytest.raises(RuntimeError, match="session killed"):
         runner.run(cfg, env, ["sentences"], stage_fns={"sentences": flaky})
-    keys = runner.stage_run_keys(cfg.hash)
+    keys = runner.stage_run_keys(cfg)
     partial = mf.read(mf.manifest_path(artifacts, "sentences", keys["sentences"]))
     assert partial.complete is False and partial.progress == {"shards_done": 3}
     assert "session killed" in partial.error
@@ -83,11 +83,12 @@ def test_missing_upstream_raises(cfg, artifacts):
 
 def test_stub_names_its_milestone(cfg, artifacts):
     """Unimplemented stages fail loudly with their milestone and leave an incomplete manifest."""
-    fns = {"ftdata": _writer([]), "train": runner.DEFAULT_STAGE_FNS["train"]}
-    with pytest.raises(NotImplementedError, match="implemented in M3"):
-        runner.run(cfg, env_mod.detect(), ["ftdata", "train"], stage_fns=fns)
+    fns = {"ftdata": _writer([]), "train": _writer([]),
+           "generate": runner.DEFAULT_STAGE_FNS["generate"]}  # fmt: skip
+    with pytest.raises(NotImplementedError, match="implemented in M5"):
+        runner.run(cfg, env_mod.detect(), ["ftdata", "train", "generate"], stage_fns=fns)
     rows = {r["stage"]: r["status"] for r in runner.stage_status(cfg, env_mod.detect())}
-    assert rows["ftdata"] == "valid" and rows["train"] == "incomplete"
+    assert rows["train"] == "valid" and rows["generate"] == "incomplete"
     assert rows["embed"] == "missing"
 
 
