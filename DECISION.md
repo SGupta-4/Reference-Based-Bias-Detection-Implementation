@@ -271,7 +271,7 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Paper deviation: no.
 - Revisit-if: DC-12 fails.
 
-## D-021 Generation engine: vLLM on 2× T4, HF fallback
+## D-021 Generation engine: vLLM on 2× T4, HF fallback — superseded by D-050
 - Date: 2026-09-30
 - Context: Benchmarks dominate cost (T3: up to 156 min per checkpoint on A100).
 - Options considered: HF `generate` (simple, slow); vLLM (fast, T4 support caveats); TGI.
@@ -674,3 +674,23 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: S02 ≈ 0.3 session-h.
 - Paper deviation: no.
 - Revisit-if: a vLLM/Triton release fixes sm75 LoRA lowering.
+
+## D-050 Generate α-checkpoints from merged fp16 weights on ephemeral disk, not vLLM LoRA (supersedes D-021; amends D-007, PLAN E8)
+- Date: 2026-10-01
+- Context: vLLM's LoRA kernels cannot be compiled by Triton for sm75 (D-049, B-005), so D-021/E8's "one engine serves base + 7 α-adapters as LoRA requests" is impossible on Kaggle T4s. User decision (2026-10-01) among three options.
+- Options considered:
+  - A: For each checkpoint, compute merged weights, save to ephemeral disk, serve with vLLM without LoRA, delete the copy.
+  - B: Older vLLM/torch/Triton pins that might compile LoRA on sm75 (moves torch off the paper's 2.7.1; uncertain).
+  - C: HF `generate` with PEFT adapters (5–10× slower; Tier 1 benches would exceed 100 session-h).
+- Choice: A (user's choice).
+  - **LoRA regimes (Tier 0, Tier 1, Tier 2 LoRA):** for α ∈ {1.0, 0.9, 0.7, 0.5, 0.3, 0.1, 0.0}, compute W = W₀ + α·ΔW_u + (1−α)·ΔW_h per target module in **fp32** (ΔW_x = s_x·B_x·A_x, D-007), cast to fp16, write a plain checkpoint to `ephemeral_dir()` (`/tmp` on Kaggle, D-048), start vLLM on it without LoRA, generate every benchmark for that checkpoint, shut the engine down, and **delete the temporary checkpoint** (the user approved this deletion as part of the path). The reference is the downloaded base model. At most one merged copy exists at a time.
+  - **Full-FT regime (Tier 2):** unchanged from D-008 (materialise (1−α)W_h + αW_u to ephemeral disk), now the same code path.
+  - Gemma: merged copies are written in the dtype D-005 prescribes for inference (fp32 until revisited).
+  - **Embeddings are unchanged:** HF + PEFT with the exact concatenated rank-2r adapter on the fp16 base (D-004, D-007). Generation and embeddings therefore apply the same ΔW; they differ only by where fp16 rounding happens (merged weight vs adapter output).
+  - Generation order per session: all benchmarks for one checkpoint before moving to the next, so each merge and engine start is paid once per checkpoint.
+  - The vLLM-LoRA case stays in the M0 probe as a canary (`expect_fail: true`) so a future vLLM/Triton that fixes sm75 is noticed.
+- Why: Exact maths, no pin changes, and the cost is bounded (one engine start per checkpoint).
+- Tradeoff accepted: 7 engine starts + merges per model and regime instead of 1. Merged checkpoints never persist, so generation cannot be re-run without re-merging.
+- Cost impact: per 8B checkpoint ≈ 1–2 min merge + write (16 GB to `/tmp`) and ≈ 2–3 min engine start, ≈ +3–5 min each → ≈ +1.5–2 session-h across Tier 1 and ≈ +0.5 h across Tier 2. PLAN §8 contingency (≈ 7 h for Tier 1) absorbs it. Ephemeral disk peak ≈ 16 GB (Llama/Mistral fp16) or ≈ 17 GB (Gemma-3-4B fp32).
+- Paper deviation: no (the paper does not name its generation engine).
+- Revisit-if: the LoRA canary starts passing, or the per-session ephemeral disk limit turns out to be below ~20 GB.

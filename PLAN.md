@@ -1,6 +1,6 @@
 # PLAN — Kaggle replication of "Reference-Based Bias Detection in LLMs via Relative Representations of Hidden States" (arXiv:2609.10060v1)
 
-Status: **M0 in progress** — Kaggle run S01 passed DC-16 and the store round trip; vLLM LoRA failed on T4 (B-005); diagnostic rerun pending. Written 2026-09-30 from `paper/2609.10060v1.pdf` only (27 pages, all sections and Appendices A–H read). The authors' code (https://github.com/NASK-AISafety/Reference-Based-Bias-Detection) was not public at planning time, so everything below is a from-scratch implementation.
+Status: **M0 in progress** — DC-16 and the store round trip pass; vLLM LoRA cannot compile on T4 (B-005), so generation uses merged weights (D-050); probe run S03 pending. Written 2026-09-30 from `paper/2609.10060v1.pdf` only (27 pages, all sections and Appendices A–H read). The authors' code (https://github.com/NASK-AISafety/Reference-Based-Bias-Detection) was not public at planning time, so everything below is a from-scratch implementation.
 
 Citation convention: `§4.1` = paper section, `T1` = Table 1, `F4` = Figure 4, `App. C` = Appendix C. `[unspecified in paper]` marks a detail the PDF leaves open; each one has a `D-###` entry in `DECISION.md`.
 
@@ -169,7 +169,7 @@ No logic lives in notebooks.
 | E5 | Vectorised metrics | r(X) = normalize(E_X) @ normalize(E_A)ᵀ; distances via `torch.cdist` in fp32 on CPU/GPU; per-group reductions with index tensors; no Python loop over sentences | 1,200 × 200 distances in ms; all ablation cells in < 1 min CPU |
 | E6 | α sweep on one loaded base | LoRA: base loaded once (fp16, sharded); per α, activate a pre-built concatenated rank-2r adapter (D-007). Tier 2: endpoints held in CPU RAM (fp32), GPU weights overwritten in place per α (D-008) | 1 base load per model per session instead of 8 (≈ 3–5 min saved per α at 8B) |
 | E7 | Both T4s | 7–8B inference: `device_map` sharding (HF) or TP=2 (vLLM). Training: one split per GPU in parallel (u on cuda:0, h on cuda:1). Tier 2 benches: two small-model jobs in parallel | Kaggle bills session time, not GPU count, so parallel jobs halve quota use for training (D-002, D-003) |
-| E8 | vLLM multi-LoRA | One vLLM engine per Tier 1 model serves base + 7 α-adapters as LoRA requests (`max_lora_rank=32`, `max_loras=8`) | 1 engine start per model instead of 8 (~3–5 min each) |
+| E8 | ~~vLLM multi-LoRA~~ → merged weights per checkpoint (D-050) | vLLM LoRA does not compile on sm75 (B-005). Each α-checkpoint is merged in fp32, saved as fp16 to ephemeral disk, served without LoRA, then deleted; all benchmarks for a checkpoint run on one engine start | 1 engine start per checkpoint (not per benchmark); ≈ +1.5–2 h over the original E8 plan |
 | E9 | Reuse generations | Generations cached per (checkpoint, benchmark, prompt-subset hash, gen settings, seed); scorers (WildGuard, DT parser, ToxiGen RoBERTa) and all metric variants read them | Re-scoring or re-analysis without regeneration; the classifier model loads once per model batch |
 | E10 | Model weights from Kaggle Models mounts where they exist | Llama 3.1 8B Instruct, Gemma 3, Mistral on Kaggle Models, verified by config and tensor checksum against the HF revision | No 8–16GB download per session; does not count toward the 20GB output |
 | E11 | Length-grouped training | `group_by_length=True` in TRL | ~20–30% less padding at max len 1024 |
@@ -244,7 +244,7 @@ Conventions:
 - M0-T4 Kaggle install test: `pip install -e .[train]` and `.[bench]` on the Kaggle image. Record `pip freeze`. Resolve pin conflicts; each change gets a D-031 follow-up.
 - M0-T5 Gated-access check: for every repo in §5, call `huggingface_hub.model_info`/`dataset_info` with the token, without downloading weights. Record pass/fail per repo in `env.json`, without the token.
 - M0-T6 vLLM hello-world:
-  - Qwen2.5-0.5B, TP=1 and TP=2, `dtype=float16`, `enable_lora=True`, 4 prompts.
+  - Qwen2.5-0.5B, TP=1 and TP=2, `dtype=float16`, plain and as merged weights from ephemeral disk (D-050); vLLM-LoRA canary recorded; 4 greedy prompts.
   - Record which engine (V0/V1) and attention backend is used.
   - Try `dtype=float16` on Gemma-3-1B and record whether it is refused (B-005).
 - M0-T7 Artifact-store round trip (D-041): write a 1 MB file to `/kaggle/working/artifacts/env/<session>/`, upload it with `HfApi.upload_folder` to the private HF repo `SarthakGupta414/rbbd-artifacts` (after checking `private is True`), and read it back with a forced fresh download into an empty cache (D-045).
@@ -328,7 +328,7 @@ Conventions:
 **Tasks:**
 - M5-T1 Pin the DT and ToxiGen commit SHAs. Fetch the DT stereotype prompts, system prompts and agreement parser. Fetch the ToxiGen prompt files for 9 groups. Record the SHAs in D-022 and D-025. Write the parity fixtures (DT parser on 200 canned responses).
 - M5-T2 `bench/generate.py`:
-  - vLLM engine factory (TP by model size, dtype per D-004/D-005, `enable_lora`, `max_lora_rank=32`).
+  - vLLM engine factory (TP by model size, dtype per D-004/D-005) serving merged α-checkpoints from ephemeral disk, one checkpoint at a time, temp copy deleted afterwards (D-050).
   - Chat-template prompts; seeded sampling (T=0.7, top-p 1.0).
   - Sharded JSONL output with resume.
   - HF-generate fallback behind a flag (B-005).
@@ -338,7 +338,7 @@ Conventions:
 - M5-T6 `bench/toxigen.py`: seeded prompt subset, user-turn format, first-statement extraction, RoBERTa scoring, toxic fraction per group.
 - M5-T7 Tier 0 harness run inside the smoke config (DC-11 now includes benchmark stages).
 - M5-T8 Tier 2 benches: 2 models × 2 regimes × (ref + 7), with two jobs in parallel on the two GPUs.
-- M5-T9 Tier 1 benches: one vLLM engine per model with LoRA requests (E8). WildGuard scoring is batched per model after generation.
+- M5-T9 Tier 1 benches: per checkpoint, merge → one vLLM engine for all three benchmarks → delete the merged copy (D-050). WildGuard scoring is batched per model after generation.
 **Checks:** DC-01, DC-02, DC-11, DC-13, DC-14 (bench timing logged), DC-15, DC-18 (no generated text in `results/` or git).
 **Rollback:** `m5*-green`. Generations are immutable per `gen_key`; scorer changes bump `score.schema_version` only.
 

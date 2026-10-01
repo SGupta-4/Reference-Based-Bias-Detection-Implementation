@@ -45,12 +45,14 @@ probe:
     - {id: allenai/wildguardmix, type: dataset}
     - {id: tatsu-lab/alpaca, type: dataset}
     - {id: allenai/tulu-3-sft-mixture, type: dataset}
-  # M0-T6 (B-005, D-047, D-048): one fresh process per case. The no-LoRA and rank-16
-  # cases isolate whether the 2026-10-01 Triton failure comes from LoRA kernels.
+  # M0-T6 (B-005, D-047..D-050): one fresh process per case. vLLM LoRA does not compile
+  # on sm75, so α-checkpoints are served as merged fp16 weights from ephemeral disk
+  # (mode: merged). The LoRA case stays as a canary that is expected to fail.
   vllm_cases:
-    - {name: qwen05b_tp1_fp16_nolora, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, lora_rank: null}
-    - {name: qwen05b_tp1_fp16_lora16, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, lora_rank: 16}
-    - {name: qwen05b_tp1_fp16_lora32, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, lora_rank: 32}
-    - {name: qwen05b_tp2_fp16_lora32, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 2, dtype: float16, lora_rank: 32}
-    - {name: gemma3_1b_tp1_fp16, model: google/gemma-3-1b-it, tp: 1, dtype: float16, lora_rank: null}
-    - {name: gemma3_1b_tp1_fp32, model: google/gemma-3-1b-it, tp: 1, dtype: float32, lora_rank: null}
+    - {name: qwen05b_tp1_fp16_plain, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, mode: plain}
+    - {name: qwen05b_tp2_fp16_plain, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 2, dtype: float16, mode: plain}
+    - {name: qwen05b_tp1_fp16_merged32, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, mode: merged, lora_rank: 32}
+    - {name: qwen05b_tp2_fp16_merged32, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 2, dtype: float16, mode: merged, lora_rank: 32}
+    - {name: qwen05b_tp1_fp16_lora32_canary, model: Qwen/Qwen2.5-0.5B-Instruct, tp: 1, dtype: float16, mode: lora, lora_rank: 32, expect_fail: true}
+    - {name: gemma3_1b_tp1_fp16, model: google/gemma-3-1b-it, tp: 1, dtype: float16, mode: plain}
+    - {name: gemma3_1b_tp1_fp32, model: google/gemma-3-1b-it, tp: 1, dtype: float32, mode: plain}

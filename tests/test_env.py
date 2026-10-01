@@ -159,7 +159,10 @@ def _fake_vllm(fail_with_lora: bool):
             self.outputs = [types.SimpleNamespace(token_ids=[1, 2, 3], text=text)]
 
     class LLM:
+        calls = []
+
         def __init__(self, **kwargs):
+            LLM.calls.append(kwargs)
             if fail_with_lora and kwargs.get("enable_lora"):
                 raise RuntimeError("PassManager::run failed")
             self.llm_engine = types.SimpleNamespace()
@@ -191,3 +194,34 @@ def test_vllm_case_records_failed_stage(tmp_path, monkeypatch):
     clean = env_mod.vllm_case({**case, "lora_rank": None}, tmp_path)
     assert clean["ok"] is True and clean["failed_stage"] is None
     assert clean["base_texts"] == ["out 0", "out 1", "out 2", "out 3"]
+
+
+def test_vllm_case_merged_serves_local_weights_and_cleans_up(tmp_path, monkeypatch):
+    """Merged mode loads the folded checkpoint from ephemeral disk without LoRA, then removes it."""
+    fake = _fake_vllm(fail_with_lora=True)
+    for name, mod in fake.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    monkeypatch.setenv("RBBD_EPHEMERAL", str(tmp_path / "eph"))
+    monkeypatch.setattr(env_mod, "make_random_lora", lambda model, rank, out: out)
+
+    def fake_merge(model_id, lora_dir, out_dir):
+        out_dir.mkdir(parents=True)
+        (out_dir / "model.safetensors").write_bytes(b"x" * 10)
+        return out_dir
+
+    monkeypatch.setattr(env_mod, "materialize_merged", fake_merge)
+    case = {
+        "name": "m",
+        "model": "m",
+        "tp": 2,
+        "dtype": "float16",
+        "mode": "merged",
+        "lora_rank": 32,
+    }
+    result = env_mod.vllm_case(case, tmp_path)
+    merged_dir = tmp_path / "eph" / "rbbd_probe" / "m"
+    assert result["ok"] is True and result["merged_bytes"] == 10
+    assert result["merged_dir_removed"] is True and not merged_dir.exists()
+    kwargs = fake["vllm"].LLM.calls[-1]
+    assert kwargs["model"] == str(merged_dir) and "enable_lora" not in kwargs
+    assert kwargs["tensor_parallel_size"] == 2
