@@ -14,7 +14,7 @@ Skip condition: ...
 Resume behaviour: ...
 Failure modes: ... (link B-###)
 ```
-Status: Entrypoint, probe and sync are **implemented (M0)**; stage bodies are stubs that raise `NotImplementedError` naming their milestone. Function names below are the intended public API and are fixed when implemented.
+Status: Entrypoint, probe and sync are **implemented (M0)**; `sentences`/`ftdata` (M1), `embed` for ref (M2) and `train` (M3a) are implemented; other stage bodies are stubs that raise `NotImplementedError` naming their milestone. Function names below are the intended public API and are fixed when implemented.
 
 ---
 
@@ -87,13 +87,28 @@ Entry: `run --stages ftdata` → `data.ft_data.stage(ctx)`
 5. Writes `ftdata/<run_key>/{unharmful_ids.json, harmful_ids.json, stats.json}` (indices and aggregates only; no text, D-037)
 M3 renders training records with `to_messages(row)` (TRL prompt–completion, D-040).
 
-## Stage: train
-1. `finetune.sft.train(cfg.model, cfg.regime, split, data_key, seed, device)` → endpoint dir
-   - `models.loading.load_for_training(...)` (QLoRA NF4 | fp16 LoRA | fp32-master full FT)
-   - TRL `SFTTrainer.train(resume_from_checkpoint=latest)`; guard on loss and grad-norm (D-006)
-   [writes `train/<model>/<regime>/<split>/seed<k>/<train_key>/`; Tier 2 full endpoints are pushed to `rbbd-ckpt-private`]
-2. Runner launches u and h as two processes, on `cuda:0` and `cuda:1` (D-003).
-Resume behaviour: `checkpoint-*` every ~20 min of wall-clock. `complete=false` manifests trigger resume.
+## Stage: train (implemented, M3a; Tier 1/2 runs in M3b/M3c)
+Entry: `run --stages ftdata,train` → `runner.STAGE_IMPLS["train"]` → `finetune.sft.stage(ctx)`
+1. `sft.plan_jobs(cfg, root, ftdata outputs)` → one `Job` per (model, regime, seed, split), u/h adjacent
+   - reads `ftdata/<run_key>/{stats.json (dataset revision), <split>_ids.json}`
+   - `spec_from_config` → `TrainSpec` (App. C hyperparameters, `data_key` = revision + split + ids) → `train_key`
+   - job dir `train/<slug>/<regime>/<split>/seed<k>/<train_key>/`
+2. `train.parallel: true`: each u/h pair runs as two processes `python -m rbbd.cli train-one --config C --model S --regime R --split X --seed K` with `CUDA_VISIBLE_DEVICES` 0 / 1 (D-003); logs → `<job>/train.log`. Jobs with `done.json` are skipped. (`parallel: false` runs `run_job` in-process: CPU tests.)
+3. `cli._cmd_train_one` → re-plans from the config + ftdata manifest → `sft.run_job(cfg, job)`:
+   - `load_rows` (WildGuardMix at the recorded revision, selected ids; text stays in the HF cache) → `models.loading.load_tokenizer` → `load_model(spec)` (lora fp16 | qlora NF4 | full fp32 masters; `device_map {"": 0}`)
+   - `train_one(spec, rows, tok, model, job_dir)`:
+     - `build_examples` → [{input_ids, completion_mask}] ≤ max_length; drops prompt-fills-window rows (D-055) → `data.json`
+     - TRL `SFTTrainer(sft_config(spec), peft_config if LoRA/QLoRA, callbacks=[GuardCallback (D-065), WallClockSaveCallback (20 min)])`
+     - `trainer.train(resume_from_checkpoint=latest_checkpoint(job/checkpoints))`
+     - writes `final/` (PEFT adapter, or fp16 full model), `train_log.json`, `done.json` {global_step, losses, resumed_from, tokens_per_second, scaler_skipped_steps}
+4. Stage outputs: every job's `final/` and `done.json` (directory hashes in the manifest).
+Skip condition: valid manifest; per job, `done.json`.
+Resume behaviour: a killed job restarts from its newest `checkpoints/checkpoint-N` (DC-13).
+Failure modes: `NonFiniteError` from the guard (B-001, D-065); `DataBuildError` if a chat template breaks the prompt prefix; a failed subprocess raises with its log tail.
+
+## α-merges (implemented, M3a; used from M4)
+- LoRA: `models.adapters.read_adapter(final)` ×2 → `adapter_for_alpha(u, h, α)`: u at α=1, h at α=0, else `combine` = rank-2r concatenation, scaling 1 (D-007, D-066) → `write_adapter` (PEFT dir + `rbbd_meta.json`).
+- Full FT: `models.interpolate.load_endpoint` ×2 (fp32 CPU) → `apply_alpha(model, w_h, w_u, α)` in place, or `materialize(...)` to ephemeral disk only (D-008, D-050).
 
 ## Stage: embed (implemented for `ref`, M2 green — D-064; α-checkpoints M4)
 Entry: `run --stages sentences,embed` → `runner.STAGE_IMPLS["embed"]` → `embed.extract.stage(ctx)`

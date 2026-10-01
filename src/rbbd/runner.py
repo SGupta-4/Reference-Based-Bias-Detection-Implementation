@@ -114,6 +114,7 @@ def _stub(stage: str) -> StageFn:
 STAGE_IMPLS: dict[str, str] = {
     "sentences": "rbbd.data.sentences:stage",
     "ftdata": "rbbd.data.ft_data:stage",
+    "train": "rbbd.finetune.sft:stage",
     "embed": "rbbd.embed.extract:stage",
 }
 

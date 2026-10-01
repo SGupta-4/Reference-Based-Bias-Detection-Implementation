@@ -97,3 +97,40 @@ def make_tiny_model(seed=0, layers=2):
 @pytest.fixture
 def tiny():
     return make_tiny_model(), FakeTokenizer()
+
+
+CHAT_TEMPLATE = (
+    "{{ bos_token }} {% for m in messages %}<{{ m['role'] }}> {{ m['content'] }} <end> {% endfor %}"
+    "{% if add_generation_prompt %}<assistant> {% endif %}"
+)
+
+
+def make_chat_tokenizer():
+    """A real (offline) word-level `PreTrainedTokenizerFast` with a chat template.
+
+    Vocabulary: specials, role tags and words w0..w99 (ids < 128, the tiny model's vocab).
+    The prompt rendered with a generation prompt is a token prefix of prompt + completion,
+    as with the real templates (checked by `sft.build_examples`).
+    """
+    from tokenizers import Tokenizer, models, pre_tokenizers
+    from transformers import PreTrainedTokenizerFast
+
+    specials = ["<pad>", "<s>", "</s>", "<unk>", "<user>", "<assistant>", "<end>"]
+    vocab = {t: i for i, t in enumerate(specials + [f"w{i}" for i in range(100)])}
+    core = Tokenizer(models.WordLevel(vocab, unk_token="<unk>"))
+    core.pre_tokenizer = pre_tokenizers.WhitespaceSplit()
+    tok = PreTrainedTokenizerFast(tokenizer_object=core, bos_token="<s>", eos_token="</s>",
+                                  pad_token="<pad>", unk_token="<unk>")  # fmt: skip
+    tok.chat_template = CHAT_TEMPLATE
+    tok.padding_side = "right"
+    return tok
+
+
+def make_rows(n, seed=0, prompt_words=(3, 8), response_words=(2, 6)):
+    """`n` synthetic WildGuardMix-like rows ({"prompt", "response"}) over words w0..w99."""
+    rng = np.random.default_rng(seed)
+
+    def text(lo, hi):
+        return " ".join(f"w{int(i)}" for i in rng.integers(0, 100, size=int(rng.integers(lo, hi))))
+
+    return [{"prompt": text(*prompt_words), "response": text(*response_words)} for _ in range(n)]

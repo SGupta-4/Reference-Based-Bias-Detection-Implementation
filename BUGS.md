@@ -216,3 +216,27 @@ IDs are sequential and never reused.
 - Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `79 passed, 8 deselected in 16.45s`. A dry run of `test_padding_invariance_fp32` with the tiny model gives max_abs 2.2e-8 / 6.0e-8 / 1.2e-7 (mean/max/last): fp32-level values, no fp16 steps. Kaggle (session `20261001T122025Z`, commit `8e26c8d`): `3 passed in 20.53s`. `padding_invariance_fp32` max_abs is last 1.36e-4, max 7.31e-4, mean 1.83e-4. These are non-power-of-two values, which confirms the comparison now sees fp32 values. Store commit `1eeebb91`.
 - GPU-hours lost: ≈ 0.1 (one short session)
 - Linked commits and D-### entries: `ac0f1ce`, `8e26c8d`; D-061, D-063, D-064; B-013
+
+## B-015 Feature: M3a fine-tuning (SFT endpoints, α-merges, train stage)
+- Status: In progress. CPU side done; the Kaggle GPU run (`notebooks/m3a_train.ipynb`) is pending, then `m3a-green`.
+- How it was found or scoped: PLAN §7 M3 (M3-T1–T3, M3a-T4).
+- Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3a_train.ipynb`.
+- Hypotheses tried:
+  - D-006 taken literally would abort fp16 training on scaler-skipped steps → D-065 (user-approved).
+  - Concatenated adapters are not guaranteed to be bit-equal to the endpoints at α ∈ {0, 1} → D-066 (user-approved).
+  - TRL infers `completion_only_loss` from a `prompt` column, which pre-tokenised data lacks → set explicitly (D-067).
+  - TRL requires a real `PreTrainedTokenizerBase` → CPU tests use an offline word-level fast tokenizer with a chat template (`tests/conftest.make_chat_tokenizer`).
+  - The data-leak assertion in a test first matched the field name `n_dropped_prompt_fills_window` → it now checks that no row text appears.
+  - `test_stub_names_its_milestone` used `train` as its stub → retargeted to `generate` (M5).
+- Fix:
+  - Code: `src/rbbd/finetune/sft.py`, `src/rbbd/models/{adapters,interpolate}.py`, `runner.STAGE_IMPLS["train"]`, `cli train-one`.
+  - Config: `train:` sections in `configs/{base,smoke}.yaml`.
+  - Tests: `tests/{test_merge,test_sft}.py`, `tests/gpu/test_train_gpu.py`.
+  - Notebook: `notebooks/m3a_train.ipynb`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `96 passed, 9 deselected in 13.30s`; `grep -rn "PLACEHOLDER(M3)" tests` → no output.
+  - DC-13 on CPU: after a kill at checkpoint 3 the run resumes to the same step with bit-identical adapter tensors.
+  - DC-07 on CPU: α ∈ {0, 1} are bit-identical to the endpoints, and combined ΔW is linear within float64 rtol 1e-6.
+  - A CPU dry run of `test_real_adapter_endpoints` (tiny model trained into the smoke layout) passed, with max relative linearity error 5.1e-8.
+  - Kaggle: pending.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-065, D-066, D-067

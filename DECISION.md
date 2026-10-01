@@ -920,3 +920,71 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: M2 used ≈ 0.6 session-h on Kaggle in total (three sessions).
 - Paper deviation: no (precision deviations are logged in D-005/D-062).
 - Revisit-if: an `embed.schema_version` bump (ROLLBACK lists DC-06, 09, 10, 11, 12 to re-run).
+
+## D-065 Training guard under fp16 mixed precision: scaler-skipped steps are tolerated within limits (refines D-006)
+- Date: 2026-10-01
+- Context: D-006 says training aborts on a non-finite loss or grad-norm. Every T4 run uses fp16 autocast with a dynamic gradient scaler. The scaler starts at 2¹⁶ and deliberately overflows on some steps, mostly early. On those steps the unscaled grad-norm is inf/NaN and the optimizer step is skipped, so nothing reaches the weights. Applied literally, D-006 would abort every fp16 run. The user chose this refinement on 2026-10-01.
+- Options considered: (a) tolerate scaler-skipped steps within limits; (b) strict D-006, which would force fp32 compute everywhere (QLoRA 7–8B ≈ 2–3× slower).
+- Choice (a), implemented in `finetune.sft.GuardCallback`, with `logging_steps=1` so every step is checked:
+  - A non-finite **loss** always aborts (`NonFiniteError`), on any step.
+  - A non-finite **grad-norm** is tolerated only on a step the scaler skipped (`accelerator.optimizer_step_was_skipped`); on an applied step it aborts.
+  - More than **25 consecutive** skipped steps aborts: the scale has collapsed by a factor of 2²⁵.
+  - More than **5 %** skipped steps aborts once the run has at least **100** steps. A short run is exempt because its early skips while the scaler calibrates would dominate.
+  - In fp32 compute the scaler is off and nothing is ever skipped, so any non-finite value aborts.
+  - `done.json` records `scaler_skipped_steps`. Limits live in `train.guard` (config) and are part of nothing's cache key.
+- Why: Keeps D-006's intent (no silent NaN can reach weights or results) while allowing the standard fp16 recipe.
+- Tradeoff accepted: A run can still finish after a few skipped steps; the count is recorded.
+- Cost impact: none (one check per logged step).
+- Paper deviation: no.
+- Revisit-if: a run aborts on the skip limits; then switch that model to fp32 compute per D-005 and log it.
+
+## D-066 Spectrum endpoints are the trained adapters themselves; interior α uses the rank-2r concatenation (refines D-007)
+- Date: 2026-10-01
+- Context: DC-07 requires α=1 and α=0 to reproduce the endpoints exactly (`torch.equal`). D-007's concatenated adapter is exact in arithmetic, but its ΔW is a matmul over 2r ranks (half of them zero blocks). That may round differently from the endpoint's rank-r matmul, so bit equality of ΔW is not guaranteed. The user chose this option on 2026-10-01.
+- Options considered: (a) a100 = u and a000 = h as trained, with concatenation only for α ∈ {0.9, 0.7, 0.5, 0.3, 0.1}; (b) concatenation for every α.
+- Choice: (a). `models.adapters.adapter_for_alpha` returns the endpoint adapter objects at α ∈ {1, 0} and `combine(u, h, α)` otherwise. `combine` is still tested at every α including 0 and 1. ΔW linearity is checked with float64 evaluation of the stored fp32 tensors, rtol 1e-6 with atol 1e-6·max|ΔW|; elements near zero have no meaningful relative error. A combined adapter keeps PEFT's config format (r = lora_alpha = 2r, scaling 1). Its provenance (α, s_u, s_h) goes to a sidecar `rbbd_meta.json`, because PEFT warns on unknown config keys.
+- Why: The endpoints are exact by construction, and interior points are exact up to fp32 rounding (measured ≤ 5e-8 relative on CPU).
+- Tradeoff accepted: Endpoints are served at rank r and interior points at rank 2r. The two paths differ only by fp32 rounding.
+- Cost impact: none.
+- Paper deviation: no (App. C merging, implemented exactly).
+- Revisit-if: vLLM ever serves adapters directly again (D-050); then check that rank-r and rank-2r adapters coexist in one engine.
+
+## D-067 M3a implementation choices for `finetune.sft` and the train stage (implements D-003, D-009, D-040, D-055)
+- Date: 2026-10-01
+- Context: M3-T1–T3 and M3a-T4. Details the plan left open.
+- Choices:
+  - **Tokenisation** reproduces TRL 0.25.1's prompt–completion path:
+    - The prompt is rendered with `add_generation_prompt=True`, then prompt + completion.
+    - `completion_mask` covers the assistant tokens.
+    - The pair is truncated from the right at `max_length`.
+    - Doing this in `build_examples` lets us **drop and count examples whose prompt fills the window** (D-055 item 4; `data.json` → `n_dropped_prompt_fills_window`).
+    - It fails loudly (`DataBuildError`) if a chat template breaks the prompt-prefix property. TRL only warns in that case.
+    - The pre-tokenised dataset is passed to `SFTTrainer` with `completion_only_loss=True` set explicitly; TRL cannot infer it without a `prompt` column.
+  - **Hyperparameters** (App. C):
+    - 3 epochs, per-device batch 4 × grad-acc 8, warmup 0.03, linear schedule, max length 1,024.
+    - LoRA r 16, α 32, dropout 0.05 on all 7 projections; lr 1e-4 (LoRA/QLoRA) and 2e-5 (full).
+    - `group_by_length`; seed = data seed = the job seed.
+    - [unspecified in paper], TrainingArguments defaults: `max_grad_norm` 1.0, `weight_decay` 0.
+    - Optimizer: `adamw_torch` for LoRA/QLoRA (App. C AdamW); `paged_adamw_8bit` for full FT (D-009).
+  - **Precision:**
+    - LoRA: fp16 base with fp32 LoRA weights (PEFT autocast).
+    - QLoRA: NF4 + double quantisation, compute fp16 (D-003).
+    - Full: fp32 masters with fp16 autocast. The endpoint is saved as fp16 safetensors (D-008).
+    - A `models:` entry may set `train_compute: fp32` (D-005).
+  - **Checkpoints:**
+    - A trainer checkpoint is written every 20 min of wall-clock time (`WallClockSaveCallback`), and a job resumes from the newest one.
+    - `save_total_limit=1`: the trainer itself replaces the previous checkpoint. This is the library's normal rotation of transient training state inside the job directory, not an ad hoc deletion of artifacts.
+    - A job with `done.json` is never retrained.
+  - **Jobs:**
+    - One per (model, regime, seed, split), in `train/<slug>/<regime>/<split>/seed<k>/<train_key>/`.
+    - Each job directory holds `checkpoints/`, `final/`, `data.json`, `train_log.json`, `done.json` and `train.log`. Everything is aggregate-only: no row text is written (D-037).
+    - u‖h run as two `cli train-one` processes with `CUDA_VISIBLE_DEVICES` 0/1 (D-003).
+    - `done.json` records `tokens_per_second` for the M3c-T8 throughput probe.
+  - **Smoke** (Tier 0 only): effective batch 8 (4 × 2) instead of 32, so 64 rows × 3 epochs give 24 optimizer steps rather than 6, and the adapters move measurably for DC-07.
+  - **Config hash:** adding the `train:` section to `base.yaml` changes every config's hash, so the M2 configs' `sentences`/`embed` manifests re-run once. The embedding tensor cache is keyed by content, not by config hash, so nothing is re-extracted.
+  - **Full-FT merges** (`models.interpolate`): `materialize` refuses any path under the artifact root or `/kaggle/working`. It uses `utils.env.ephemeral_dir()` (D-050), not D-008's `/kaggle/tmp`, which does not exist on current Kaggle images (M0 probe).
+- Why: Each item follows the paper where it speaks and records the choice where it does not.
+- Tradeoff accepted: The smoke run's batch differs from the paper's; smoke results are pipeline checks only.
+- Cost impact: Smoke training ≈ 2–5 min on 2×T4 (estimate; measured in M3a).
+- Paper deviation: smoke batch only (Tier 0). Otherwise no.
+- Revisit-if: TRL's tokenisation changes (pinned 0.25.1), or M3c-T8 shows checkpointing overhead > 5 %.
