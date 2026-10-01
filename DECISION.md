@@ -888,3 +888,14 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: within PLAN §8 (D-005 already budgeted Gemma in fp32).
 - Paper deviation: yes, App. C precision, as already logged in D-005.
 - Revisit-if: never for M2. Training precision is decided separately by D-005's 50-step probe in M3.
+
+## D-063 DC-06 part 1 measures the pooled vectors before the fp16 cache cast (implements D-061; thresholds unchanged)
+- Date: 2026-10-01 (after the first run under D-061)
+- Context: The first run under D-061 (session `20261001T122025Z`, commit `ac0f1ce`) passed part 2 and failed part 1. Part 1's measured gaps were max_abs 0.00390625 (last, max) and 0.001953125 (mean): exactly 2⁻⁸ and 2⁻⁹, which are fp16 rounding steps. `encode` always cast its output to fp16, the cache dtype. The test therefore compared fp16-rounded copies of fp32 results, and a sub-ulp fp32 gap that crossed a rounding boundary became a whole fp16 step (max_rel 1.6e-3 ≈ 2 fp16 ulps). D-061 states part 1 as a check of fp32 arithmetic, so the test did not implement the decision (B-014).
+- Options considered: (a) compare the pooled vectors before the cast, thresholds unchanged; (b) loosen part 1's tolerance to cover fp16 output rounding. Option (b) would change a pre-registered threshold after seeing data.
+- Choice: (a). `encode(..., keep_fp32=True)` returns the pooled vectors before the cast; the fp16 guard still runs. Only `test_padding_invariance_fp32` uses it, and the cache stays fp16. Tolerance stays `atol=1e-3, rtol=1e-4`.
+- Why: It measures exactly what D-061 specifies. This fix is chosen after seeing a failure, so it is logged with the evidence that justifies it: the observed gaps are exact powers of two, matching fp16 rounding steps rather than fp32 compute error. Even before the fix, the fp32-compute gap (≤ 0.0039) was 160× smaller than the fp16-compute gap (0.625). A padding leak would give O(1) errors.
+- Tradeoff accepted: One test-only keyword on `encode`.
+- Cost impact: none (same GPU test).
+- Paper deviation: no.
+- Revisit-if: Part 1 fails with pre-cast vectors. That would be a real padding bug.

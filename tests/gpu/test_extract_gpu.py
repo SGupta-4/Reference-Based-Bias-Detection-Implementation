@@ -80,6 +80,7 @@ def test_padding_invariance_fp32():
 
     fp32 rounding is ~1000x finer than fp16, so any gap left here is a logic error
     (padding leaking into real positions or into the pooling), not kernel rounding.
+    Compared before the fp16 cache cast (`keep_fp32=True`, B-014).
     Runs on cuda:1 so it does not compete with the fp16 fixture on cuda:0.
     """
     import torch
@@ -87,8 +88,10 @@ def test_padding_invariance_fp32():
     model, tok = load_for_inference(QWEN32)
     try:
         settings = ExtractSettings(token_budget=1 << 20)
-        alone = encode(model, tok, [SHORT], settings)
-        batched = encode(model, tok, [LONG[0], SHORT, LONG[1]], settings)
+        # keep_fp32: compare the pooled vectors before the cache's fp16 cast, which
+        # otherwise turns sub-ulp fp32 gaps into whole fp16 steps (B-014).
+        alone = encode(model, tok, [SHORT], settings, keep_fp32=True)
+        batched = encode(model, tok, [LONG[0], SHORT, LONG[1]], settings, keep_fp32=True)
         pairs = {k: (alone[k][0], batched[k][1]) for k in ("mean", "max", "last")}
         _record("padding_invariance_fp32", {k: _diffs(a, b) for k, (a, b) in pairs.items()})
         for a, b in pairs.values():

@@ -166,3 +166,15 @@ def test_compare_entries_identity_and_perturbation(config_dir, artifacts, monkey
     }
     diff = extract.compare_entries(noisy, tensors, union)
     assert diff["cosine"]["mean"]["mean"] < 0.999 and diff["bias_rr"]["max_abs_diff"] > 0
+
+
+def test_encode_keep_fp32_matches_cached_fp16(tiny):
+    """B-014: `keep_fp32` returns the pre-cast pooled vectors; casting them gives the
+    fp16 rows `encode` returns by default."""
+    model, tok = tiny
+    texts = ["a b c", "a b c d e f", "a"]
+    half = encode(model, tok, texts, ExtractSettings())
+    full = encode(model, tok, texts, ExtractSettings(), keep_fp32=True)
+    for name in half:
+        assert full[name].dtype == np.float32 and half[name].dtype == np.float16
+        np.testing.assert_array_equal(full[name].astype(np.float16), half[name])

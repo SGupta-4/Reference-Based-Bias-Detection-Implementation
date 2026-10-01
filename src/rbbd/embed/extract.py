@@ -120,11 +120,15 @@ def encode(
     *,
     context: Mapping[str, Any] | None = None,
     stats: ExtractStats | None = None,
+    keep_fp32: bool = False,
 ) -> dict[str, np.ndarray]:
     """Pooled final-layer embeddings of `texts` -> {name: [N, d] float16}, rows in input order.
 
     `context` (model slug, checkpoint) is attached to guard errors. A pre-norm hook on
     the last decoder layer is registered only when "pre_norm" is requested (D-017).
+    `keep_fp32=True` returns the pooled vectors before the fp16 cast ([N, d] float32;
+    the fp16 guard still runs). Only DC-06's fp32 check uses it (B-014); the cache is
+    always fp16.
     """
     import torch
 
@@ -175,9 +179,13 @@ def encode(
                         half = vec.to(torch.float16)
                         # fp32 models can produce values beyond the fp16 range of the cache.
                         assert_finite(half, f"embed.{name}.fp16", batch=bi, **context)
+                        kept = vec.float() if keep_fp32 else half
                         if name not in out:
-                            out[name] = np.zeros((len(texts), half.shape[1]), dtype=np.float16)
-                        out[name][idx] = half.cpu().numpy()
+                            out[name] = np.zeros(
+                                (len(texts), kept.shape[1]),
+                                dtype=np.float32 if keep_fp32 else np.float16,
+                            )
+                        out[name][idx] = kept.cpu().numpy()
     finally:
         if handle is not None:
             handle.remove()

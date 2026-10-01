@@ -111,7 +111,7 @@ Depends on `sentences` only while `embed.checkpoints == [ref]` (`runner.stage_de
 5. Writes `embed/<run_key>/timing.json` {download, load, extraction seconds, padding waste, peak GiB per GPU, cache hit}
 `python -m rbbd.cli compare-embeddings --a <cfg> --b <cfg>` → `cached_ref_entry` ×2 → `compare_entries` (cosine per pooling; per-group B under RR and SEAT via `metrics.delta_b.from_union`) → `env/<session>/compare_<run_name>.json` (D-058).
 Invariant (M4): ref and every aXXX key differ only in the checkpoint field.
-GPU checks (`tests/gpu/test_extract_gpu.py`): DC-06 per D-061 calls `load_for_inference` (fp16 on cuda:0, fp32 on cuda:1) → `encode` on the short sentence alone vs in a padded batch (fp32), and on the 85-text smoke union alone vs batched (fp16) → `m2_extract_gpu.json`. DC-09 hooks the last decoder layer and calls `extract_cached`.
+GPU checks (`tests/gpu/test_extract_gpu.py`): DC-06 per D-061 calls `load_for_inference` (fp16 on cuda:0, fp32 on cuda:1) → `encode(keep_fp32=True)` on the short sentence alone vs in a padded batch (fp32, before the fp16 cast; D-063), and on the 85-text smoke union alone vs batched (fp16) → `m2_extract_gpu.json`. DC-09 hooks the last decoder layer and calls `extract_cached`.
 
 ## Stage: deltab
 1. `utils.cache.read(embed_key_ref)`, `read(embed_key_aud)` → E_ref, E_aud (CPU fp32)

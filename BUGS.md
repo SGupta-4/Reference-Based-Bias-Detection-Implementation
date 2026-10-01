@@ -149,7 +149,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-052, D-053, D-054, D-055, D-056; commit `8277155`
 
 ## B-011 Feature: M2 embedding extraction and cache
-- Status: In progress. The second Kaggle run (session `20261001T113125Z`, commit `64498de`) passed DC-09, DC-10 and DC-12 and settled the Gemma probe (D-062). DC-06 failed its D-058 rule (B-013). Next: rerun the GPU tests under D-061, then `m2-green`.
+- Status: In progress. The second Kaggle run (session `20261001T113125Z`, commit `64498de`) passed DC-09, DC-10 and DC-12 and settled the Gemma probe (D-062). DC-06 failed its D-058 rule (B-013). Under D-061 (session `20261001T122025Z`), the fp16 part passed and the fp32 part failed on a test-measurement bug (B-014). Next: rerun `test_padding_invariance_fp32`, then `m2-green`.
 - How it was found or scoped: PLAN §7 M2 (M2-T1…T4).
 - Reproduction command: CPU: `pytest -q -m "not gpu"`; Kaggle: `notebooks/m2_extract.ipynb`.
 - Hypotheses tried:
@@ -166,7 +166,7 @@ IDs are sequential and never reused.
   - Gemma-3-4B fp32: load 22.2 s + extraction 191.0 s; peak 9.07 / 9.92 GiB. fp16 probe: guard fired on batch 0, all values NaN → stays fp32 (D-062).
   - DC-06 (GPU): **fail** under D-058 (B-013). Rule replaced by D-061; rerun pending.
 - GPU-hours lost: ≈ 0.2 (first Kaggle run, B-012)
-- Linked commits and D-### entries: `92e836e`, `64498de`; D-057, D-058, D-059, D-060, D-061, D-062; B-012, B-013
+- Linked commits and D-### entries: `92e836e`, `64498de`, `ac0f1ce`; D-057, D-058, D-059, D-060, D-061, D-062, D-063; B-012, B-013, B-014
 
 ## B-012 Bug: every M2 model load fails on Kaggle — torchvision does not match the pinned torch
 - Status: Fixed and verified on Kaggle (session `20261001T113125Z`).
@@ -186,7 +186,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `92e836e` (failing run), `64498de` (fix, verified); D-031, D-060; B-011
 
 ## B-013 Bug: DC-06 fp16 padding-invariance rule (D-058) cannot be met by fp16 arithmetic
-- Status: Rule replaced (D-061); new GPU tests written and dry-run on CPU; Kaggle verification pending.
+- Status: Rule replaced (D-061). Under D-061, part 2 (fp16 cosine) passed on Kaggle. Part 1 failed because of a test-measurement bug (B-014); a rerun is pending.
 - How it was found or scoped: `test_padding_invariance_fp16` failed on Kaggle (session `20261001T113125Z`, commit `64498de`): `1 failed, 1 passed in 13.09s`.
 - Reproduction command: `pytest -q -m gpu tests/gpu/test_extract_gpu.py::test_padding_invariance_fp16` at `64498de` on 2×T4.
 - Observed (`m2_extract_gpu.json`), max |alone − batched| with max |value|: mean 0.146 / 124.7; max 0.625 / 183.1; last 0.156 / 146.8. The fp16 step in [128, 256) is 0.125, so these gaps are 1–5 ulps.
@@ -195,5 +195,24 @@ IDs are sequential and never reused.
   - fp16 rounding from different GEMM shapes and attention kernels (masked batch vs single sequence). Consistent with gaps of a few ulps at the largest coordinates. D-058 assumed values in [8, 16), which made the tolerance look feasible; real values reach 183.
 - Fix: D-061 replaces the rule. `test_padding_invariance_fp16` is replaced by `test_padding_invariance_fp32` and `test_padding_cosine_fp16_smoke` (85 smoke sentences, cosine ≥ 0.9999). The latter also records fp16-vs-fp32 error. The notebook's pytest cell prints full failure lines (`-rfE --tb=short`).
 - Verification (CPU, this container): both new tests ran end to end with the tiny conftest model standing in for Qwen (`load_for_inference` monkeypatched); `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `78 passed, 8 deselected in 10.51s`. Kaggle: pending.
+- Kaggle under D-061 (session `20261001T122025Z`, commit `ac0f1ce`): `1 failed, 2 passed in 31.80s`. Part 2 (85 smoke texts) passed. min cosine alone vs batched in fp16: mean 0.9999973, max 0.9999936, last 0.9999967 (≥ 0.9999). Recorded for comparison:
+  - Padding error (relative L2): mean 0.0014 / max 0.0023.
+  - fp16 vs fp32, sentence alone: mean 0.0039 / max 0.0072.
+  - fp16 vs fp32, sentence in its batch: mean 0.0039 / max 0.0075.
+  - So padding adds less error than fp16 itself; fp16 batched vs fp32 is no worse than alone vs fp32.
+  - Max-pooling, fp16 vs fp32: min cosine 0.99993, the least precise pooling.
+  - Part 1 failed: see B-014.
 - GPU-hours lost: ≈ 0 (the test took 13 s; the rest of the run produced usable results)
-- Linked commits and D-### entries: `64498de`; D-058, D-061; B-011
+- Linked commits and D-### entries: `64498de`, `ac0f1ce`; D-058, D-061, D-063; B-011, B-014
+
+## B-014 Bug: DC-06's fp32 check compared fp16-rounded outputs
+- Status: Fixed on CPU; Kaggle verification pending.
+- How it was found or scoped: `test_padding_invariance_fp32` failed on Kaggle (session `20261001T122025Z`, commit `ac0f1ce`). `m2_extract_gpu.json` shows `padding_invariance_fp32` max_abs: last 0.00390625, max 0.00390625, mean 0.001953125; max_rel ≈ 1.6e-3–1.8e-3; max |value| 146.75 / 182.75 / 124.56.
+- Reproduction command: `pytest -q -m gpu tests/gpu/test_extract_gpu.py::test_padding_invariance_fp32` at `ac0f1ce` on 2×T4.
+- Hypotheses tried:
+  - Padding leak in fp32. Rejected: a leak would give O(1) errors. These gaps are 1–2 fp16 ulps, 160× below the fp16-compute gap.
+  - fp16 output cast. Confirmed: the gaps are exactly 2⁻⁸ and 2⁻⁹, the fp16 rounding steps in [4, 8) and [2, 4). `encode` casts every pooled vector to fp16 before returning, so the test never saw fp32 values.
+- Fix: `encode(..., keep_fp32=True)` returns the pre-cast pooled vectors, and the fp16 guard still runs. `test_padding_invariance_fp32` uses it. New CPU test `test_encode_keep_fp32_matches_cached_fp16` checks that casting the kept vectors reproduces the default fp16 output exactly. Thresholds are unchanged (D-063).
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `79 passed, 8 deselected in 16.45s`. A dry run of `test_padding_invariance_fp32` with the tiny model gives max_abs 2.2e-8 / 6.0e-8 / 1.2e-7 (mean/max/last): fp32-level values, no fp16 steps. Kaggle: pending.
+- GPU-hours lost: ≈ 0.1 (one short session)
+- Linked commits and D-### entries: `ac0f1ce`; D-061, D-063; B-013
