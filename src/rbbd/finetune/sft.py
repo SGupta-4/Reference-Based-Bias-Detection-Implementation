@@ -284,6 +284,54 @@ class WallClockSaveCallback(_callback_base()):  # type: ignore[misc]
         self.last = time.time()
 
 
+class ThroughputCallback(_callback_base()):  # type: ignore[misc]
+    """Steady-state training throughput from TRL's cumulative `num_tokens` log (M3c-T8).
+
+    `num_tokens` counts attention-mask (non-pad) tokens, as `data.json`'s `n_tokens`
+    does, so a projection from the two is consistent. The first `skip_steps` logged
+    steps are excluded: `group_by_length` puts the longest batch first, and CUDA/kernel
+    warm-up inflates the first steps.
+    """
+
+    def __init__(self, skip_steps: int = 3) -> None:
+        self.skip_steps = skip_steps
+        self.clock = time.time  # replaceable in tests
+        self.points: list[tuple[int, float, float]] = []  # (step, wall time, num_tokens)
+
+    def on_log(self, args: Any, state: Any, control: Any, logs: Any = None, **kwargs: Any) -> None:
+        if logs and "num_tokens" in logs:
+            self.points.append((int(state.global_step), self.clock(), float(logs["num_tokens"])))
+
+    def summary(self) -> dict[str, Any]:
+        steady = [p for p in self.points if p[0] > self.skip_steps]
+        out: dict[str, Any] = {"tokens_per_second_steady": None, "seconds_per_step_steady": None}
+        if len(steady) >= 2:
+            (s0, t0, n0), (s1, t1, n1) = steady[0], steady[-1]
+            if t1 > t0:
+                out["tokens_per_second_steady"] = round((n1 - n0) / (t1 - t0), 1)
+                out["seconds_per_step_steady"] = round((t1 - t0) / (s1 - s0), 2)
+        return out
+
+
+class TimeLimitCallback(_callback_base()):  # type: ignore[misc]
+    """Stop training cleanly after `minutes` of wall-clock time (throughput probes only)."""
+
+    def __init__(self, minutes: float) -> None:
+        self.deadline = time.time() + minutes * 60.0
+
+    def on_step_end(self, args: Any, state: Any, control: Any, **kwargs: Any) -> Any:
+        if time.time() >= self.deadline:
+            control.should_training_stop = True
+        return control
+
+
+def project_hours(n_tokens: int, epochs: float, tokens_per_second: float | None) -> float | None:
+    """Projected training hours for `epochs` passes over `n_tokens` at a measured rate."""
+    if not tokens_per_second:
+        return None
+    return round(n_tokens * epochs / tokens_per_second / 3600.0, 2)
+
+
 class KillAfterSave(_callback_base()):  # type: ignore[misc]
     """Test hook (DC-13): raise `SimulatedKill` right after the checkpoint at `step`."""
 
@@ -383,6 +431,7 @@ def train_one(
     save_steps: int | None = None,
     guard: GuardSettings | None = None,
     extra_callbacks: Sequence[Any] = (),
+    max_minutes: float | None = None,
 ) -> dict[str, Any]:
     """Train one endpoint into `out_dir`, resuming from its newest checkpoint; return done.json.
 
@@ -420,6 +469,8 @@ def train_one(
     ckpt_dir = out_dir / "checkpoints"
     context = {"model": spec.slug, "regime": spec.regime, "split": spec.split, "seed": spec.seed}
     guard_cb = GuardCallback(guard or GuardSettings(), context)
+    throughput = ThroughputCallback()
+    time_limit = [TimeLimitCallback(max_minutes)] if max_minutes is not None else []
     # The LoRA A matrices are initialised inside SFTTrainer (get_peft_model): seed here so
     # the initial adapter depends on the spec's seed only, not on what ran before (B-017).
     from transformers import set_seed
@@ -431,7 +482,13 @@ def train_one(
         train_dataset=Dataset.from_list(examples),
         processing_class=tokenizer,
         peft_config=_peft_config(spec) if spec.regime in ("lora", "qlora") else None,
-        callbacks=[guard_cb, WallClockSaveCallback(save_minutes), *extra_callbacks],
+        callbacks=[
+            guard_cb,
+            WallClockSaveCallback(save_minutes),
+            throughput,
+            *time_limit,
+            *extra_callbacks,
+        ],
     )
     guard_cb.trainer = trainer
     resume = latest_checkpoint(ckpt_dir)
@@ -467,9 +524,24 @@ def train_one(
         else None,
         "n_examples": data_stats["n_kept"],
         **guard_cb.summary(),
+        **throughput.summary(),
+        "peak_mem_gib": _peak_mem_gib(),
+    }
+    # Full-run projection from this split's exact token count (M3c-T8; D-042, D-055).
+    tps = done["tokens_per_second_steady"]
+    done["projected_hours"] = {
+        f"{e:g}_epochs": project_hours(data_stats["n_tokens"], e, tps) for e in (spec.epochs, 1)
     }
     done_path.write_text(json.dumps(done, indent=2))
     return done
+
+
+def _peak_mem_gib() -> float | None:
+    import torch
+
+    if not torch.cuda.is_available():
+        return None
+    return round(torch.cuda.max_memory_allocated(0) / 2**30, 2)
 
 
 def load_model(spec: TrainSpec) -> Any:
@@ -616,6 +688,7 @@ def run_job(cfg: Any, job: Job) -> dict[str, Any]:
         job.out_dir,
         save_minutes=float(t.get("save_minutes", 20)),
         guard=guard,
+        max_minutes=t.get("max_minutes"),
     )
 
 

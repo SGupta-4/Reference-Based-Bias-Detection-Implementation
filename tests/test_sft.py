@@ -369,3 +369,40 @@ def test_adapter_init_depends_on_spec_seed_only(tmp_path):
     a = ad.read_adapter(tmp_path / "a" / "final").tensors
     b = ad.read_adapter(tmp_path / "b" / "final").tensors
     assert all(torch.equal(a[k], b[k]) for k in a)
+
+
+# --- throughput probe (M3c-T8) --------------------------------------------------------------
+
+
+def test_throughput_summary_skips_warmup_steps():
+    cb = sft.ThroughputCallback(skip_steps=2)
+    t0 = 1000.0
+    # steps 1-2 are warm-up (slow); steady steps 3..5 process 400 tokens per 2 s
+    for step, t, n in [(1, t0 + 10, 300), (2, t0 + 20, 600), (3, t0 + 22, 1000),
+                       (4, t0 + 24, 1400), (5, t0 + 26, 1800)]:  # fmt: skip
+        cb.clock = lambda t=t: t
+        cb.on_log(None, SimpleNamespace(global_step=step), None, logs={"num_tokens": n})
+    assert cb.summary() == {"tokens_per_second_steady": 200.0, "seconds_per_step_steady": 2.0}
+    assert sft.ThroughputCallback().summary()["tokens_per_second_steady"] is None
+    assert sft.project_hours(7_200_000, 3, 2000.0) == 3.0
+    assert sft.project_hours(1, 3, None) is None
+
+
+def test_time_limit_stops_training_and_done_has_projection(tmp_path):
+    """max_minutes=0 stops after the first optimizer step; done.json still carries the
+    throughput fields and a projection keyed by epoch count."""
+    done = sft.train_one(_spec(), make_rows(16), make_chat_tokenizer(), make_tiny_model(),
+                         tmp_path / "job", save_minutes=1e6, max_minutes=0)  # fmt: skip
+    assert done["global_step"] == 1
+    assert set(done["projected_hours"]) == {"2_epochs", "1_epochs"}
+    assert {"tokens_per_second_steady", "seconds_per_step_steady", "peak_mem_gib"} <= set(done)
+
+
+def test_full_run_projection_uses_steady_rate(tmp_path):
+    done = sft.train_one(_spec(epochs=2, per_device_batch=1, grad_accum=1), make_rows(12),
+                         make_chat_tokenizer(), make_tiny_model(), tmp_path / "job",
+                         save_minutes=1e6)  # fmt: skip
+    data = json.loads((tmp_path / "job" / "data.json").read_text())
+    tps = done["tokens_per_second_steady"]
+    assert tps and tps > 0
+    assert done["projected_hours"]["1_epochs"] == round(data["n_tokens"] / tps / 3600, 2)

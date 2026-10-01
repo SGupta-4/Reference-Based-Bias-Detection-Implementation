@@ -102,6 +102,7 @@ Entry: `run --stages ftdata,train` → `runner.STAGE_IMPLS["train"]` → `finetu
      - `trainer.train(resume_from_checkpoint=latest_checkpoint(job/checkpoints))`
      - writes `final/` (PEFT adapter, or fp16 full model), `train_log.json`, `done.json` {global_step, losses, resumed_from, tokens_per_second, scaler_skipped_steps}
 4. Stage outputs: every job's `final/` and `done.json` (directory hashes in the manifest).
+Throughput probe (M3c-T8, D-070): the same path with `train.max_steps`/`train.max_minutes` set; `ThroughputCallback` (steady tok/s from TRL's `num_tokens`) and `TimeLimitCallback` feed `done.json` {tokens_per_second_steady, peak_mem_gib, projected_hours}; `notebooks/m3c_probe.ipynb` tries batch layouts b4 → b2 → b1 on OOM.
 Skip condition: valid manifest; per job, `done.json`.
 Resume behaviour: a killed job restarts from its newest `checkpoints/checkpoint-N` (DC-13).
 Failure modes: `NonFiniteError` from the guard (B-001, D-065); `DataBuildError` if a chat template breaks the prompt prefix; a failed subprocess raises with its log tail.

@@ -276,3 +276,19 @@ IDs are sequential and never reused.
   - Kaggle: pending.
 - GPU-hours lost: included in B-015.
 - Linked commits and D-### entries: `ec87d99`; D-003, D-068; B-015
+
+## B-018 Feature: M3c-T8 throughput probe (Llama-3.1-8B QLoRA)
+- Status: In progress. CPU side done; the Kaggle run (`notebooks/m3c_probe.ipynb`) is pending.
+- How it was found or scoped: PLAN §7 M3c-T8; the user chose to run it before M3b (2026-10-01).
+- Reproduction command: CPU: `python -m pytest -q tests/test_sft.py -k "throughput or time_limit or projection"`; Kaggle: `notebooks/m3c_probe.ipynb`.
+- Hypotheses tried:
+  - `max_minutes=0` was falsy, so the time limit was silently dropped; caught by `test_time_limit_stops_training_and_done_has_projection` → now checked against `None`.
+  - Measuring throughput from `n_tokens × epochs_done / seconds` mixes warm-up and the longest-batch-first step into the rate → the steady rate comes from TRL's cumulative `num_tokens` over steps > 3 (`ThroughputCallback`).
+- Fix:
+  - `finetune.sft`: `ThroughputCallback`, `TimeLimitCallback`, `project_hours`, and `done.json` fields `tokens_per_second_steady`, `seconds_per_step_steady`, `peak_mem_gib` and `projected_hours`.
+  - `train.max_minutes` config key.
+  - `configs/m3c_probe_llama3.1-8b_b{4,2,1}.yaml` and `notebooks/m3c_probe.ipynb`.
+  - Decision rule fixed in D-070.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `102 passed, 10 deselected in 14.35s`, including the 3 new probe tests; all notebook code cells parse. Kaggle: pending.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-042, D-055, D-070

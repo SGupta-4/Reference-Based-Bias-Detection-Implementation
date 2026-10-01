@@ -1034,3 +1034,34 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: M3a used ≈ 0.6 session-h (two runs).
 - Paper deviation: smoke batch only (D-067).
 - Revisit-if: `train` schema bump; then re-run DC-07, DC-11 and DC-13 (ROLLBACK).
+
+## D-070 M3c-T8 throughput probe for Llama-3.1-8B QLoRA and its pre-registered decision rule (implements D-042, D-055)
+- Date: 2026-10-01 (written before any probe data)
+- Context: D-055 projected Tier 1 training at an assumed 350 tok/s per T4. At that rate every harmful run exceeds D-042's 9 h trigger. The user chose to run this probe before M3b (2026-10-01).
+- Options considered: probe one model now and the others in their own sessions; or probe all three Tier 1 models now (≈ 2 h of downloads plus probes).
+- Choice:
+  - **Probe** (`notebooks/m3c_probe.ipynb`, `configs/m3c_probe_llama3.1-8b_b{4,2,1}.yaml`):
+    - QLoRA on the real WildGuardMix splits, the same 8,000 ids per split as the full run.
+    - Unharmful on cuda:0 and harmful on cuda:1, in parallel as in production (D-003). Paper hyperparameters except `max_steps: 25`, `max_minutes: 20` and no checkpoint inside the window.
+    - Batch layouts are tried in order 4×8, 2×16, 1×32 (effective batch 32 in all), moving on only after a CUDA out-of-memory failure.
+    - `done.json` records:
+      - `tokens_per_second_steady`: Δ`num_tokens`/Δtime over logged steps > 3. These are non-pad tokens, the same count as `data.json`'s `n_tokens`.
+      - `seconds_per_step_steady` and `peak_mem_gib`.
+      - `projected_hours` = n_tokens × epochs / tokens_per_second_steady for 3 epochs and for 1.
+    - Only aggregate JSON is synced; probe adapters are not uploaded.
+  - **Decision rule** (per model, applied to Llama now):
+    1. **Batch layout:** the first of 4×8, 2×16, 1×32 that completes becomes that model's Tier 1 layout. The effective batch stays 32, so this is not a paper deviation.
+    2. **Epochs:**
+       - If the **harmful** run's `projected_hours["3_epochs"]` ≤ 9 h, the model trains for 3 epochs (App. C). The harmful run is the longer one and sets the session time, since u‖h run in parallel.
+       - Otherwise it trains for 1 epoch. That is D-042's pre-approved Q3 fallback; the 512-token option is excluded by D-055. A new D entry logs it as a paper deviation (App. C epochs).
+       - If even 1 epoch projects > 9 h, stop and ask the user.
+    3. If the measured rate differs from 350 tok/s by more than ±30 % (D-055 Revisit-if), PLAN §8's budget is re-baselined in the same D entry.
+  - Mistral-7B and Gemma-3-4B are decided by the same rule from their own probe at the start of their M3c session. For Gemma this is D-005's 50-step fp16 probe.
+- Why: The epoch choice and the week's budget split depend on a measured rate. Fixing the rule first keeps the choice independent of the outcome.
+- Tradeoff accepted:
+  - 25 steps (≈ 800 of 8,000 examples) under `group_by_length`'s random megabatches is a sample. Its error is assumed small next to the 9 h margin.
+  - Checkpoint saves (every 20 min in real runs) are excluded from the measurement; they are expected to cost < 1 %.
+  - Per-model epoch counts could differ across Tier 1 models; any difference is recorded.
+- Cost impact: ≈ 0.6–0.8 session-h (download ≈ 2 min, data selection ≈ 20 s, ≤ 20 min training per tried layout).
+- Paper deviation: no (the probe itself). The epoch fallback, if taken, gets its own D entry.
+- Revisit-if: the probe's two splits disagree by > 20 % in tok/s at similar lengths (suggests contention), or real runs drift > 15 % from the probe.
