@@ -38,10 +38,10 @@
 
 | Tag | Commit | Kaggle notebook (version) | Store commit (rbbd-artifacts, D-041) | Date |
 |---|---|---|---|---|
-| *(none yet — `m0-green` waits for the Kaggle probe run)* | | | | |
+| `m0-green` | `7d956c162e9c6dfec9872104c7951a67d0f9e1d4` | `00_probe.ipynb` (Kaggle version not reported; session `20261001T094200Z`, run S03) | `a3d5ae3a9bf9c2e3a557af9a82acff77c08b13d4` | 2026-10-01 |
 
 ## Pre-edit rollback targets
 
 | Date | Planned change | Rollback tag | Files expected to change | Namespaces invalidated | Outcome |
 |---|---|---|---|---|---|
-| 2026-09-30 | M0: first implementation of cli/config/runner/utils + notebooks (touches > 3 modules) | none yet — commit `2df82d9` (docs-only state before M0 code) | `src/rbbd/{cli,config,runner}.py`, `src/rbbd/utils/*`, `configs/{base,smoke}.yaml`, `notebooks/*`, `tests/*`, `.gitignore`, `pyproject.toml` untouched | none (no artifacts exist yet) | CPU checks green; Kaggle pending |
+| 2026-09-30 | M0: first implementation of cli/config/runner/utils + notebooks (touches > 3 modules) | none yet — commit `2df82d9` (docs-only state before M0 code) | `src/rbbd/{cli,config,runner}.py`, `src/rbbd/utils/*`, `configs/{base,smoke}.yaml`, `notebooks/*`, `tests/*`, `.gitignore`, `pyproject.toml` untouched | none (no artifacts exist yet) | Done: M0 green, tagged `m0-green` |

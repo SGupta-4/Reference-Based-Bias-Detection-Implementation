@@ -61,7 +61,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-036
 
 ## B-005 vLLM on T4 (Turing) fails or misbehaves
-- Status: Fixed by design pending verification — root cause localised 2026-10-01 (S02): vLLM's Triton LoRA kernels cannot be compiled for sm75. User chose merged weights on ephemeral disk (D-050); the M0 probe now tests that path.
+- Status: Fixed (worked around) — vLLM's Triton LoRA kernels cannot be compiled for sm75 (S02); generation uses merged weights on ephemeral disk (D-050), verified in S03 (D-051). The LoRA canary stays in the probe.
 - How it was found or scoped: Planning listed V1 unsupported, gemma3 fp16 refusal, LoRA (Triton) kernels on sm75, TP=2 NCCL hangs, no FlashAttention on sm75. M0 Kaggle run S01 (session `20261001T091905Z`) confirmed the first and last, and hit the LoRA one.
 - Reproduction command: `pytest -q -m gpu tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora` (or `python -m rbbd.cli probe --vllm`) on Kaggle 2× T4.
 - Hypotheses tried:
@@ -71,7 +71,8 @@ IDs are sequential and never reused.
 - Fix: generation no longer uses vLLM LoRA. Each α-checkpoint is merged in fp32, saved as fp16 to ephemeral disk, served by vLLM without LoRA, then deleted (D-050). Probe cases: Qwen TP=1 and TP=2 plain and merged; a vLLM-LoRA canary expected to fail.
 - Verification (S02, session `20261001T094200Z`): Qwen TP=1 fp16 no-LoRA ok; LoRA rank 16 TP=1, rank 32 TP=1, rank 32 TP=2 all fail at `construct` with `RuntimeError: PassManager::run failed` raised in `triton/backends/nvidia/compiler.py::make_llir` (`pm.run(mod)`). Not yet tested: TP=2 without LoRA.
 - GPU-hours lost: ≈ 0.1 (five failed cases).
-- Linked commits and D-### entries: D-021, D-031, D-047, D-048, D-049, D-050
+- Verification (S03, commit `7d956c1`): Qwen TP=1/TP=2 plain and merged all ok, merged temp dirs removed; `test_vllm_hello_tp1_tp2_merged` → `1 passed in 378.52s`.
+- Linked commits and D-### entries: D-021, D-031, D-047, D-048, D-049, D-050, D-051; commits `c5c554b`, `7d956c1`
 
 ## B-006 Benchmark package / data drift
 - Status: Open (pre-registered)
@@ -104,7 +105,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-019, D-029
 
 ## B-009 Feature: M0 environment probe, artifact store and pipeline skeleton
-- Status: In progress — DC-16 and the store round trip passed twice (S01, S02). The GPU test now checks the D-050 merged-weights path; one more probe run (S03) decides `m0-green`.
+- Status: Fixed — M0 complete, tagged `m0-green` on `7d956c1` (D-051).
 - How it was found or scoped: PLAN §7 M0 (tasks M0-T1…T7), with the Q1–Q6 answers (D-041–D-044).
 - Reproduction command: `ruff check src tests && pytest -q -m "not gpu"` (CPU); on Kaggle, `notebooks/00_probe.ipynb`.
 - Hypotheses tried:
@@ -125,4 +126,7 @@ IDs are sequential and never reused.
   - Kaggle S02 (`20261001T094200Z`, commit `c5c554b`): DC-16 PASS again; store PASS (commit `494d1593…`); Kaggle `ruff` → `All checks passed!`; Kaggle `pytest -q -m "not gpu"` → `52 passed, 7 deselected in 2.63s`; `pip check` conflicts only among unused preinstalled packages (D-049); vLLM GPU test still FAIL (LoRA, B-005).
   - Diagnostics change (D-048): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `52 passed, 7 deselected in 0.27s`.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-041, D-042, D-043, D-044, D-045, D-046, D-047, D-048, D-049, D-050
+  - Kaggle S03 (commit `7d956c1`): DC-16 PASS; store PASS (commit `a3d5ae3a…`); `pytest -q -m gpu …::test_vllm_hello_tp1_tp2_merged` → `1 passed in 378.52s`.
+  - Local at close: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `53 passed, 7 deselected`; `grep -rn "PLACEHOLDER(M0)" tests` → no output.
+- GPU-hours lost (B-009 total): ≈ 0.1 (failed LoRA cases).
+- Linked commits and D-### entries: D-041–D-051; commits `2df82d9`, `93dbe07`, `c5c554b`, `e73077d`, `7d956c1`

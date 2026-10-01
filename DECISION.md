@@ -694,3 +694,21 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: per 8B checkpoint ≈ 1–2 min merge + write (16 GB to `/tmp`) and ≈ 2–3 min engine start, ≈ +3–5 min each → ≈ +1.5–2 session-h across Tier 1 and ≈ +0.5 h across Tier 2. PLAN §8 contingency (≈ 7 h for Tier 1) absorbs it. Ephemeral disk peak ≈ 16 GB (Llama/Mistral fp16) or ≈ 17 GB (Gemma-3-4B fp32).
 - Paper deviation: no (the paper does not name its generation engine).
 - Revisit-if: the LoRA canary starts passing, or the per-session ephemeral disk limit turns out to be below ~20 GB.
+
+## D-051 M0 closed: S03 verifies the merged-weights path (D-050) and all M0 checks
+- Date: 2026-10-01
+- Context: Kaggle run S03 at commit `7d956c1` (`notebooks/00_probe.ipynb`). The kernel was reused from S02, so `RBBD_SESSION_ID` stayed `20261001T094200Z`; vLLM log timestamps (10:09–10:15) and the new store commit show it is a fresh run.
+- Observed (facts):
+  - Qwen2.5-0.5B fp16 plain on TP=1 (41.5 s) and **TP=2** (59.2 s) build and generate; greedy texts identical across TP.
+  - Merged path (D-050): random rank-32 LoRA folded into fp16 weights in 4.6–5.0 s, written to `/tmp/rbbd_probe/<case>`, served by vLLM on TP=1 (47.8 s) and TP=2 (66.7 s); `merged_dir_removed: true` for both.
+  - The vLLM-LoRA canary still fails at `construct` with Triton `PassManager::run failed` (as expected).
+  - Gemma-3-1B fp16 and fp32 reproduce S02's greedy outputs exactly (3/4 prompts identical across dtypes).
+  - `pytest -q -m gpu tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_merged` → `1 passed in 378.52s`.
+  - DC-16 passed for the third time; store round trip ok (store commit `a3d5ae3a9bf9c2e3a557af9a82acff77c08b13d4`).
+- Options considered: n/a (facts).
+- Choice: Tag `m0-green` on `7d956c1`, the exact commit Kaggle validated (DONE M0 row: DC-01, DC-02, DC-10 unit, DC-15, DC-16, DC-19 all pass). Notebooks should restart the kernel between runs so each run gets its own session id.
+- Why: The milestone tag must point at validated code.
+- Tradeoff accepted: none.
+- Cost impact: M0 used ≈ 1.0 session-h across S01–S03, within the 1.0 h budget.
+- Paper deviation: no.
+- Revisit-if: n/a.
