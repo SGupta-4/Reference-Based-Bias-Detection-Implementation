@@ -26,8 +26,9 @@ IDs are sequential and never reused.
 - Fix: planned — D-005 (Gemma fp32 inference; fp32-compute fallback in training), D-006 (guard).
 - Verification: guard test passes (DC-09); the Gemma probe outcome is recorded in D-005.
 - Note 2026-10-01: vLLM 0.10.1.1 accepted Gemma-3-1B in fp16 and generated tokens (D-048). Whether those outputs are numerically sound is checked by comparing greedy fp16 and fp32 texts in the M0 rerun; until then D-005 (fp32 for Gemma inference) stands.
+- Note 2026-10-01 (S02): greedy Gemma-3-1B fp16 vs fp32 agree on 3/4 prompts, diverge after ~8 tokens on the 4th; fp16 text is coherent. D-005 stays until the Gemma-3-4B check in M2-T4 (D-049).
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-005, D-006, D-048
+- Linked commits and D-### entries: D-005, D-006, D-048, D-049
 
 ## B-002 Padding-side / pooling errors
 - Status: Open (pre-registered)
@@ -60,7 +61,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-036
 
 ## B-005 vLLM on T4 (Turing) fails or misbehaves
-- Status: Open — reproduced 2026-10-01 (LoRA engines fail to build); diagnostic rerun pending.
+- Status: Open — root cause localised 2026-10-01 (S02): vLLM's Triton LoRA kernels cannot be compiled for sm75. Awaiting the user's choice of generation path for α-checkpoints.
 - How it was found or scoped: Planning listed V1 unsupported, gemma3 fp16 refusal, LoRA (Triton) kernels on sm75, TP=2 NCCL hangs, no FlashAttention on sm75. M0 Kaggle run S01 (session `20261001T091905Z`) confirmed the first and last, and hit the LoRA one.
 - Reproduction command: `pytest -q -m gpu tests/gpu/test_generate_gpu.py::test_vllm_hello_tp1_tp2_lora` (or `python -m rbbd.cli probe --vllm`) on Kaggle 2× T4.
 - Hypotheses tried:
@@ -68,9 +69,9 @@ IDs are sequential and never reused.
   - Gemma 3 fp16 refused: **not** the case in 0.10.1.1 — the engine built and generated (see B-001 for numerics).
   - LoRA kernels on sm75: both Qwen2.5-0.5B rank-32 LoRA cases (TP=1, TP=2) failed in `LLM(...)` with `RuntimeError: PassManager::run failed` after ~55–67 s. The message comes from Triton's MLIR compiler, and vLLM's LoRA (punica) kernels are Triton kernels compiled during the profile run, so LoRA is the leading suspect. Not yet isolated: there was no Qwen case without LoRA, and only the exception message (no traceback) was kept.
 - Fix: in progress — the probe now records the failing stage and a traceback tail and adds Qwen TP=1 fp16 without LoRA and with rank-16 LoRA (D-048). If LoRA is confirmed as the cause, the decision on how M5 generates the α-checkpoints is put to the user (merged weights on ephemeral disk vs a different vLLM/Triton pin vs HF generate).
-- Verification: pending the rerun.
-- GPU-hours lost: ≈ 0.05 (two failed cases ≈ 2 min).
-- Linked commits and D-### entries: D-021, D-031, D-047, D-048
+- Verification (S02, session `20261001T094200Z`): Qwen TP=1 fp16 no-LoRA ok; LoRA rank 16 TP=1, rank 32 TP=1, rank 32 TP=2 all fail at `construct` with `RuntimeError: PassManager::run failed` raised in `triton/backends/nvidia/compiler.py::make_llir` (`pm.run(mod)`). Not yet tested: TP=2 without LoRA.
+- GPU-hours lost: ≈ 0.1 (five failed cases).
+- Linked commits and D-### entries: D-021, D-031, D-047, D-048, D-049
 
 ## B-006 Benchmark package / data drift
 - Status: Open (pre-registered)
@@ -121,7 +122,7 @@ IDs are sequential and never reused.
     - DC-16 **PASS**: 2× Tesla T4, compute cap 7.5, 15,360 MiB each; `bf16_supported: false`; `requirements.ok: true`; RAM 31 GiB; `/kaggle/working` 20G; `access_all_ok: true` (no failures).
     - Store round trip **PASS**: `ok: true`, `private: true`, repo type `model`, commit `594c0470b4d638349cdf9f8a6d6bbaf6fc3b4f45`.
     - vLLM GPU test **FAIL**: Qwen LoRA cases `RuntimeError: PassManager::run failed` (B-005); Gemma fp16 and fp32 cases ok.
-    - Not yet reported: `pip check`, Kaggle `pytest -q -m "not gpu"` and `ruff` outputs.
+  - Kaggle S02 (`20261001T094200Z`, commit `c5c554b`): DC-16 PASS again; store PASS (commit `494d1593…`); Kaggle `ruff` → `All checks passed!`; Kaggle `pytest -q -m "not gpu"` → `52 passed, 7 deselected in 2.63s`; `pip check` conflicts only among unused preinstalled packages (D-049); vLLM GPU test still FAIL (LoRA, B-005).
   - Diagnostics change (D-048): `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `52 passed, 7 deselected in 0.27s`.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-041, D-042, D-043, D-044, D-045, D-046, D-047, D-048

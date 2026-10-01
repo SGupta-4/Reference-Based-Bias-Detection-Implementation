@@ -656,3 +656,21 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: ≈ 0.2 session-h (6 cases × ~1 min + install).
 - Paper deviation: no.
 - Revisit-if: the rerun shows the no-LoRA Qwen case also failing (then the problem is not LoRA-specific).
+
+## D-049 Kaggle S02 diagnostic results: vLLM LoRA is unusable on T4; Gemma fp16 numerically plausible; pins co-install (amends D-048)
+- Date: 2026-10-01
+- Context: Diagnostic rerun of `notebooks/00_probe.ipynb` (session `20261001T094200Z`, commit `c5c554b`), per D-048.
+- Observed (facts):
+  - Qwen2.5-0.5B **without LoRA** (TP=1, fp16) builds and generates coherent greedy text ("Paris. It is the largest city…").
+  - **Every LoRA case fails** (rank 16 and 32, TP=1 and TP=2) in `LLM(...)` with `RuntimeError: PassManager::run failed`, raised from `triton/backends/nvidia/compiler.py::make_llir` (`pm.run(mod)`), i.e. Triton cannot lower vLLM's LoRA kernels to LLVM IR for sm75. The failure is rank-independent. vLLM 0.10.1.1 is built on torch 2.7.1, which pins its Triton version, so this cannot be fixed within the current pins.
+  - Gemma-3-1B greedy: fp16 and fp32 agree on 3 of 4 prompts and diverge after ~8 tokens on the fourth ("vast, blue ocean" vs "vast, shimmering ocean"); fp16 output is coherent, with no sign of overflow garbage.
+  - `pip check`: every conflict is between packages preinstalled on the Kaggle image (ydata-profiling, gradio, google-colab, google-adk, bigframes, dopamine-rl, moviepy) and versions in our resolve (matplotlib 3.10.6, pyyaml 6.0.2, pandas 2.3.3, starlette). None involves torch, vLLM, transformers, PEFT, TRL, accelerate or bitsandbytes, and none of those packages is used here. The train and bench extras co-install, so no separate venv is needed (D-031 stands).
+  - Kaggle runs Python 3.12 (`/usr/local/lib/python3.12`). On Kaggle: `ruff check` → `All checks passed!`; `pytest -q -m "not gpu"` → `52 passed, 7 deselected in 2.63s`.
+  - Store round trip passed again (commit `494d159353cebd5a3fafff21583da49d7ba4d787`).
+- Options considered: n/a (facts). The resulting choice of how M5 generates α-checkpoints without vLLM LoRA is a separate decision put to the user.
+- Choice: Record the facts. D-005 (Gemma fp32 for inference) stays: one divergent prompt out of four on the 1B model is not the "match within tolerance" its Revisit-if requires; the 4B fp16 check in M2-T4 decides it.
+- Why: Evidence for the pending generation-path decision (B-005).
+- Tradeoff accepted: none.
+- Cost impact: S02 ≈ 0.3 session-h.
+- Paper deviation: no.
+- Revisit-if: a vLLM/Triton release fixes sm75 LoRA lowering.
