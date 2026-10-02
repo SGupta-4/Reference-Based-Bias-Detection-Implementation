@@ -1034,3 +1034,224 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: M3a used ≈ 0.6 session-h (two runs).
 - Paper deviation: smoke batch only (D-067).
 - Revisit-if: `train` schema bump; then re-run DC-07, DC-11 and DC-13 (ROLLBACK).
+
+## D-070 M3c-T8 throughput probe for Llama-3.1-8B QLoRA and its pre-registered decision rule (implements D-042, D-055)
+- Date: 2026-10-01 (written before any probe data)
+- Context: D-055 projected Tier 1 training at an assumed 350 tok/s per T4. At that rate every harmful run exceeds D-042's 9 h trigger. The user chose to run this probe before M3b (2026-10-01).
+- Options considered: probe one model now and the others in their own sessions; or probe all three Tier 1 models now (≈ 2 h of downloads plus probes).
+- Choice:
+  - **Probe** (`notebooks/m3c_probe.ipynb`, `configs/m3c_probe_llama3.1-8b_b{4,2,1}.yaml`):
+    - QLoRA on the real WildGuardMix splits, the same 8,000 ids per split as the full run.
+    - Unharmful on cuda:0 and harmful on cuda:1, in parallel as in production (D-003). Paper hyperparameters except `max_steps: 25`, `max_minutes: 20` and no checkpoint inside the window.
+    - Batch layouts are tried in order 4×8, 2×16, 1×32 (effective batch 32 in all), moving on only after a CUDA out-of-memory failure.
+    - `done.json` records:
+      - `tokens_per_second_steady`: Δ`num_tokens`/Δtime over logged steps > 3. These are non-pad tokens, the same count as `data.json`'s `n_tokens`.
+      - `seconds_per_step_steady` and `peak_mem_gib`.
+      - `projected_hours` = n_tokens × epochs / tokens_per_second_steady for 3 epochs and for 1.
+    - Only aggregate JSON is synced; probe adapters are not uploaded.
+  - **Decision rule** (per model, applied to Llama now):
+    1. **Batch layout:** the first of 4×8, 2×16, 1×32 that completes becomes that model's Tier 1 layout. The effective batch stays 32, so this is not a paper deviation.
+    2. **Epochs:**
+       - If the **harmful** run's `projected_hours["3_epochs"]` ≤ 9 h, the model trains for 3 epochs (App. C). The harmful run is the longer one and sets the session time, since u‖h run in parallel.
+       - Otherwise it trains for 1 epoch. That is D-042's pre-approved Q3 fallback; the 512-token option is excluded by D-055. A new D entry logs it as a paper deviation (App. C epochs).
+       - If even 1 epoch projects > 9 h, stop and ask the user.
+    3. If the measured rate differs from 350 tok/s by more than ±30 % (D-055 Revisit-if), PLAN §8's budget is re-baselined in the same D entry.
+  - Mistral-7B and Gemma-3-4B are decided by the same rule from their own probe at the start of their M3c session. For Gemma this is D-005's 50-step fp16 probe.
+- Why: The epoch choice and the week's budget split depend on a measured rate. Fixing the rule first keeps the choice independent of the outcome.
+- Tradeoff accepted:
+  - 25 steps (≈ 800 of 8,000 examples) under `group_by_length`'s random megabatches is a sample. Its error is assumed small next to the 9 h margin.
+  - Checkpoint saves (every 20 min in real runs) are excluded from the measurement; they are expected to cost < 1 %.
+  - Per-model epoch counts could differ across Tier 1 models; any difference is recorded.
+- Cost impact: ≈ 0.6–0.8 session-h (download ≈ 2 min, data selection ≈ 20 s, ≤ 20 min training per tried layout).
+- Paper deviation: no (the probe itself). The epoch fallback, if taken, gets its own D entry.
+- Revisit-if: the probe's two splits disagree by > 20 % in tok/s at similar lengths (suggests contention), or real runs drift > 15 % from the probe.
+
+## D-071 Llama-3.1-8B Tier 1 trains for 1 epoch at batch 2×16: D-070 rule applied to the measured probe (amends D-003, D-042, D-055; PLAN §8)
+- Date: 2026-10-01
+- Context: Probe run of `notebooks/m3c_probe.ipynb` on Kaggle 2×T4 (session `20261001T171846Z`, commit `c44ecaf`). Store commits: manifests `cf24d67a`, ftdata `4b9d42b4`, env `1500ad17`. Splits are the same 8,000 ids per split as the full run.
+- Observed (facts):
+  - **Batch 4×8:** `torch.OutOfMemoryError` after 131 s. It happened in TRL's token-accuracy metric (`outputs.logits[..., :-1, :].contiguous()`, +1.96 GiB) with 12.94 GiB already in use on a 14.56 GiB T4.
+  - **Batch 2×16:** completed. The 20-minute cap stopped it at 9 steps (unharmful) and 8 steps (harmful); no scaler-skipped steps.
+
+    | Split | n_tokens (1 epoch) | Truncated | Dropped | Steady tok/s | s/step | Peak GiB | Projected 3 ep | Projected 1 ep |
+    |---|---|---|---|---|---|---|---|---|
+    | unharmful | 3,375,072 | 319 | 0 | 204.7 | 116.7 | 9.91 | 13.74 h | 4.58 h |
+    | harmful | 4,955,020 | 965 | 0 | 214.8 | 149.6 | 9.91 | 19.22 h | 6.41 h |
+
+  - The two splits agree within 5 % in tok/s: no sign of contention (D-070 Revisit-if not met).
+  - No example's prompt filled the 1,024-token window, so D-055 item 4's drop path removes nothing for Llama.
+- Choice (mechanical application of D-070):
+  1. **Batch layout** 2 × grad-acc 16 (effective 32, App. C), written into `configs/tier1_llama3.1-8b.yaml`.
+  2. **Epochs: 1** for both Llama endpoints. The harmful run projects 19.22 h at 3 epochs (> 9 h) and 6.41 h at 1 epoch (≤ 9 h). This is D-042's pre-approved Q3 fallback; the 512-token option is excluded by D-055. The linear schedule and 3 % warm-up now span one epoch.
+  3. **Budget re-baseline:** the measured rate (≈ 210 tok/s) is −39 % against the assumed 350 tok/s (D-055 Revisit-if: ±30 %).
+     - Llama ≈ 6.6 session-h: 6.41 h training plus ≈ 10 min of load, data and checkpoint overhead.
+     - Mistral-7B (1 epoch, ≈ 5.28 M harmful tokens) ≈ 6.8 h if it runs at Llama's rate, probably less (smaller model and 32k vocabulary).
+     - Gemma-3-4B: unknown until its D-005 probe. If fp16 compute holds, roughly 3–4 h. If it needs fp32 compute (likely, given D-062), it may exceed 9 h even at 1 epoch, and D-070 then requires asking the user.
+     - Tier 1 training ≈ 17–21 h if Gemma stays ≤ 9 h; D-055 had 11.5–14 h at 1 epoch. The core total moves from ≈ 70 to ≈ 77–81 session-h (15 % contingency included). At 26 usable h/week that is about 3 weeks; D-042's cut order applies if a week overruns.
+- Why: Pre-registered rule (D-070) and pre-approved fallback (D-042/Q3).
+- Tradeoff accepted:
+  - Llama's endpoints see 1/3 of the paper's training passes, so the u–h gap may be smaller than in the paper. ΔB and the benchmark deltas are computed on the same endpoints, so the correlation test stays internally consistent.
+  - Tier 2 keeps 3 epochs (small models, D-009), so tiers differ in epochs.
+- Cost impact: Llama training 6.6 h instead of 19.4 h at 3 epochs; the probe cost ≈ 0.6 session-h.
+- Paper deviation: **yes**, App. C epochs (3 → 1) for Llama-3.1-8B, plus the batch layout (no deviation in effective batch).
+- Revisit-if: real Llama training drifts > 15 % from the projection (D-070), or the weekly quota grows enough to afford 3 epochs (≈ +12.8 h).
+
+## D-072 M3b Tier 2 training design and the pre-registered session rule (implements D-008, D-009, D-033; amends D-041 store path, D-067)
+- Date: 2026-10-01 (written before any Tier 2 GPU data)
+- Context: M3b trains Qwen2.5-0.5B (full s0, LoRA s0, full s1, full s2) and Llama-3.2-1B (full s0, LoRA s0), each u‖h on the two T4s, at 3 epochs (Tier 2 keeps App. C epochs, D-071).
+  - Full FT of a 1.2B model holds fp32 masters, gradients and 8-bit optimizer state (≈ 12.4 GB, D-009). Its trainer checkpoints are ≈ 7.5 GB per job.
+  - Tier 2 throughput is unmeasured.
+  - Llama-3.2-1B ties `lm_head` to `embed_tokens`.
+- Choices:
+  1. **Batch-layout fallback:** `train.batch_layouts` (per regime) lists [b, g] pairs with b × g = 32; Tier 2 uses 4×8 → 2×16 → 1×32.
+     - Each layout has its own `train_key` and job directory.
+     - A CUDA OOM writes `oom.json` there and `run_job` retries the next layout with a freshly loaded model; any other error propagates.
+     - The job resolves to the first layout with `done.json`. The effective batch is unchanged (App. C).
+     - `group_by_length` puts the longest batch first, so an OOM appears in the first steps.
+  2. **Checkpoints:** `train.checkpoint_root: {full: ephemeral}` writes full-FT trainer checkpoints to `<ephemeral>/rbbd_ckpt/<slug>/<train_key>`. A crash can then resume within the session but not across sessions.
+     - The finals stay in `/kaggle/working`.
+     - LoRA checkpoints stay in the job directory.
+     - Train subprocesses set `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` (fragmentation only; results unchanged).
+  3. **Seeds:** `train.seeds_by_regime` gives the seeds ablation (D-033) to full FT only. Jobs run **seed-major** (every regime at seed 0 first), so a short session loses extra seeds before core endpoints (D-042 cut order).
+  4. **Store:**
+     - With `train.sync_each_pair: true`, each finished u‖h pair is uploaded right away (`sft.sync_jobs`). Failures are logged, not raised.
+     - A new session runs `cli restore --path train/<slug>` (`HFStore.download_dir`, private check first) to bring back finished jobs, which the stage then skips.
+     - Full-FT endpoints are stored at their job path `train/<slug>/full/<split>/seed<k>/<train_key>/final/` in the private repo. This replaces D-041's `ckpt_private/tier2/…` layout: one layout for every regime.
+  5. **Tied weights:** `interpolate.apply_alpha` accepts endpoints without a tied alias (`lm_head.weight`), writes the stored tensor, and the alias follows. Any other missing key still raises.
+  6. **Session probe and rule (pre-registered):**
+     - Each M3b session first runs `configs/m3b_probe_<model>.yaml`: full FT, u‖h, 30 steps or 8 min, separate `*-probe` slug, never synced.
+     - **Bound** = the harmful probe's `projected_hours["3_epochs"]` × pending u‖h pairs. LoRA and the unharmful split are bounded by the harmful full-FT rate.
+     - The long run starts only if the bound is ≤ 11 h (12 h session minus setup, tests and sync).
+     - Otherwise the notebook stops and I ask the user. Options would include D-042 cut item 2 (one extra seed instead of two) or a cross-session plan.
+  7. **DC-07 on real Tier 2 endpoints:** `test_real_full_endpoints` (exact α ∈ {0, 1} on the GPU model, finite α = 0.5 forward) and `test_real_tier2_lora_endpoints`, selected by `RBBD_M3B_CONFIG`.
+  8. **Execution:** `notebooks/m3b_train.ipynb` with `MODEL` = `qwen2.5-0.5b` (session 1) or `llama3.2-1b` (session 2), run as *Save & Run All* so it needs no open browser.
+- Why: The plan fits inside one session per model, survives a dead session at the cost of at most one pair, and never fills `/kaggle/working`.
+- Tradeoff accepted: A crash mid-pair in full FT restarts that pair from step 0 in the next session (its checkpoints were ephemeral). The probe's 8 minutes are a small sample.
+- Cost impact: ≈ 0.2 h per session for probe and setup. Training per D-055 ≈ 12.3 session-h for core Tier 2; the probes replace that estimate.
+- Paper deviation: no (Tier 2 is already an analogue, D-009).
+- Revisit-if: a session bound exceeds 11 h, or a full-FT layout fails even at 1×32 (then D-009's FSDP fallback).
+
+## D-073 M3b session 1 (Qwen2.5-0.5B) results: all four u‖h pairs trained; DC-07 passes on real Tier 2 endpoints
+- Date: 2026-10-02
+- Context: `notebooks/m3b_train.ipynb` with `MODEL = "qwen2.5-0.5b"`, run as Save & Run All on Kaggle 2×T4. Commit `5d43021`, session `20261001T181946Z`. Store commits: last per-pair upload `3439e223` (full s2), `train/qwen2.5-0.5b-it` `2aab01a0`, env `56acc0c2`.
+- Observed (facts):
+  - **Probe (D-072 rule):** full FT at layout 4×8 (no OOM), 2,177 / 2,187 tok/s (harmful / unharmful), peak 11.28 GiB.
+    - Harmful projection 1.89 h at 3 epochs × 4 pending pairs → bound **7.56 h ≤ 11 h → proceed**.
+  - **Training:** `stage train done in 30396.6 s` (8.44 h); every job ran 750 steps (8,000 / 32 × 3 epochs), with 0 scaler-skipped steps and no OOM markers.
+
+    | Job | train loss | final loss | steady tok/s | peak GiB | s (process) |
+    |---|---|---|---|---|---|
+    | full u s0 / s1 / s2 | 1.3058 / 1.3050 / 1.3044 | 0.388 / 0.369 / 0.432 | 1,933 / 1,942 / 1,934 | 11.28 | 5,208 / 5,174 / 5,204 |
+    | full h s0 / s1 / s2 | 1.8250 / 1.8238 / 1.8238 | 0.638 / 0.592 / 0.669 | 1,985 / 1,986 / 1,977 | 11.28 | 7,500 / 7,493 / 7,526 |
+    | LoRA u s0 | 1.5687 | 0.839 | 1,937 | 8.20 | 5,185 |
+    | LoRA h s0 | 2.0885 | 1.568 | 1,957 | 8.20 | 7,592 |
+
+  - **Projection vs actual:** each harmful full-FT run took 2.08 h against the probe's 1.89 h (+10 %), within D-070's 15 % drift bound. The session total of 8.44 h stayed under the 11 h bound.
+  - **DC-07 (GPU, `2 passed`):**
+    - Full FT: W(α=1) and W(α=0) are `torch.equal` to the endpoints over 290 tensors; max |W_u − W_h| = 0.0709; the α=0.5 forward is finite.
+    - LoRA: 168 modules, max relative linearity error 5.4e-8.
+  - **Disk:** `/kaggle/working` 8.4 of 20 GB.
+  - **Seeds:** the seed-to-seed spread in train loss is ≤ 0.0014 (data order only; full FT has no random init), while final-step losses differ by up to 0.08.
+- Choice: The Qwen half of M3b is complete. `m3b-green` waits for session 2 (Llama-3.2-1B).
+- Why: Every M3b check for this model passes with stated outputs.
+- Tradeoff accepted: The smoke config shares the slug `qwen2.5-0.5b-it`, so the restored tree `train/qwen2.5-0.5b-it/lora/` also holds the 24-step smoke endpoints (schema v1 `e53d…`/`f121…` and v2 `aa62…`/`c6e3…`). Jobs resolve by `train_key`, so nothing mixes them up. M4 must locate checkpoints through `plan_jobs`, never by globbing (logged as B-020).
+- Cost impact: 8.44 h training + ≈ 0.3 h setup, probe, tests and sync ≈ 8.8 session-h, against D-055's ≈ 5 h estimate for Qwen. The measured cost replaces it.
+- Paper deviation: no (Tier 2 analogue, D-009).
+- Revisit-if: session 2's probe bound exceeds 11 h.
+
+## D-074 Batch-layout fallback relaunches a fresh process per layout (refines D-072 item 1)
+- Date: 2026-10-02
+- Context: M3b session 2 (Llama-3.2-1B probe, commit `d4bbe2b`, session `20261002T042125Z`) failed about 60 s after launch (B-021). The stage then crashed with `FileNotFoundError` reading the log of the job's *resolved* layout directory, which hid the real error.
+  - The in-process fallback stored the OOM exception in `last_error`. Its traceback frames keep the trainer, fp32 weights, gradients and optimizer state alive, so `del model; empty_cache()` cannot free them, and the next layouts start on an almost-full GPU.
+  - 1B full FT needs ≈ 11.5 GiB (fp32 weights + grads + 8-bit Adam) before activations, on a 14.56 GiB T4. Whether 2×16 or 1×32 fits is exactly what a clean retry must answer.
+- Options considered: free memory harder in-process (drop the traceback, `gc.collect`); or one layout per process.
+- Choice: one layout per process.
+  - `cli train-one` calls `run_job(single_attempt=True)`. On a CUDA OOM it writes `oom.json` and exits with code 75 (`sft.OOM_EXIT`).
+  - `_run_parallel` relaunches that job on the same GPU while it has an untried layout. Any other non-zero exit, or an OOM with no layout left, fails the stage.
+  - Each job logs to one file, `job.log_path` = `<first layout dir>/train.log`, with a header line per launch. The failure report always shows the real error.
+  - The M3b notebook prints every probe job's log tail on failure.
+  - In-process retries remain only for inline (CPU) runs.
+- Why: A fresh CUDA context is the only guaranteed way to release a failed trainer's memory.
+- Tradeoff accepted: Each relaunch reloads the model and data (≈ 30–60 s for 1B).
+- Cost impact: ≤ 2 min per fallback. Session 2's failed attempt cost ≈ 0.1 session-h.
+- Paper deviation: no.
+- Revisit-if: 1×32 also runs out of memory for 1B full FT. Then D-009's FSDP fallback, or dropping TRL's per-step logits metrics (≈ 0.5–1 GiB), becomes the next step and gets its own D entry.
+
+## D-075 M3b session 2 (Llama-3.2-1B) results and M3b closed: `m3b-green` = `4a43b15`
+- Date: 2026-10-02
+- Context: `notebooks/m3b_train.ipynb` with `MODEL = "llama3.2-1b"`, Save & Run All on Kaggle 2×T4. Commit `4a43b15`, session `20261002T063404Z`, wall-clock 34,813 s (9.67 h).
+  - Store commits: per-pair uploads `e20cb635`/`e568ce32` (full) and `1a7bf584`/`a8f167db` (LoRA); end-of-session sync of manifests and ftdata `f554146e`.
+  - Session 1 (Qwen, `5d43021`, D-073) used the same training code path. B-021/B-022 changed only the OOM relaunch, logging and notebooks, and no `train_key` changed, so its endpoints stand.
+- Observed (facts):
+  - **Secrets:** `{'HF_TOKEN': True}`. `restore` found 0 files (first successful run for this model).
+  - **Probe (D-072):** fell back to batch 1×32. Harmful 764.5 tok/s, unharmful 832.9 tok/s, peak 12.93 GiB. Harmful projection 5.40 h × 2 pairs → bound **10.8 h ≤ 11 h → proceed**.
+  - **Layout fallback (B-021 fix, Kaggle-verified):**
+    - Full FT 4×8 OOMed ("Tried to allocate 1.96 GiB … 13.29 GiB in use").
+    - 2×16 OOMed ("998 MiB … 13.6 GiB in use").
+    - Each relaunch was a fresh process on the same GPU (06:53:57 → 06:54:47/52 → 06:56:37 / 06:59:52). **1×32 fit**, peak 12.93 GiB.
+    - LoRA fit at 4×8 (peak 8.64 GiB).
+  - **Training:** `stage train done in 33305.1 s` (9.25 h); 750 steps each; 0 scaler-skipped steps.
+
+    | Job | layout | train loss | final loss | steady tok/s | s (process) |
+    |---|---|---|---|---|---|
+    | full u s0 | 1×32 | 1.0290 | 0.195 | 708.9 | 14,295 |
+    | full h s0 | 1×32 | 1.4982 | 0.272 | 721.3 | 20,632 |
+    | LoRA u s0 | 4×8 | 1.3680 | 0.713 | 1,430.1 | 7,093 |
+    | LoRA h s0 | 4×8 | 1.8768 | 1.208 | 1,229.8 | 12,127 |
+
+  - **Projection vs actual:** harmful full FT 5.73 h vs 5.40 h projected (+6 %). The session's 9.25 h of training stayed under the 10.8 h bound.
+  - **DC-07 (GPU, `2 passed`):**
+    - Full FT: W(α=1)/W(α=0) are `torch.equal` to the endpoints over the 146 stored tensors; the tied `lm_head` alias was handled. max |W_u − W_h| = 0.0911; the α=0.5 forward is finite.
+    - LoRA: 112 modules, max relative linearity error 5.3e-8.
+  - **Disk:** `/kaggle/working` 9.7 of 20 GB.
+- M3b DONE checks (DONE.md row M3: DC-01, 02, 07, 09, 11, 13, 15, 19):
+  - **DC-01:** `ruff check src tests` → `All checks passed!`.
+  - **DC-02:** `python -m pytest -q -m "not gpu"` → `113 passed, 12 deselected in 87.35s`.
+  - **DC-07:** passes on real Tier 2 endpoints for both models (D-073, above).
+  - **DC-09 (training):** guard tests pass on CPU; every Tier 2 run had 0 skipped steps.
+  - **DC-11 (through train):** M3a (D-069).
+  - **DC-13:** GPU resume in M3a (D-069). Full-FT resume is bit-identical on CPU (`test_full_resume_after_kill_is_bit_identical`).
+  - **DC-15:** docs in each commit. **DC-19:** `grep -rn "PLACEHOLDER(M3)" tests` → no output.
+- Choice: M3b is green. Tag `m3b-green` on `4a43b157c7d0c99c6cdd8ce9bc12a6d7e38627a4`, the latest commit run on Kaggle, which covers all M3b code.
+- Why: Every M3b check passes with its stated output.
+- Tradeoff accepted:
+  - Llama-3.2-1B full FT trains at per-device batch 1 (effective 32, App. C), slower than Qwen (≈ 715 vs 1,960 tok/s).
+  - Session 2 used 9.67 h of a 12 h session.
+- Cost impact: M3b total ≈ 8.8 h (Qwen) + 9.7 h (Llama-1B) + ≈ 0.3 h of failed runs (B-021, B-022) ≈ 18.8 session-h; D-055 estimated 12.3. Tier 2's measured cost replaces that estimate in PLAN §8 (≈ +6.5 h).
+- Paper deviation: no (Tier 2 analogue, D-009).
+- Revisit-if: a `train` schema bump (ROLLBACK: re-run DC-07, DC-11, DC-13).
+
+## D-076 M3c preparation: pre-registered Mistral/Gemma rules, runtime overrides, activation monitor, Gemma LoRA scope (implements D-005, D-070; refines D-003)
+- Date: 2026-10-02 (written before any Mistral or Gemma training data)
+- Context: M3c trains the Tier 1 QLoRA endpoints, one model per session:
+  - Llama-3.1-8B: already decided by D-071 (batch 2×16, 1 epoch, 6.41 h).
+  - Mistral-7B: needs its own D-070 probe.
+  - Gemma-3-4B: needs D-005's fp16 training probe first; M2 found fp16 *inference* all-NaN (D-062).
+  - These decisions are known only at run time, inside the session.
+  - Gemma-3-4B loads as `Gemma3ForConditionalGeneration`, whose SigLIP vision tower also has `q_proj`/`k_proj`/`v_proj` modules.
+- Choices:
+  1. **Runtime overrides:** `config.load(path, overrides)` and `--set a.b.c=value` (YAML-parsed) on `run`, `status` and `train-one`.
+     - Overrides apply before hashing, so the config hash and manifests record them.
+     - The train stage forwards them to every `train-one` subprocess.
+     - Decisions are passed as `train.epochs=1` and `train.compute=fp32`. The model's canonical YAML is updated to the same values when the session is recorded, so later stages find the same `train_key`s.
+  2. **Mistral-7B rule** (D-070, unchanged): `configs/m3c_probe_mistral-7b.yaml` runs QLoRA u‖h, 25 steps or 20 min, layouts 4×8 → 2×16 → 1×32.
+     - 3 epochs if the harmful projection is ≤ 9 h at 3 epochs, else 1 epoch if ≤ 9 h, else stop and ask (`session.epoch_decision`).
+  3. **Gemma-3-4B fp16 criterion** (D-005 made concrete): `configs/m3c_probe_gemma3-4b.yaml` runs QLoRA u‖h in fp16 compute with the activation monitor on, for 50 steps or 20 min (D-005 said 50 steps; the 20-min cap bounds the cost).
+     - fp16 is kept only if **all** hold (`session.gemma_fp16_ok`):
+       - both probe jobs finish with no `NonFiniteError` from the loss/grad guard or the monitor;
+       - ≤ 5 fp16 scaler-skipped steps per job;
+       - the largest last-layer |hidden| ≤ 32,752 (half the fp16 range).
+     - Otherwise `train.compute=fp32`, then a second probe at fp32. In both cases epochs follow rule 2.
+  4. **Activation monitor** (`sft.ActivationMonitor`, `train.activation_monitor: true` for Gemma): a forward hook on the last decoder layer's output, the pre-norm residual stream where fp16 overflows (the final norm can hide a near-overflow).
+     - It raises `NonFiniteError` on the first NaN/Inf, which D-006 requires to abort.
+     - It records `max_abs_hidden` in `done.json`.
+  5. **Gemma LoRA scope:** model-entry key `lora_target_regex` = `.*language_model.*\.(q_proj|…|down_proj)`. LoRA covers the language model's 7 projections only, never the vision tower or the projector (tested on module names).
+     - Part of the `train_key` only when set. A pinned-key test (`test_train_keys_are_stable`) proves no earlier key changed.
+  6. **Session bound:** the long run starts only if elapsed session hours + the chosen projection ≤ 11.5 h (`session.session_ok`).
+  7. **DC-07 on Tier 1:** `test_real_tier1_qlora_endpoints` checks α ∈ {0, 1} identity and linearity, that no LoRA module is in the vision tower, and a finite α = 0.5 forward with the adapter on the model's *inference* base (fp16 balanced for Llama/Mistral, fp32 balanced for Gemma, as M4 will load it).
+  8. **Notebook:** `notebooks/m3c_train.ipynb`, `MODEL` per session in the order Llama → Mistral → Gemma. The decision logic lives in `rbbd.finetune.session` (CPU-tested), not in notebook cells.
+- Why: Every run-time choice is pre-registered, testable and recorded in the config hash.
+- Tradeoff accepted: A Gemma session that falls back to fp32 spends two probes (≤ 45 min) before training. 4×8 OOMs cost ≈ 1–2 min each.
+- Cost impact: Llama ≈ 6.6 h. Mistral ≈ 0.5 h probe + ≈ 6–7 h (1 epoch) or ≈ 20 h (3 epochs; would need a split, not planned). Gemma ≈ 0.5–0.8 h probes + training per the rule.
+- Paper deviation: as decided per model (epochs: App. C), each logged in that session's D entry.
+- Revisit-if: Gemma fails fp16 *and* fp32 projects > 9 h at 1 epoch (rule 2 then asks the user).

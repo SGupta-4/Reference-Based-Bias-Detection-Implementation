@@ -16,8 +16,9 @@ def _random_adapter(tmp_path, name, seed):
     from peft import LoraConfig, get_peft_model
 
     torch.manual_seed(seed)
-    cfg = LoraConfig(r=4, lora_alpha=8, target_modules=TARGETS, init_lora_weights=False,
-                     task_type="CAUSAL_LM")  # fmt: skip
+    cfg = LoraConfig(
+        r=4, lora_alpha=8, target_modules=TARGETS, init_lora_weights=False, task_type="CAUSAL_LM"
+    )
     model = get_peft_model(make_tiny_model(), cfg)
     out = tmp_path / name
     model.save_pretrained(str(out))
@@ -126,8 +127,11 @@ def test_full_fp16_endpoints_roundtrip(tmp_path):
     """Endpoints stored as fp16 safetensors load back as fp32 and stay exact at α ∈ {0, 1}."""
     from safetensors.torch import save_file
 
-    w = {k: v.half().contiguous() for k, v in make_tiny_model(seed=1).state_dict().items()
-         if k != "lm_head.weight"}  # fmt: skip
+    w = {
+        k: v.half().contiguous()
+        for k, v in make_tiny_model(seed=1).state_dict().items()
+        if k != "lm_head.weight"
+    }
     save_file(w, str(tmp_path / "model.safetensors"))
     loaded = ip.load_endpoint(tmp_path)
     assert all(v.dtype == torch.float32 for v in loaded.values())
@@ -156,3 +160,35 @@ def test_combine_accepts_target_modules_in_any_order(endpoints):
     )
     c = ad.combine(u, shuffled, 0.5)
     assert c.config["target_modules"] == sorted(TARGETS)
+
+
+def test_apply_alpha_with_tied_embeddings(tmp_path):
+    """Llama-3.2-1B ties lm_head to embed_tokens; save_pretrained stores the tensor once.
+    Endpoints without lm_head.weight still apply, and the alias follows (D-072)."""
+    from transformers import LlamaConfig, LlamaForCausalLM
+
+    def tied(seed):
+        torch.manual_seed(seed)
+        cfg = LlamaConfig(
+            vocab_size=128,
+            hidden_size=16,
+            intermediate_size=32,
+            num_hidden_layers=2,
+            num_attention_heads=2,
+            num_key_value_heads=1,
+            tie_word_embeddings=True,
+        )
+        return LlamaForCausalLM(cfg).eval()
+
+    for name, seed in (("h", 1), ("u", 2)):
+        tied(seed).save_pretrained(str(tmp_path / name), safe_serialization=True)
+    w_h, w_u = ip.load_endpoint(tmp_path / "h"), ip.load_endpoint(tmp_path / "u")
+    assert "lm_head.weight" not in w_h
+    model = tied(3)
+    ip.apply_alpha(model, w_h, w_u, 1.0)
+    sd = model.state_dict()
+    assert torch.equal(sd["model.embed_tokens.weight"], w_u["model.embed_tokens.weight"])
+    assert torch.equal(sd["lm_head.weight"], w_u["model.embed_tokens.weight"])
+    w_h.pop("model.norm.weight")
+    with pytest.raises(ip.EndpointMismatch, match="model.norm.weight"):
+        ip.apply_alpha(model, w_h, w_u, 0.5)

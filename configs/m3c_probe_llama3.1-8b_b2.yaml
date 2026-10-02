@@ -1,0 +1,17 @@
+# M3c-T8 throughput probe (D-070): Llama-3.1-8B QLoRA, u||h on the two T4s, real WildGuardMix
+# splits (same ids as the full run), batch 2 x grad-acc 16 = 32. Stops after 25 optimizer
+# steps or 20 min, whichever comes first. done.json carries the steady tokens/s, peak memory
+# and the projected hours for 3 and 1 epochs. Tried in order b4 -> b2 -> b1 until one fits.
+run_name: m3c_probe_llama3.1-8b_b2
+tier: 1
+models:
+  - {id: meta-llama/Llama-3.1-8B-Instruct, slug: llama3.1-8b-it, layer: 32, precision: fp16, placement: balanced}
+ftdata:
+  census_tokenizers: []    # census done in M1 (D-055)
+train:
+  regimes: [qlora]
+  per_device_batch: 2
+  grad_accum: 16
+  max_steps: 25
+  max_minutes: 20
+  save_minutes: 600        # no checkpoint inside the probe window

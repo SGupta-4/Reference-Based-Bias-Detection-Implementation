@@ -59,20 +59,27 @@ def interpolate(w_h: Any, w_u: Any, alpha: float) -> Any:
 def apply_alpha(model: Any, w_h: Mapping[str, Any], w_u: Mapping[str, Any], alpha: float) -> None:
     """Overwrite `model`'s parameters and buffers in place with W(α), cast to their dtype.
 
-    Every model state-dict key must be in both endpoints (tied weights appear once per
-    name and are written consistently). Runs under `torch.no_grad()`.
+    Every state-dict key must be in both endpoints, except a tied alias (e.g.
+    `lm_head.weight` sharing storage with `model.embed_tokens.weight` in Llama-3.2-1B):
+    `save_pretrained` stores tied tensors once, and writing the stored name updates the
+    alias too. Runs under `torch.no_grad()`.
     """
     import torch
 
     state = model.state_dict()
-    missing = sorted(k for k in state if k not in w_h or k not in w_u)
+    present = {k for k in state if k in w_h and k in w_u}
+    stored_ptrs = {state[k].data_ptr() for k in present}
+    missing = sorted(
+        k for k in state if k not in present and state[k].data_ptr() not in stored_ptrs
+    )
     if missing:
         raise EndpointMismatch(f"model keys missing from the endpoints, e.g. {missing[:5]}")
     with torch.no_grad():
-        for name, target in state.items():
+        for name in sorted(present):
+            target = state[name]
             if tuple(target.shape) != tuple(w_h[name].shape):
-                raise EndpointMismatch(f"shape of {name}: model {tuple(target.shape)} "
-                                       f"vs endpoint {tuple(w_h[name].shape)}")  # fmt: skip
+                shapes = f"model {tuple(target.shape)} vs endpoint {tuple(w_h[name].shape)}"
+                raise EndpointMismatch(f"shape of {name}: {shapes}")
             target.copy_(interpolate(w_h[name], w_u[name], alpha).to(target.dtype))
 
 

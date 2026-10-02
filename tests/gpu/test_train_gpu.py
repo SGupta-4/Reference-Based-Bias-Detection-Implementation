@@ -192,3 +192,147 @@ def test_smoke_config_has_train_section():
     """Guard against running the notebook with a config that never trains (CPU-cheap)."""
     cfg = config.load(SMOKE)
     assert cfg.get("train.regimes") == ["lora"] and cfg.get("ftdata.n_per_split") == 64
+
+
+def _finals_for(cfg_path, regime, seed=0, overrides=()):
+    """{split: final dir} for one regime/seed of a config (+ `--set` overrides), via its
+    ftdata manifest."""
+    from rbbd import runner
+    from rbbd.utils import manifest as mf
+
+    cfg = config.load(cfg_path, overrides)
+    root = env_mod.detect().artifacts_root
+    ft = mf.read(mf.manifest_path(root, "ftdata", runner.stage_run_keys(cfg)["ftdata"]))
+    if ft is None or not ft.complete:
+        pytest.fail(f"no complete ftdata manifest for {cfg_path}")
+    found = {}
+    for job in sft.plan_jobs(cfg, root, list(ft.output_hashes)):
+        if job.regime == regime and job.seed == seed:
+            if not (job.out_dir / "done.json").exists():
+                pytest.fail(f"job not finished: {job.out_dir}")
+            found[job.split] = job.out_dir / "final"
+    return cfg, found
+
+
+def _m3b_config():
+    import os
+
+    path = os.environ.get("RBBD_M3B_CONFIG")
+    if not path:
+        pytest.skip("set RBBD_M3B_CONFIG to the Tier 2 config trained in this session")
+    return Path(path)
+
+
+def test_real_full_endpoints():
+    """DC-07 on real Tier 2 full-FT endpoints (D-008): on the GPU model, W(α=1) equals the
+    unharmful endpoint and W(α=0) the harmful one exactly (`torch.equal`, fp32), tied
+    aliases included; W(0.5) gives a finite forward."""
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    from rbbd.models import interpolate as ip
+
+    cfg, finals = _finals_for(_m3b_config(), "full")
+    w_u, w_h = ip.load_endpoint(finals["unharmful"]), ip.load_endpoint(finals["harmful"])
+    ip.check_endpoints(w_h, w_u)
+    model = AutoModelForCausalLM.from_pretrained(
+        str(finals["unharmful"]), dtype=torch.float32, device_map={"": 0}
+    ).eval()
+    report = {"n_tensors": len(w_u)}
+    for alpha, expected in ((1.0, w_u), (0.0, w_h)):
+        ip.apply_alpha(model, w_h, w_u, alpha)
+        sd = model.state_dict()
+        assert all(torch.equal(sd[k].cpu(), expected[k]) for k in expected), alpha
+    diff = max(float((w_u[k] - w_h[k]).abs().max()) for k in w_u)
+    report["max_abs_endpoint_diff"] = diff
+    assert diff > 0, "the two endpoints are identical: training did not move the weights"
+    ip.apply_alpha(model, w_h, w_u, 0.5)
+    tok = AutoTokenizer.from_pretrained(str(finals["unharmful"]))
+    batch = tok(["Women attend community events."], return_tensors="pt").to("cuda:0")
+    with torch.inference_mode():
+        out = model(**batch, output_hidden_states=True)
+    assert_finite(out.hidden_states[-1], "m3b.full.a050.hidden", ckpt="a050")
+    report["a050_forward"] = "finite"
+    _record(f"real_full_endpoints_{cfg['run_name']}", report)
+
+
+def test_real_tier2_lora_endpoints():
+    """DC-07 on real Tier 2 LoRA endpoints: α ∈ {1, 0} are the trained adapters; the rank-2r
+    combination is linear in ΔW (float64, rtol 1e-6)."""
+    cfg, finals = _finals_for(_m3b_config(), "lora")
+    u, h = ad.read_adapter(finals["unharmful"]), ad.read_adapter(finals["harmful"])
+    assert ad.adapter_for_alpha(u, h, 1.0) is u and ad.adapter_for_alpha(u, h, 0.0) is h
+    s_u, s_h = ad.scaling(u.config), ad.scaling(h.config)
+    worst = 0.0
+    for alpha in (0.9, 0.5, 0.1):
+        c = ad.combine(u, h, alpha)
+        for p in u.prefixes():
+
+            def ba(a, p=p):
+                return (
+                    a.tensors[p + ".lora_B.weight"].double()
+                    @ a.tensors[p + ".lora_A.weight"].double()
+                )
+
+            got, ref = ba(c), alpha * s_u * ba(u) + (1 - alpha) * s_h * ba(h)
+            torch.testing.assert_close(got, ref, rtol=1e-6, atol=1e-6 * float(ref.abs().max()))
+            worst = max(worst, float((got - ref).abs().max() / ref.abs().max()))
+    _record(
+        f"real_lora_endpoints_{cfg['run_name']}",
+        {"modules": len(u.prefixes()), "max_rel_err": worst},
+    )
+
+
+def test_real_tier1_qlora_endpoints():
+    """DC-07 on real Tier 1 QLoRA endpoints (M3c): α ∈ {1, 0} are the trained adapters; the
+    rank-2r combination is linear in ΔW (float64, rtol 1e-6); the α=0.5 adapter loads on
+    the model's inference base (precision and placement from the config, as M4 will use
+    it) and gives a finite forward. Select with RBBD_M3C_CONFIG and, for runtime
+    decisions, RBBD_M3C_SET ("key=value;key=value")."""
+    import os
+
+    from peft import PeftModel
+
+    from rbbd.models.loading import LoadSpec, base_decoder, load_for_inference
+
+    path = os.environ.get("RBBD_M3C_CONFIG")
+    if not path:
+        pytest.skip("set RBBD_M3C_CONFIG to the Tier 1 config trained in this session")
+    overrides = [x for x in os.environ.get("RBBD_M3C_SET", "").split(";") if x]
+    cfg, finals = _finals_for(Path(path), "qlora", overrides=overrides)
+    u, h = ad.read_adapter(finals["unharmful"]), ad.read_adapter(finals["harmful"])
+    assert ad.adapter_for_alpha(u, h, 1.0) is u and ad.adapter_for_alpha(u, h, 0.0) is h
+    s_u, s_h = ad.scaling(u.config), ad.scaling(h.config)
+    worst = 0.0
+    for alpha in (0.9, 0.5, 0.1):
+        c = ad.combine(u, h, alpha)
+        for p in u.prefixes():
+
+            def ba(a, p=p):
+                return (
+                    a.tensors[p + ".lora_B.weight"].double()
+                    @ a.tensors[p + ".lora_A.weight"].double()
+                )
+
+            got, ref = ba(c), alpha * s_u * ba(u) + (1 - alpha) * s_h * ba(h)
+            torch.testing.assert_close(got, ref, rtol=1e-6, atol=1e-6 * float(ref.abs().max()))
+            worst = max(worst, float((got - ref).abs().max() / ref.abs().max()))
+    targets = u.config.get("target_modules")
+    report = {"modules": len(u.prefixes()), "max_rel_err": worst,
+              "regex": targets if isinstance(targets, str) else None}  # fmt: skip
+    assert all("vision" not in p for p in u.prefixes()), "LoRA reached the vision tower"
+
+    entry = cfg["models"][0]
+    path_a050 = ad.write_adapter(
+        ad.combine(u, h, 0.5), env_mod.ephemeral_dir() / f"rbbd_m3c_{entry['slug']}_a050"
+    )
+    model, tok = load_for_inference(
+        LoadSpec(entry["id"], entry.get("revision"), entry["precision"], entry["placement"])
+    )
+    peft_model = PeftModel.from_pretrained(model, str(path_a050)).eval()
+    batch = tok(["Women attend community events."], return_tensors="pt")
+    device = next(base_decoder(peft_model).parameters()).device
+    with torch.inference_mode():
+        out = peft_model(**{k: v.to(device) for k, v in batch.items()}, output_hidden_states=True)
+    assert_finite(out.hidden_states[-1], "m3c.a050.hidden", ckpt="a050", model=entry["slug"])
+    report["a050_forward"] = f"finite ({entry['precision']}, {entry['placement']})"
+    _record(f"real_qlora_endpoints_{cfg['run_name']}", report)

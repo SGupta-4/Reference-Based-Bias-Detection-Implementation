@@ -1,6 +1,19 @@
-# Tier 1, Gemma-3-4B-it (PLAN §6). Inference in fp32 sharded over both T4s (D-005) until the
-# M2 fp16 probe (configs/m2_gemma3-4b_fp16_probe.yaml) shows fp16 is safe.
+# Tier 1, Gemma-3-4B-it (PLAN §6). Inference in fp32 sharded over both T4s (D-005, D-062: the
+# M2 fp16 extraction probe gave NaN). Training (D-076): QLoRA on the language model only
+# (the regex keeps LoRA off the SigLIP vision tower), with the activation monitor on.
+# Compute precision and epochs come from the M3c probes via `--set train.compute=fp32` and
+# `--set train.epochs=1` when the D-076 rules require them.
 run_name: tier1_gemma3-4b
 tier: 1
 models:
-  - {id: google/gemma-3-4b-it, slug: gemma3-4b-it, layer: 34, precision: fp32, placement: balanced}
+  - {id: google/gemma-3-4b-it, slug: gemma3-4b-it, layer: 34, precision: fp32, placement: balanced,
+     lora_target_regex: '.*language_model.*\.(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)'}
+ftdata:
+  census_tokenizers: []
+train:
+  regimes: [qlora]
+  epochs: 3
+  compute: fp16
+  batch_layouts: {qlora: [[4, 8], [2, 16], [1, 32]]}
+  activation_monitor: true
+  sync_each_pair: true

@@ -1,1 +1,14 @@
-# Placeholder — filled in M3. Schema and values: PLAN.md §3, §6 and DECISION.md.
+# Tier 1, Mistral-7B-Instruct-v0.3 (PLAN §6; D-003, D-076). QLoRA u||h on the two T4s.
+# Epochs follow the D-070 rule from this model's own probe: the M3c notebook passes
+# `--set train.epochs=1` when the harmful run projects > 9 h at 3 epochs.
+run_name: tier1_mistral-7b
+tier: 1
+models:
+  - {id: mistralai/Mistral-7B-Instruct-v0.3, slug: mistral-7b-it, layer: 32, precision: fp16, placement: balanced}
+ftdata:
+  census_tokenizers: []
+train:
+  regimes: [qlora]
+  epochs: 3
+  batch_layouts: {qlora: [[4, 8], [2, 16], [1, 32]]}
+  sync_each_pair: true
