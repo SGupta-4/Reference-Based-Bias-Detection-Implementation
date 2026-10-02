@@ -1158,3 +1158,21 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: 8.44 h training + ≈ 0.3 h setup, probe, tests and sync ≈ 8.8 session-h, against D-055's ≈ 5 h estimate for Qwen. The measured cost replaces it.
 - Paper deviation: no (Tier 2 analogue, D-009).
 - Revisit-if: session 2's probe bound exceeds 11 h.
+
+## D-074 Batch-layout fallback relaunches a fresh process per layout (refines D-072 item 1)
+- Date: 2026-10-02
+- Context: M3b session 2 (Llama-3.2-1B probe, commit `d4bbe2b`, session `20261002T042125Z`) failed about 60 s after launch (B-021). The stage then crashed with `FileNotFoundError` reading the log of the job's *resolved* layout directory, which hid the real error.
+  - The in-process fallback stored the OOM exception in `last_error`. Its traceback frames keep the trainer, fp32 weights, gradients and optimizer state alive, so `del model; empty_cache()` cannot free them, and the next layouts start on an almost-full GPU.
+  - 1B full FT needs ≈ 11.5 GiB (fp32 weights + grads + 8-bit Adam) before activations, on a 14.56 GiB T4. Whether 2×16 or 1×32 fits is exactly what a clean retry must answer.
+- Options considered: free memory harder in-process (drop the traceback, `gc.collect`); or one layout per process.
+- Choice: one layout per process.
+  - `cli train-one` calls `run_job(single_attempt=True)`. On a CUDA OOM it writes `oom.json` and exits with code 75 (`sft.OOM_EXIT`).
+  - `_run_parallel` relaunches that job on the same GPU while it has an untried layout. Any other non-zero exit, or an OOM with no layout left, fails the stage.
+  - Each job logs to one file, `job.log_path` = `<first layout dir>/train.log`, with a header line per launch. The failure report always shows the real error.
+  - The M3b notebook prints every probe job's log tail on failure.
+  - In-process retries remain only for inline (CPU) runs.
+- Why: A fresh CUDA context is the only guaranteed way to release a failed trainer's memory.
+- Tradeoff accepted: Each relaunch reloads the model and data (≈ 30–60 s for 1B).
+- Cost impact: ≤ 2 min per fallback. Session 2's failed attempt cost ≈ 0.1 session-h.
+- Paper deviation: no.
+- Revisit-if: 1×32 also runs out of memory for 1B full FT. Then D-009's FSDP fallback, or dropping TRL's per-step logits metrics (≈ 0.5–1 GiB), becomes the next step and gets its own D entry.

@@ -207,7 +207,12 @@ def _cmd_train_one(args: argparse.Namespace) -> int:
         raise SystemExit(
             f"no unique job for {args.model}/{args.regime}/{args.split}/seed{args.seed}"
         )
-    done = sft.run_job(cfg, match[0])
+    try:
+        done = sft.run_job(cfg, match[0], single_attempt=True)
+    except sft.LayoutOOM as exc:
+        # The parent relaunches a fresh process for the next layout (B-021).
+        print(f"layout OOM: {exc}")
+        return sft.OOM_EXIT
     print(json.dumps(done, indent=2))
     return 0
 

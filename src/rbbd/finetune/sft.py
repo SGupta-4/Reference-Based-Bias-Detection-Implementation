@@ -675,6 +675,18 @@ class Job:
     def out_dir(self) -> Path:
         return self._active()[1]
 
+    @property
+    def log_path(self) -> Path:
+        """One log per job across layouts: `<first layout dir>/train.log` (B-021)."""
+        return self.candidates[0][1] / "train.log"
+
+    def has_untried_layout(self) -> bool:
+        """True while some layout is neither finished nor marked OOM."""
+        return any(
+            not (d / "done.json").exists() and not (d / OOM_MARKER).exists()
+            for _, d in self.candidates
+        )
+
 
 def plan_jobs(cfg: Any, artifacts_root: Path, ftdata_outputs: Sequence[str]) -> list[Job]:
     """Every (model, seed, regime, split) job under `cfg`, u/h pairs adjacent.
@@ -743,11 +755,22 @@ def _is_oom(exc: BaseException) -> bool:
     return isinstance(exc, torch.OutOfMemoryError) or "out of memory" in str(exc).lower()
 
 
-def run_job(cfg: Any, job: Job) -> dict[str, Any]:
+OOM_EXIT = 75  # train-one exit code: this layout ran out of memory; relaunch for the next
+
+
+class LayoutOOM(RuntimeError):
+    """A batch layout ran out of CUDA memory; `oom.json` has been written (B-021)."""
+
+
+def run_job(cfg: Any, job: Job, single_attempt: bool = False) -> dict[str, Any]:
     """Load data, tokenizer and model for `job` and train it (`cli train-one`).
 
-    Batch layouts are tried in order: a CUDA OOM writes `oom.json` into that layout's
-    directory and moves to the next layout with a freshly loaded model (D-072).
+    Batch layouts are tried in order; a CUDA OOM writes `oom.json` into that layout's
+    directory (D-072). With `single_attempt` (the `train-one` subprocess path) the OOM
+    raises `LayoutOOM` instead of retrying here: an in-process retry cannot reliably free
+    the failed trainer's GPU memory (the exception's traceback keeps it alive, B-021), so
+    the parent relaunches a fresh process for the next layout. In-process retries remain
+    for CPU tests and inline runs.
     """
     import gc
 
@@ -788,6 +811,8 @@ def run_job(cfg: Any, job: Job) -> dict[str, Any]:
                 json.dumps({"layout": layout, "error": str(exc)[:500]})
             )
             log.warning("CUDA OOM at batch %d x %d; trying the next layout", *layout)
+            if single_attempt:
+                raise LayoutOOM(f"batch {layout[0]} x {layout[1]} ran out of memory") from None
             del model
             gc.collect()
             torch.cuda.empty_cache()
@@ -840,50 +865,65 @@ def sync_jobs(cfg: Any, artifacts_root: Path, jobs: Sequence[Job]) -> None:
                     type(exc).__name__, exc)  # fmt: skip
 
 
-def _run_parallel(ctx: Any, jobs: Sequence[Job]) -> None:
-    # Jobs come in u/h pairs (plan_jobs order). Each pair runs as two processes, one per
-    # GPU; the next pair starts when both finish. Logs go to <job>/train.log.
+def _launch(ctx: Any, job: Job, gpu: int) -> tuple[Any, Any]:
+    """Start `cli train-one` for `job` on `gpu`; returns (process, open log file).
+
+    The log is `job.log_path` (one file per job, appended per attempt), so a failure can
+    always be reported, whichever layout directory the job resolves to (B-021).
+    """
     import os
     import subprocess
     import sys
 
+    cmd = [sys.executable, "-m", "rbbd.cli", "train-one",
+           "--config", str(Path(ctx.cfg.path).resolve()), "--model", job.spec.slug,
+           "--regime", job.regime, "--split", job.split, "--seed", str(job.seed)]  # fmt: skip
+    # expandable_segments reduces fragmentation-driven OOMs; it does not change results.
+    env = {**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu),
+           "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}  # fmt: skip
+    job.log_path.parent.mkdir(parents=True, exist_ok=True)
+    logf = open(job.log_path, "a")  # noqa: SIM115 - closed by the caller
+    layout = (job.spec.per_device_batch, job.spec.grad_accum)
+    logf.write(f"\n=== launch: batch {layout[0]} x {layout[1]} on cuda:{gpu} ===\n")
+    logf.flush()
+    log.info("launching %s (batch %d x %d) on cuda:%d -> %s", job.split, *layout, gpu, job.out_dir)
+    return subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT), logf
+
+
+def _tail(path: Path, n: int = 40) -> str:
+    return "\n".join(path.read_text().splitlines()[-n:]) if path.exists() else f"(no log at {path})"
+
+
+def _run_parallel(
+    ctx: Any, jobs: Sequence[Job], launch: Any = _launch, poll_seconds: float = 5.0
+) -> None:
+    """Run jobs in u/h pairs, one process per GPU; the next pair starts when both finish.
+
+    A process that exits with `OOM_EXIT` is relaunched on the same GPU for the job's next
+    batch layout (fresh CUDA context, B-021) until a layout fits or none is left. Any
+    other non-zero exit fails the stage with the job's log tail.
+    """
+    import time as _time
+
     pending = [j for j in jobs if not (j.out_dir / "done.json").exists()]
     for i in range(0, len(pending), 2):
-        procs = []
-        for gpu, job in enumerate(pending[i : i + 2]):
-            job.out_dir.mkdir(parents=True, exist_ok=True)
-            cmd = [
-                sys.executable,
-                "-m",
-                "rbbd.cli",
-                "train-one",
-                "--config",
-                str(Path(ctx.cfg.path).resolve()),
-                "--model",
-                job.spec.slug,
-                "--regime",
-                job.regime,
-                "--split",
-                job.split,
-                "--seed",
-                str(job.seed),
-            ]
-            # expandable_segments reduces fragmentation-driven OOMs; it does not change results.
-            env = {**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu),
-                   "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}  # fmt: skip
-            logf = open(job.out_dir / "train.log", "a")  # noqa: SIM115 - closed after wait
-            log.info("launching %s on cuda:%d -> %s", job.split, gpu, job.out_dir)
-            procs.append(
-                (job, subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT), logf)
-            )
+        pair = pending[i : i + 2]
+        running = {gpu: (job, *launch(ctx, job, gpu)) for gpu, job in enumerate(pair)}
         failed = []
-        for job, proc, logf in procs:
-            proc.wait()
-            logf.close()
-            if proc.returncode != 0:
-                tail = (job.out_dir / "train.log").read_text().splitlines()[-30:]
-                failed.append(f"{job.out_dir} (exit {proc.returncode}):\n" + "\n".join(tail))
+        while running:
+            for gpu, (job, proc, logf) in list(running.items()):
+                code = proc.poll()
+                if code is None:
+                    continue
+                logf.close()
+                del running[gpu]
+                if code == OOM_EXIT and job.has_untried_layout():
+                    running[gpu] = (job, *launch(ctx, job, gpu))
+                elif code != 0:
+                    failed.append(f"{job.out_dir} (exit {code}):\n{_tail(job.log_path)}")
+            if running:
+                _time.sleep(poll_seconds)
         if failed:
             raise RuntimeError("train-one failed:\n" + "\n\n".join(failed))
         if ctx.cfg.get("train.sync_each_pair", False):
-            sync_jobs(ctx.cfg, ctx.env.artifacts_root, [job for job, _, _ in procs])
+            sync_jobs(ctx.cfg, ctx.env.artifacts_root, pair)

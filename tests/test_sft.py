@@ -562,3 +562,93 @@ def test_sync_jobs_uploads_finished_jobs_and_swallows_errors(tmp_path, monkeypat
     with caplog.at_level(logging.WARNING):
         sft.sync_jobs(cfg, tmp_path, jobs)
     assert "per-pair sync failed" in caplog.text
+
+
+# --- B-021: OOM fallback across fresh processes ------------------------------------------------
+
+
+def _layout_job(tmp_path, layouts=((4, 8), (2, 16), (1, 32))):
+    cfg = _cfg({"regimes": ["full"], "batch_layouts": [list(x) for x in layouts]})
+    return cfg, sft.plan_jobs(cfg, tmp_path, _ftdata(tmp_path))
+
+
+def test_run_job_single_attempt_raises_layout_oom(tmp_path, monkeypatch):
+    cfg, jobs = _layout_job(tmp_path)
+    job = jobs[0]
+    from rbbd.models import loading
+
+    monkeypatch.setattr(sft, "load_rows", lambda *a: make_rows(2))
+    monkeypatch.setattr(loading, "load_tokenizer", lambda *a: make_chat_tokenizer())
+    monkeypatch.setattr(sft, "load_model", lambda spec: object())
+
+    def fake_train_one(spec, rows, tok, model, out_dir, **kw):
+        if spec.per_device_batch > 1:
+            raise torch.OutOfMemoryError("CUDA out of memory")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "done.json").write_text('{"global_step": 3}')
+        return {"global_step": 3}
+
+    monkeypatch.setattr(sft, "train_one", fake_train_one)
+    with pytest.raises(sft.LayoutOOM, match="4 x 8"):
+        sft.run_job(cfg, job, single_attempt=True)
+    with pytest.raises(sft.LayoutOOM, match="2 x 16"):
+        sft.run_job(cfg, job, single_attempt=True)
+    assert sft.run_job(cfg, job, single_attempt=True) == {"global_step": 3}
+    assert job.spec.per_device_batch == 1 and not job.has_untried_layout()
+
+
+class _FakeProc:
+    def __init__(self, code, effect=None):
+        self.code, self.effect = code, effect
+
+    def poll(self):
+        if self.effect:
+            self.effect()
+            self.effect = None
+        return self.code
+
+
+def _ctx(cfg, root):
+    return SimpleNamespace(cfg=cfg, env=SimpleNamespace(artifacts_root=root))
+
+
+def test_run_parallel_relaunches_after_oom_exit(tmp_path):
+    cfg, jobs = _layout_job(tmp_path)
+    launches = []
+
+    def launch(ctx, job, gpu):
+        launches.append((job.split, job.spec.per_device_batch, gpu))
+        d = job.out_dir
+
+        def effect():
+            d.mkdir(parents=True, exist_ok=True)
+            if job.split == "unharmful" and job.spec.per_device_batch == 4:
+                (d / sft.OOM_MARKER).write_text("{}")
+            else:
+                (d / "done.json").write_text("{}")
+
+        code = sft.OOM_EXIT if job.split == "unharmful" and job.spec.per_device_batch == 4 else 0
+        job.log_path.parent.mkdir(parents=True, exist_ok=True)
+        return _FakeProc(code, effect), open(job.log_path, "a")
+
+    sft._run_parallel(_ctx(cfg, tmp_path), jobs, launch=launch, poll_seconds=0)
+    assert launches == [("unharmful", 4, 0), ("harmful", 4, 1), ("unharmful", 2, 0)]
+    assert all((j.out_dir / "done.json").exists() for j in jobs)
+
+
+def test_run_parallel_reports_log_tail_and_exhausted_layouts(tmp_path):
+    cfg, jobs = _layout_job(tmp_path, layouts=((4, 8),))
+    jobs = jobs[:1]
+
+    def launch(ctx, job, gpu):
+        job.log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(job.log_path, "a") as f:
+            f.write("torch.OutOfMemoryError: boom\n")
+
+        def effect():
+            (job.out_dir / sft.OOM_MARKER).write_text("{}")
+
+        return _FakeProc(sft.OOM_EXIT, effect), open(job.log_path, "a")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        sft._run_parallel(_ctx(cfg, tmp_path), jobs, launch=launch, poll_seconds=0)

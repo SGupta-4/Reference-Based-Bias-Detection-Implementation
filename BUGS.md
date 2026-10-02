@@ -328,3 +328,18 @@ IDs are sequential and never reused.
 - Verification: pending (M4).
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-072, D-073
+
+## B-021 Bug: the OOM layout fallback failed for Llama-3.2-1B full FT, and the failure report hid the error
+- Status: Fixed on CPU; Kaggle verification pending (M3b session 2 rerun).
+- How it was found or scoped: M3b session 2 (`d4bbe2b`, session `20261002T042125Z`). The probe stage failed ≈ 60 s after launch with `FileNotFoundError: …/llama3.2-1b-it-probe/full/unharmful/seed0/4771744e3daa2694/train.log`, so the probe produced nothing (`proceed: false`). Correctly, no long run started.
+- Reproduction command: `notebooks/m3b_train.ipynb` with `MODEL = "llama3.2-1b"` at `d4bbe2b`.
+- Hypotheses tried:
+  - Missing log file. Confirmed as the *reporting* bug: logs went to the 4×8 directory (`52d01d…`), but once `oom.json` marked that layout, `job.out_dir` resolved to 2×16 (`4771…`), which has no log.
+  - The training process itself failed after the 4×8 OOM. Most likely cause: the in-process retry kept the failed trainer's GPU memory alive through the stored exception's traceback, so 2×16 and 1×32 OOMed in turn and `run_job` raised "every batch layout ran out of memory". Not directly observed, because the log was not printed. The real log stays in that session's output (`…/52d01d8d36f65628/train.log`).
+- Fix (D-074): one layout per process (exit 75 → parent relaunch), one log per job (`Job.log_path`), and probe log tails printed by the notebook. New CPU tests:
+  - `test_run_job_single_attempt_raises_layout_oom`;
+  - `test_run_parallel_relaunches_after_oom_exit` (OOM at 4×8 → relaunch at 2×16 on the same GPU; the other job is untouched);
+  - `test_run_parallel_reports_log_tail_and_exhausted_layouts`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `113 passed, 12 deselected in 13.95s`. Kaggle: pending.
+- GPU-hours lost: ≈ 0.1
+- Linked commits and D-### entries: `d4bbe2b`; D-072, D-074; B-019
