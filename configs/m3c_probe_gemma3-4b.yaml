@@ -1,0 +1,17 @@
+# M3c probe (D-070, D-076): QLoRA u||h on the real WildGuardMix splits, 50 steps or 20 min,
+# batch layouts 4x8 -> 2x16 -> 1x32 on OOM. Separate *-probe slug; never synced.
+run_name: m3c_probe_gemma3-4b
+tier: 1
+models:
+  - {id: google/gemma-3-4b-it, slug: gemma3-4b-it-probe, layer: 34, precision: fp32, placement: balanced,
+     lora_target_regex: '.*language_model.*\.(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)'}
+ftdata:
+  census_tokenizers: []
+train:
+  regimes: [qlora]
+  batch_layouts: {qlora: [[4, 8], [2, 16], [1, 32]]}
+  max_steps: 50
+  max_minutes: 20
+  save_minutes: 600
+  activation_monitor: true
+  compute: fp16

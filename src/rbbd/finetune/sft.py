@@ -89,6 +89,9 @@ class TrainSpec:
     lora_alpha: int = 32
     lora_dropout: float = 0.05
     lora_targets: tuple[str, ...] = LORA_TARGETS
+    # Optional PEFT regex (full match) replacing `lora_targets`, e.g. to keep LoRA off
+    # Gemma-3's vision tower (D-076). None = the module-name list above.
+    lora_target_regex: str | None = None
     optim: str | None = None
     gradient_checkpointing: bool = True
     max_steps: int = -1  # tests only; -1 = run the epochs
@@ -114,9 +117,11 @@ class TrainSpec:
         fields = asdict(self)
         fields["lora_targets"] = list(self.lora_targets)
         fields.update(lr=self.learning_rate, optim=self.optimizer, schema_version=SCHEMA_VERSION)
+        if self.lora_target_regex is None:  # absent from keys made before D-076
+            fields.pop("lora_target_regex", None)
         if self.regime == "full":  # LoRA fields do not affect a full fine-tune
-            for k in ("lora_r", "lora_alpha", "lora_dropout", "lora_targets"):
-                fields.pop(k)
+            for k in ("lora_r", "lora_alpha", "lora_dropout", "lora_targets", "lora_target_regex"):
+                fields.pop(k, None)
         return fields
 
     @property
@@ -313,6 +318,48 @@ class ThroughputCallback(_callback_base()):  # type: ignore[misc]
         return out
 
 
+class ActivationMonitor:
+    """Final-layer hidden-state monitor for fp16 training probes (D-005, D-006, D-076).
+
+    A forward hook on the text decoder's last layer (`base_decoder(model).layers[-1]`,
+    the pre-norm residual stream, where fp16 overflows: Gemma's final norm can hide a
+    near-overflow) records the largest |hidden| seen and raises `NonFiniteError` on the
+    first NaN/Inf. An overflow in any earlier layer propagates to this output as Inf/NaN.
+    So fp16 trouble stops training at once instead of surfacing later as a NaN loss.
+    `attach(model)` must run before the trainer wraps the model (PEFT keeps
+    the same module objects). Cost: two reductions per forward.
+    """
+
+    def __init__(self, context: Mapping[str, Any]) -> None:
+        self.context = dict(context)
+        self.max_abs = 0.0
+        self.calls = 0
+        self._handle: Any = None
+
+    def attach(self, model: Any) -> None:
+        from rbbd.models.loading import base_decoder
+
+        self._handle = base_decoder(model).layers[-1].register_forward_hook(self._hook)
+
+    def _hook(self, _module: Any, _inputs: Any, output: Any) -> None:
+        from rbbd.utils.guards import assert_finite
+
+        hidden = (
+            output[0] if isinstance(output, tuple) else getattr(output, "last_hidden_state", output)
+        )
+        self.calls += 1
+        assert_finite(hidden.detach(), "train.hidden", call=self.calls, **self.context)
+        self.max_abs = max(self.max_abs, float(hidden.detach().abs().max()))
+
+    def detach(self) -> None:
+        if self._handle is not None:
+            self._handle.remove()
+            self._handle = None
+
+    def summary(self) -> dict[str, Any]:
+        return {"max_abs_hidden": round(self.max_abs, 3), "monitored_forwards": self.calls}
+
+
 class TimeLimitCallback(_callback_base()):  # type: ignore[misc]
     """Stop training cleanly after `minutes` of wall-clock time (throughput probes only)."""
 
@@ -374,7 +421,7 @@ def _peft_config(spec: TrainSpec) -> Any:
         r=spec.lora_r,
         lora_alpha=spec.lora_alpha,
         lora_dropout=spec.lora_dropout,
-        target_modules=list(spec.lora_targets),
+        target_modules=spec.lora_target_regex or list(spec.lora_targets),
         bias="none",
         task_type="CAUSAL_LM",
     )
@@ -433,6 +480,7 @@ def train_one(
     extra_callbacks: Sequence[Any] = (),
     max_minutes: float | None = None,
     ckpt_dir: Path | None = None,
+    activation_monitor: bool = False,
 ) -> dict[str, Any]:
     """Train one endpoint into `out_dir`, resuming from its newest checkpoint; return done.json.
 
@@ -471,6 +519,9 @@ def train_one(
     context = {"model": spec.slug, "regime": spec.regime, "split": spec.split, "seed": spec.seed}
     guard_cb = GuardCallback(guard or GuardSettings(), context)
     throughput = ThroughputCallback()
+    monitor = ActivationMonitor(context) if activation_monitor else None
+    if monitor is not None:
+        monitor.attach(model)
     time_limit = [TimeLimitCallback(max_minutes)] if max_minutes is not None else []
     # The LoRA A matrices are initialised inside SFTTrainer (get_peft_model): seed here so
     # the initial adapter depends on the spec's seed only, not on what ran before (B-017).
@@ -496,7 +547,11 @@ def train_one(
     if resume:
         log.info("resuming %s from %s", out_dir, resume)
     t0 = time.time()
-    result = trainer.train(resume_from_checkpoint=resume)
+    try:
+        result = trainer.train(resume_from_checkpoint=resume)
+    finally:
+        if monitor is not None:
+            monitor.detach()
     seconds = time.time() - t0
     guard_cb.check_counts(trainer.state.global_step)
 
@@ -526,6 +581,7 @@ def train_one(
         "n_examples": data_stats["n_kept"],
         **guard_cb.summary(),
         **throughput.summary(),
+        **(monitor.summary() if monitor is not None else {}),
         "peak_mem_gib": _peak_mem_gib(),
     }
     # Full-run projection from this split's exact token count (M3c-T8; D-042, D-055).
@@ -610,6 +666,7 @@ def spec_from_config(
         lora_alpha=int(lora.get("alpha", 32)),
         lora_dropout=float(lora.get("dropout", 0.05)),
         lora_targets=tuple(lora.get("targets", LORA_TARGETS)),
+        lora_target_regex=model_entry.get("lora_target_regex"),
         optim=(t.get("optim") or {}).get(regime) if isinstance(t.get("optim"), Mapping) else None,
         gradient_checkpointing=bool(t.get("gradient_checkpointing", True)),
         max_steps=int(t.get("max_steps", -1)),
@@ -800,6 +857,7 @@ def run_job(cfg: Any, job: Job, single_attempt: bool = False) -> dict[str, Any]:
                 guard=guard,
                 max_minutes=t.get("max_minutes"),
                 ckpt_dir=checkpoint_dir(cfg, spec, out_dir),
+                activation_monitor=bool(t.get("activation_monitor", False)),
             )
         except Exception as exc:
             if not _is_oom(exc):
@@ -878,6 +936,8 @@ def _launch(ctx: Any, job: Job, gpu: int) -> tuple[Any, Any]:
     cmd = [sys.executable, "-m", "rbbd.cli", "train-one",
            "--config", str(Path(ctx.cfg.path).resolve()), "--model", job.spec.slug,
            "--regime", job.regime, "--split", job.split, "--seed", str(job.seed)]  # fmt: skip
+    for assignment in getattr(ctx.cfg, "overrides", ()):  # same effective config as the parent
+        cmd += ["--set", assignment]
     # expandable_segments reduces fragmentation-driven OOMs; it does not change results.
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu),
            "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}  # fmt: skip

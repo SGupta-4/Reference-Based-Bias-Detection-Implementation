@@ -58,3 +58,21 @@ def test_repo_configs_load():
     assert smoke.get("store.repo_id") == "SarthakGupta414/rbbd-artifacts"
     assert smoke["alphas"] == [1.0, 0.9, 0.7, 0.5, 0.3, 0.1, 0.0]
     assert len(smoke.get("probe.access_repos")) == 13
+
+
+def test_overrides_apply_before_hash(config_dir):
+    """`--set a.b=value` (D-076): YAML-parsed, creates missing mappings, changes the hash."""
+    import pytest
+
+    from rbbd import config
+
+    path = config_dir("run_name: base\nseed: 0\ntrain: {epochs: 3}\n", "run_name: t\n")
+    plain = config.load(path)
+    over = config.load(path, ["train.epochs=1", "new.deep.key=[1, 2]"])
+    assert over.get("train.epochs") == 1 and over.get("new.deep.key") == [1, 2]
+    assert over.hash != plain.hash and over.overrides == ("train.epochs=1", "new.deep.key=[1, 2]")
+    assert config.load(path, ["train.epochs=3"]).hash == plain.hash
+    with pytest.raises(config.ConfigError, match="a.b.c=value"):
+        config.load(path, ["noequals"])
+    with pytest.raises(config.ConfigError, match="not a mapping"):
+        config.load(path, ["run_name.x=1"])

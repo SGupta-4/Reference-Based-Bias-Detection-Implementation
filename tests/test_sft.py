@@ -652,3 +652,110 @@ def test_run_parallel_reports_log_tail_and_exhausted_layouts(tmp_path):
 
     with pytest.raises(RuntimeError, match="boom"):
         sft._run_parallel(_ctx(cfg, tmp_path), jobs, launch=launch, poll_seconds=0)
+
+
+# --- M3c: key stability, overrides, activation monitor, LoRA regex (D-076) ---------------------
+
+
+@pytest.mark.parametrize(
+    "extra,key",
+    [
+        ({"regime": "lora"}, "2e328c11f5b9ac45"),
+        (
+            {"regime": "qlora", "per_device_batch": 2, "grad_accum": 16, "epochs": 1},
+            "99210282e3392889",
+        ),
+        ({"regime": "full", "optim": "adamw_torch"}, "36202add34bb2182"),
+    ],
+)
+def test_train_keys_are_stable(extra, key):
+    """Finished Kaggle jobs are found by train_key: a new TrainSpec field must not change the
+    keys of specs that do not use it (pinned values from schema 2, before D-076)."""
+    spec = sft.TrainSpec(model_id="m", slug="s", split="harmful", seed=0, data_key="d", **extra)
+    assert spec.train_key == key
+
+
+def test_lora_target_regex_reaches_peft_and_key():
+    base = dict(model_id="m", slug="s", regime="qlora", split="harmful", seed=0, data_key="d")
+    regex = r".*language_model.*\.(q_proj|v_proj)"
+    spec = sft.TrainSpec(**base, lora_target_regex=regex)
+    assert spec.train_key != sft.TrainSpec(**base).train_key
+    assert sft._peft_config(spec).target_modules == regex
+
+
+def test_activation_monitor_records_and_raises(tmp_path):
+    """D-076: the monitor records max |hidden| during training and fails on a non-finite value."""
+    done = sft.train_one(
+        _spec(epochs=1),
+        make_rows(8),
+        make_chat_tokenizer(),
+        make_tiny_model(),
+        tmp_path / "ok",
+        save_minutes=1e6,
+        activation_monitor=True,
+    )
+    assert done["max_abs_hidden"] > 0 and done["monitored_forwards"] >= done["global_step"]
+
+    model = make_tiny_model()
+
+    def poison(_m, _i, output):
+        out = output[0] if isinstance(output, tuple) else output
+        out[0, 0, 0] = float("nan")
+        return output
+
+    model.model.layers[-1].register_forward_hook(poison)
+    with pytest.raises(NonFiniteError, match="train.hidden"):
+        sft.train_one(
+            _spec(epochs=1),
+            make_rows(8),
+            make_chat_tokenizer(),
+            model,
+            tmp_path / "bad",
+            save_minutes=1e6,
+            activation_monitor=True,
+        )
+    assert not (tmp_path / "bad" / "done.json").exists()
+
+
+def test_gemma_lora_regex_targets_language_model_only():
+    """D-076: Gemma-3's LoRA stays off the SigLIP vision tower and the projector; the probe
+    and the training config use the identical regex."""
+    import re
+
+    from rbbd import config
+    from tests.conftest import REPO_ROOT
+
+    regexes = {
+        config.load(REPO_ROOT / "configs" / f)["models"][0]["lora_target_regex"]
+        for f in ("tier1_gemma3-4b.yaml", "m3c_probe_gemma3-4b.yaml")
+    }
+    assert len(regexes) == 1
+    rx = regexes.pop()
+    for proj in sft.LORA_TARGETS:
+        kind = "mlp" if proj in ("gate_proj", "up_proj", "down_proj") else "self_attn"
+        assert re.fullmatch(rx, f"model.language_model.layers.7.{kind}.{proj}")
+    for name in ("model.vision_tower.vision_model.encoder.layers.0.self_attn.q_proj",
+                 "model.vision_tower.vision_model.encoder.layers.0.mlp.fc1",
+                 "model.multi_modal_projector.mm_input_projection", "lm_head"):  # fmt: skip
+        assert not re.fullmatch(rx, name)
+
+
+def test_launch_passes_overrides_to_train_one(tmp_path, monkeypatch):
+    """Runtime decisions (`--set`, D-076) reach every train-one subprocess."""
+    import subprocess
+
+    cfg = _cfg({"regimes": ["qlora"]})
+    cfg.overrides = ("train.epochs=1", "train.compute=fp32")
+    job = sft.plan_jobs(cfg, tmp_path, _ftdata(tmp_path))[0]
+    seen = {}
+
+    class P:
+        def __init__(self, cmd, **kw):
+            seen["cmd"], seen["env"] = cmd, kw["env"]
+
+    monkeypatch.setattr(subprocess, "Popen", P)
+    _, logf = sft._launch(SimpleNamespace(cfg=cfg), job, 1)
+    logf.close()
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--set") + 1] == "train.epochs=1" and "train.compute=fp32" in cmd
+    assert seen["env"]["CUDA_VISIBLE_DEVICES"] == "1"

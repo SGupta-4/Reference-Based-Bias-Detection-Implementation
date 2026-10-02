@@ -1220,3 +1220,38 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: M3b total ≈ 8.8 h (Qwen) + 9.7 h (Llama-1B) + ≈ 0.3 h of failed runs (B-021, B-022) ≈ 18.8 session-h; D-055 estimated 12.3. Tier 2's measured cost replaces that estimate in PLAN §8 (≈ +6.5 h).
 - Paper deviation: no (Tier 2 analogue, D-009).
 - Revisit-if: a `train` schema bump (ROLLBACK: re-run DC-07, DC-11, DC-13).
+
+## D-076 M3c preparation: pre-registered Mistral/Gemma rules, runtime overrides, activation monitor, Gemma LoRA scope (implements D-005, D-070; refines D-003)
+- Date: 2026-10-02 (written before any Mistral or Gemma training data)
+- Context: M3c trains the Tier 1 QLoRA endpoints, one model per session:
+  - Llama-3.1-8B: already decided by D-071 (batch 2×16, 1 epoch, 6.41 h).
+  - Mistral-7B: needs its own D-070 probe.
+  - Gemma-3-4B: needs D-005's fp16 training probe first; M2 found fp16 *inference* all-NaN (D-062).
+  - These decisions are known only at run time, inside the session.
+  - Gemma-3-4B loads as `Gemma3ForConditionalGeneration`, whose SigLIP vision tower also has `q_proj`/`k_proj`/`v_proj` modules.
+- Choices:
+  1. **Runtime overrides:** `config.load(path, overrides)` and `--set a.b.c=value` (YAML-parsed) on `run`, `status` and `train-one`.
+     - Overrides apply before hashing, so the config hash and manifests record them.
+     - The train stage forwards them to every `train-one` subprocess.
+     - Decisions are passed as `train.epochs=1` and `train.compute=fp32`. The model's canonical YAML is updated to the same values when the session is recorded, so later stages find the same `train_key`s.
+  2. **Mistral-7B rule** (D-070, unchanged): `configs/m3c_probe_mistral-7b.yaml` runs QLoRA u‖h, 25 steps or 20 min, layouts 4×8 → 2×16 → 1×32.
+     - 3 epochs if the harmful projection is ≤ 9 h at 3 epochs, else 1 epoch if ≤ 9 h, else stop and ask (`session.epoch_decision`).
+  3. **Gemma-3-4B fp16 criterion** (D-005 made concrete): `configs/m3c_probe_gemma3-4b.yaml` runs QLoRA u‖h in fp16 compute with the activation monitor on, for 50 steps or 20 min (D-005 said 50 steps; the 20-min cap bounds the cost).
+     - fp16 is kept only if **all** hold (`session.gemma_fp16_ok`):
+       - both probe jobs finish with no `NonFiniteError` from the loss/grad guard or the monitor;
+       - ≤ 5 fp16 scaler-skipped steps per job;
+       - the largest last-layer |hidden| ≤ 32,752 (half the fp16 range).
+     - Otherwise `train.compute=fp32`, then a second probe at fp32. In both cases epochs follow rule 2.
+  4. **Activation monitor** (`sft.ActivationMonitor`, `train.activation_monitor: true` for Gemma): a forward hook on the last decoder layer's output, the pre-norm residual stream where fp16 overflows (the final norm can hide a near-overflow).
+     - It raises `NonFiniteError` on the first NaN/Inf, which D-006 requires to abort.
+     - It records `max_abs_hidden` in `done.json`.
+  5. **Gemma LoRA scope:** model-entry key `lora_target_regex` = `.*language_model.*\.(q_proj|…|down_proj)`. LoRA covers the language model's 7 projections only, never the vision tower or the projector (tested on module names).
+     - Part of the `train_key` only when set. A pinned-key test (`test_train_keys_are_stable`) proves no earlier key changed.
+  6. **Session bound:** the long run starts only if elapsed session hours + the chosen projection ≤ 11.5 h (`session.session_ok`).
+  7. **DC-07 on Tier 1:** `test_real_tier1_qlora_endpoints` checks α ∈ {0, 1} identity and linearity, that no LoRA module is in the vision tower, and a finite α = 0.5 forward with the adapter on the model's *inference* base (fp16 balanced for Llama/Mistral, fp32 balanced for Gemma, as M4 will load it).
+  8. **Notebook:** `notebooks/m3c_train.ipynb`, `MODEL` per session in the order Llama → Mistral → Gemma. The decision logic lives in `rbbd.finetune.session` (CPU-tested), not in notebook cells.
+- Why: Every run-time choice is pre-registered, testable and recorded in the config hash.
+- Tradeoff accepted: A Gemma session that falls back to fp32 spends two probes (≤ 45 min) before training. 4×8 OOMs cost ≈ 1–2 min each.
+- Cost impact: Llama ≈ 6.6 h. Mistral ≈ 0.5 h probe + ≈ 6–7 h (1 epoch) or ≈ 20 h (3 epochs; would need a split, not planned). Gemma ≈ 0.5–0.8 h probes + training per the rule.
+- Paper deviation: as decided per model (epochs: App. C), each logged in that session's D entry.
+- Revisit-if: Gemma fails fp16 *and* fp32 projects > 9 h at 1 epoch (rule 2 then asks the user).

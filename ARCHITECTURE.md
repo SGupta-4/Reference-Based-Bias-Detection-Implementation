@@ -140,3 +140,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 - 2026-10-01 — `embed` depends on `train` only for α-checkpoints; CLI gains `compare-embeddings` — D-057, D-058.
 - 2026-10-01 — `train` stage implemented: `finetune.sft` jobs run as `cli train-one` processes (u‖h on two GPUs); α endpoints are the trained adapters — D-065, D-066, D-067.
 - 2026-10-01 — Tier 2 training: batch-layout fallback, ephemeral full-FT checkpoints, per-pair store sync, CLI `restore`; full endpoints stored at their `train/` path — D-072.
+- 2026-10-02 — Config overrides (`--set`, hashed) forwarded to training subprocesses; `rbbd.finetune.session` holds the pre-registered M3c probe rules; activation monitor for fp16 probes — D-076.

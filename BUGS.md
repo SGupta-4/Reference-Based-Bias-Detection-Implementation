@@ -359,3 +359,28 @@ IDs are sequential and never reused.
 - Verification (CPU): all notebook code cells parse. Kaggle: next run.
 - GPU-hours lost: ≈ 0.1 (install + failed cells, ≈ 6 min)
 - Linked commits and D-### entries: `3644675`; D-036, D-072; B-021
+
+## B-023 Feature: M3c Tier 1 training preparation (Llama, Mistral, Gemma)
+- Status: In progress. CPU side done; three Kaggle sessions pending (`notebooks/m3c_train.ipynb`, Llama → Mistral → Gemma).
+- How it was found or scoped: PLAN §7 M3c-T9–T11; the user said "prepare M3c" (2026-10-02).
+- Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3c_train.ipynb` with `MODEL` per session.
+- Hypotheses tried (design risks found while preparing):
+  - A new `TrainSpec` field would change every existing `train_key` and orphan the finished Tier 2 endpoints. The first draft did; caught by comparing keys against the previous code → the field is omitted when unset, and three keys are pinned in a test.
+  - Shell escaping doubled the backslash in the probe config's regex (it would have matched nothing) → fixed; a test asserts both Gemma configs share one regex and that it matches only language-model projections.
+  - A post-norm activation monitor would miss Gemma's residual-stream near-overflow → the hook is on the last decoder layer.
+  - Decoder layers return a plain tensor in transformers 4.57 (not a tuple) → the monitor and the tests handle both.
+- Fix:
+  - Code: `config.apply_override` + `load(path, overrides)`; `--set` on `run`/`status`/`train-one` (forwarded by `_launch`); `TrainSpec.lora_target_regex`; `sft.ActivationMonitor` + `train.activation_monitor`; `rbbd.finetune.session`.
+  - Configs and notebook: `configs/tier1_{mistral-7b,gemma3-4b}.yaml` (`tier1_llama3.1-8b.yaml` gains `sync_each_pair`), `configs/m3c_probe_{mistral-7b,gemma3-4b}.yaml`, `notebooks/m3c_train.ipynb`.
+  - Tests: GPU `test_real_tier1_qlora_endpoints`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `125 passed, 13 deselected in 13.71s`. New tests:
+  - key pinning (3 regimes);
+  - regex reaching PEFT and the key;
+  - activation monitor records and raises;
+  - Gemma regex scope;
+  - overrides forwarded to `train-one`;
+  - config overrides (YAML-parsed, hashed, errors);
+  - the four session-rule tests.
+  The GPU test skips without `RBBD_M3C_CONFIG`, and all notebook cells parse. Kaggle: pending.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-005, D-062, D-070, D-071, D-076
