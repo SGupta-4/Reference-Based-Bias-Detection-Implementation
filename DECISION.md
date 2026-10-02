@@ -1130,3 +1130,31 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: ≈ 0.2 h per session for probe and setup. Training per D-055 ≈ 12.3 session-h for core Tier 2; the probes replace that estimate.
 - Paper deviation: no (Tier 2 is already an analogue, D-009).
 - Revisit-if: a session bound exceeds 11 h, or a full-FT layout fails even at 1×32 (then D-009's FSDP fallback).
+
+## D-073 M3b session 1 (Qwen2.5-0.5B) results: all four u‖h pairs trained; DC-07 passes on real Tier 2 endpoints
+- Date: 2026-10-02
+- Context: `notebooks/m3b_train.ipynb` with `MODEL = "qwen2.5-0.5b"`, run as Save & Run All on Kaggle 2×T4. Commit `5d43021`, session `20261001T181946Z`. Store commits: last per-pair upload `3439e223` (full s2), `train/qwen2.5-0.5b-it` `2aab01a0`, env `56acc0c2`.
+- Observed (facts):
+  - **Probe (D-072 rule):** full FT at layout 4×8 (no OOM), 2,177 / 2,187 tok/s (harmful / unharmful), peak 11.28 GiB.
+    - Harmful projection 1.89 h at 3 epochs × 4 pending pairs → bound **7.56 h ≤ 11 h → proceed**.
+  - **Training:** `stage train done in 30396.6 s` (8.44 h); every job ran 750 steps (8,000 / 32 × 3 epochs), with 0 scaler-skipped steps and no OOM markers.
+
+    | Job | train loss | final loss | steady tok/s | peak GiB | s (process) |
+    |---|---|---|---|---|---|
+    | full u s0 / s1 / s2 | 1.3058 / 1.3050 / 1.3044 | 0.388 / 0.369 / 0.432 | 1,933 / 1,942 / 1,934 | 11.28 | 5,208 / 5,174 / 5,204 |
+    | full h s0 / s1 / s2 | 1.8250 / 1.8238 / 1.8238 | 0.638 / 0.592 / 0.669 | 1,985 / 1,986 / 1,977 | 11.28 | 7,500 / 7,493 / 7,526 |
+    | LoRA u s0 | 1.5687 | 0.839 | 1,937 | 8.20 | 5,185 |
+    | LoRA h s0 | 2.0885 | 1.568 | 1,957 | 8.20 | 7,592 |
+
+  - **Projection vs actual:** each harmful full-FT run took 2.08 h against the probe's 1.89 h (+10 %), within D-070's 15 % drift bound. The session total of 8.44 h stayed under the 11 h bound.
+  - **DC-07 (GPU, `2 passed`):**
+    - Full FT: W(α=1) and W(α=0) are `torch.equal` to the endpoints over 290 tensors; max |W_u − W_h| = 0.0709; the α=0.5 forward is finite.
+    - LoRA: 168 modules, max relative linearity error 5.4e-8.
+  - **Disk:** `/kaggle/working` 8.4 of 20 GB.
+  - **Seeds:** the seed-to-seed spread in train loss is ≤ 0.0014 (data order only; full FT has no random init), while final-step losses differ by up to 0.08.
+- Choice: The Qwen half of M3b is complete. `m3b-green` waits for session 2 (Llama-3.2-1B).
+- Why: Every M3b check for this model passes with stated outputs.
+- Tradeoff accepted: The smoke config shares the slug `qwen2.5-0.5b-it`, so the restored tree `train/qwen2.5-0.5b-it/lora/` also holds the 24-step smoke endpoints (schema v1 `e53d…`/`f121…` and v2 `aa62…`/`c6e3…`). Jobs resolve by `train_key`, so nothing mixes them up. M4 must locate checkpoints through `plan_jobs`, never by globbing (logged as B-020).
+- Cost impact: 8.44 h training + ≈ 0.3 h setup, probe, tests and sync ≈ 8.8 session-h, against D-055's ≈ 5 h estimate for Qwen. The measured cost replaces it.
+- Paper deviation: no (Tier 2 analogue, D-009).
+- Revisit-if: session 2's probe bound exceeds 11 h.

@@ -294,7 +294,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `c44ecaf`; D-042, D-055, D-070, D-071
 
 ## B-019 Feature: M3b Tier 2 training (full FT + LoRA, seeds, OOM fallback, per-pair sync)
-- Status: In progress. CPU side done; Kaggle sessions (`notebooks/m3b_train.ipynb`, Qwen then Llama-1B) pending.
+- Status: In progress. Session 1 (Qwen2.5-0.5B, `5d43021`) is complete: 4 pairs trained and DC-07 passed (D-073). Session 2 (Llama-3.2-1B) is pending, then `m3b-green`.
 - How it was found or scoped: PLAN §7 M3b-T5–T7; the user said "prepare M3b" (2026-10-01).
 - Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3b_train.ipynb` with `MODEL = "qwen2.5-0.5b"`, then `"llama3.2-1b"`.
 - Hypotheses tried (design risks found before running):
@@ -315,6 +315,16 @@ IDs are sequential and never reused.
   - store `download_dir`;
   - `sync_jobs` uploads finished jobs and swallows store errors.
   - Planning dry run on the real configs: Qwen → full s0, LoRA s0, full s1, full s2 (4 pairs); Llama-1B → full s0, LoRA s0 (2 pairs). The GPU tests skip without `RBBD_M3B_CONFIG`. All notebook cells parse.
-  - Kaggle: pending.
+  - Kaggle session 1 (Qwen, session `20261001T181946Z`): probe bound 7.56 h → proceed; training 8.44 h, 8 jobs × 750 steps, 0 skips, 0 OOM; GPU DC-07 `2 passed in 96.01s`. Full numbers in D-073.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-008, D-009, D-033, D-042, D-072
+- Linked commits and D-### entries: `5d43021`; D-008, D-009, D-033, D-042, D-072, D-073
+
+## B-020 Risk: smoke and Tier 2 Qwen jobs share one slug directory
+- Status: Open, mitigated by design. Act on it in M4.
+- How it was found or scoped: The M3b session 1 summary (D-073) listed six `done.json` files under `train/qwen2.5-0.5b-it/lora/`: the two Tier 2 endpoints plus four 24-step smoke endpoints (two from schema v1, two from v2), restored from the store.
+- Reproduction command: `ls artifacts/train/qwen2.5-0.5b-it/lora/*/seed0/` after `cli restore --path train/qwen2.5-0.5b-it`.
+- Hypotheses tried: n/a. The behaviour is as designed: `train_key` differs, and `plan_jobs` resolves each config's own jobs. Anything that globs `train/<slug>/<regime>/<split>/seed0/*` would match several jobs.
+- Fix (planned, M4): the α-checkpoint sweep finds endpoints only through `plan_jobs` for its config. A CPU test will assert that a smoke job never resolves for the Tier 2 config. Renaming the smoke slug would change smoke keys and retrain them (≈ 2 min), but it is not needed.
+- Verification: pending (M4).
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-072, D-073
