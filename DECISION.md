@@ -1176,3 +1176,47 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: ≤ 2 min per fallback. Session 2's failed attempt cost ≈ 0.1 session-h.
 - Paper deviation: no.
 - Revisit-if: 1×32 also runs out of memory for 1B full FT. Then D-009's FSDP fallback, or dropping TRL's per-step logits metrics (≈ 0.5–1 GiB), becomes the next step and gets its own D entry.
+
+## D-075 M3b session 2 (Llama-3.2-1B) results and M3b closed: `m3b-green` = `4a43b15`
+- Date: 2026-10-02
+- Context: `notebooks/m3b_train.ipynb` with `MODEL = "llama3.2-1b"`, Save & Run All on Kaggle 2×T4. Commit `4a43b15`, session `20261002T063404Z`, wall-clock 34,813 s (9.67 h).
+  - Store commits: per-pair uploads `e20cb635`/`e568ce32` (full) and `1a7bf584`/`a8f167db` (LoRA); end-of-session sync of manifests and ftdata `f554146e`.
+  - Session 1 (Qwen, `5d43021`, D-073) used the same training code path. B-021/B-022 changed only the OOM relaunch, logging and notebooks, and no `train_key` changed, so its endpoints stand.
+- Observed (facts):
+  - **Secrets:** `{'HF_TOKEN': True}`. `restore` found 0 files (first successful run for this model).
+  - **Probe (D-072):** fell back to batch 1×32. Harmful 764.5 tok/s, unharmful 832.9 tok/s, peak 12.93 GiB. Harmful projection 5.40 h × 2 pairs → bound **10.8 h ≤ 11 h → proceed**.
+  - **Layout fallback (B-021 fix, Kaggle-verified):**
+    - Full FT 4×8 OOMed ("Tried to allocate 1.96 GiB … 13.29 GiB in use").
+    - 2×16 OOMed ("998 MiB … 13.6 GiB in use").
+    - Each relaunch was a fresh process on the same GPU (06:53:57 → 06:54:47/52 → 06:56:37 / 06:59:52). **1×32 fit**, peak 12.93 GiB.
+    - LoRA fit at 4×8 (peak 8.64 GiB).
+  - **Training:** `stage train done in 33305.1 s` (9.25 h); 750 steps each; 0 scaler-skipped steps.
+
+    | Job | layout | train loss | final loss | steady tok/s | s (process) |
+    |---|---|---|---|---|---|
+    | full u s0 | 1×32 | 1.0290 | 0.195 | 708.9 | 14,295 |
+    | full h s0 | 1×32 | 1.4982 | 0.272 | 721.3 | 20,632 |
+    | LoRA u s0 | 4×8 | 1.3680 | 0.713 | 1,430.1 | 7,093 |
+    | LoRA h s0 | 4×8 | 1.8768 | 1.208 | 1,229.8 | 12,127 |
+
+  - **Projection vs actual:** harmful full FT 5.73 h vs 5.40 h projected (+6 %). The session's 9.25 h of training stayed under the 10.8 h bound.
+  - **DC-07 (GPU, `2 passed`):**
+    - Full FT: W(α=1)/W(α=0) are `torch.equal` to the endpoints over the 146 stored tensors; the tied `lm_head` alias was handled. max |W_u − W_h| = 0.0911; the α=0.5 forward is finite.
+    - LoRA: 112 modules, max relative linearity error 5.3e-8.
+  - **Disk:** `/kaggle/working` 9.7 of 20 GB.
+- M3b DONE checks (DONE.md row M3: DC-01, 02, 07, 09, 11, 13, 15, 19):
+  - **DC-01:** `ruff check src tests` → `All checks passed!`.
+  - **DC-02:** `python -m pytest -q -m "not gpu"` → `113 passed, 12 deselected in 87.35s`.
+  - **DC-07:** passes on real Tier 2 endpoints for both models (D-073, above).
+  - **DC-09 (training):** guard tests pass on CPU; every Tier 2 run had 0 skipped steps.
+  - **DC-11 (through train):** M3a (D-069).
+  - **DC-13:** GPU resume in M3a (D-069). Full-FT resume is bit-identical on CPU (`test_full_resume_after_kill_is_bit_identical`).
+  - **DC-15:** docs in each commit. **DC-19:** `grep -rn "PLACEHOLDER(M3)" tests` → no output.
+- Choice: M3b is green. Tag `m3b-green` on `4a43b157c7d0c99c6cdd8ce9bc12a6d7e38627a4`, the latest commit run on Kaggle, which covers all M3b code.
+- Why: Every M3b check passes with its stated output.
+- Tradeoff accepted:
+  - Llama-3.2-1B full FT trains at per-device batch 1 (effective 32, App. C), slower than Qwen (≈ 715 vs 1,960 tok/s).
+  - Session 2 used 9.67 h of a 12 h session.
+- Cost impact: M3b total ≈ 8.8 h (Qwen) + 9.7 h (Llama-1B) + ≈ 0.3 h of failed runs (B-021, B-022) ≈ 18.8 session-h; D-055 estimated 12.3. Tier 2's measured cost replaces that estimate in PLAN §8 (≈ +6.5 h).
+- Paper deviation: no (Tier 2 analogue, D-009).
+- Revisit-if: a `train` schema bump (ROLLBACK: re-run DC-07, DC-11, DC-13).

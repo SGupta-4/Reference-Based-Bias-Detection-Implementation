@@ -294,7 +294,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `c44ecaf`; D-042, D-055, D-070, D-071
 
 ## B-019 Feature: M3b Tier 2 training (full FT + LoRA, seeds, OOM fallback, per-pair sync)
-- Status: In progress. Session 1 (Qwen2.5-0.5B, `5d43021`) is complete: 4 pairs trained and DC-07 passed (D-073). Session 2 (Llama-3.2-1B) is pending, then `m3b-green`.
+- Status: **Done.** Session 1 (Qwen, `5d43021`, D-073) and session 2 (Llama-3.2-1B, `4a43b15`, D-075) are complete; tagged `m3b-green`.
 - How it was found or scoped: PLAN §7 M3b-T5–T7; the user said "prepare M3b" (2026-10-01).
 - Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3b_train.ipynb` with `MODEL = "qwen2.5-0.5b"`, then `"llama3.2-1b"`.
 - Hypotheses tried (design risks found before running):
@@ -317,7 +317,8 @@ IDs are sequential and never reused.
   - Planning dry run on the real configs: Qwen → full s0, LoRA s0, full s1, full s2 (4 pairs); Llama-1B → full s0, LoRA s0 (2 pairs). The GPU tests skip without `RBBD_M3B_CONFIG`. All notebook cells parse.
   - Kaggle session 1 (Qwen, session `20261001T181946Z`): probe bound 7.56 h → proceed; training 8.44 h, 8 jobs × 750 steps, 0 skips, 0 OOM; GPU DC-07 `2 passed in 96.01s`. Full numbers in D-073.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: `5d43021`; D-008, D-009, D-033, D-042, D-072, D-073
+  - Kaggle session 2 (Llama-1B, session `20261002T063404Z`): full FT fell back 4×8 → 2×16 → 1×32 (fresh processes); training 9.25 h; GPU DC-07 `2 passed`. Full numbers in D-075.
+- Linked commits and D-### entries: `5d43021`, `4a43b15`; D-008, D-009, D-033, D-042, D-072, D-073, D-074, D-075
 
 ## B-020 Risk: smoke and Tier 2 Qwen jobs share one slug directory
 - Status: Open, mitigated by design. Act on it in M4.
@@ -330,7 +331,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-072, D-073
 
 ## B-021 Bug: the OOM layout fallback failed for Llama-3.2-1B full FT, and the failure report hid the error
-- Status: Fixed on CPU; Kaggle verification pending (M3b session 2 rerun).
+- Status: **Closed.** Verified on Kaggle (session `20261002T063404Z`, `4a43b15`): 4×8 and 2×16 OOMed and were relaunched in fresh processes, 1×32 trained to completion, and the probe printed each job's log.
 - How it was found or scoped: M3b session 2 (`d4bbe2b`, session `20261002T042125Z`). The probe stage failed ≈ 60 s after launch with `FileNotFoundError: …/llama3.2-1b-it-probe/full/unharmful/seed0/4771744e3daa2694/train.log`, so the probe produced nothing (`proceed: false`). Correctly, no long run started.
 - Reproduction command: `notebooks/m3b_train.ipynb` with `MODEL = "llama3.2-1b"` at `d4bbe2b`.
 - Hypotheses tried:
@@ -345,7 +346,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `d4bbe2b`; D-072, D-074; B-019
 
 ## B-022 Bug: a run without the HF_TOKEN secret continued and failed on every gated call
-- Status: Fixed (notebooks fail fast). The M3b session 2 rerun is pending.
+- Status: **Closed.** The next run attached the secret (`{'HF_TOKEN': True}`) and completed (D-075). The fail-fast path is in every notebook; it has not been triggered since.
 - How it was found or scoped: M3b session 2 rerun at `3644675` (Kaggle session `20261002T050031Z`, Save & Run All). The secrets cell printed `{'HF_TOKEN': False}`, and every later step failed:
   - `cli restore` → `StoreError: … not found as dataset or model` (private repo, unauthenticated);
   - `ftdata` → `DatasetNotFoundError: … gated dataset`;
