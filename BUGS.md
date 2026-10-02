@@ -343,3 +343,18 @@ IDs are sequential and never reused.
 - Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `113 passed, 12 deselected in 13.95s`. Kaggle: pending.
 - GPU-hours lost: ≈ 0.1
 - Linked commits and D-### entries: `d4bbe2b`; D-072, D-074; B-019
+
+## B-022 Bug: a run without the HF_TOKEN secret continued and failed on every gated call
+- Status: Fixed (notebooks fail fast). The M3b session 2 rerun is pending.
+- How it was found or scoped: M3b session 2 rerun at `3644675` (Kaggle session `20261002T050031Z`, Save & Run All). The secrets cell printed `{'HF_TOKEN': False}`, and every later step failed:
+  - `cli restore` → `StoreError: … not found as dataset or model` (private repo, unauthenticated);
+  - `ftdata` → `DatasetNotFoundError: … gated dataset`;
+  - the Llama download → `GatedRepoError: 401`;
+  - the probe cell → `KeyError: 'stats.json'` (no ftdata manifest).
+  No training ran, and the B-021 fix was not exercised.
+- Reproduction command: run any notebook without attaching the `HF_TOKEN` secret (Add-ons → Secrets).
+- Hypotheses tried: a code regression from B-021. Rejected: every failure is an authentication failure, and the secrets cell reported the token missing.
+- Fix: every notebook's secrets cell (`00_probe`, `run_stage`, `m2_extract`, `m3a_train`, `m3b_train`, `m3c_probe`) raises `RuntimeError("HF_TOKEN secret not attached …")` when the token is absent, so Save & Run All stops at that cell. The M3b probe cell also raises a clear error when the ftdata manifest is missing.
+- Verification (CPU): all notebook code cells parse. Kaggle: next run.
+- GPU-hours lost: ≈ 0.1 (install + failed cells, ≈ 6 min)
+- Linked commits and D-### entries: `3644675`; D-036, D-072; B-021
