@@ -224,6 +224,10 @@ def _cmd_train_one(args: argparse.Namespace) -> int:
         )
     try:
         done = sft.run_job(cfg, match[0], single_attempt=True)
+    except sft.SessionPaused as exc:
+        # Checkpoint saved, no done.json: the next session resumes this job (D-079).
+        print(f"paused: {exc}")
+        return sft.PAUSE_EXIT
     except sft.LayoutOOM as exc:
         # The parent relaunches a fresh process for the next layout (B-021).
         print(f"layout OOM: {exc}")

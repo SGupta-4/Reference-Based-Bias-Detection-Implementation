@@ -1303,3 +1303,52 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: ≈ 0.56 session-h for the two probes.
 - Paper deviation: yes (as already logged in D-005), App. C precision: fp32 compute instead of bf16.
 - Revisit-if: the user decides (B-024).
+
+## D-079 Gemma-3-4B trains 1 epoch in fp32 over two sessions: a deadline pause with checkpoint sync, resumed next session (user decision on D-078 / B-024; refines D-070, D-072, D-076)
+- Date: 2026-10-08
+- Context: D-078 stopped and asked: Gemma-3-4B needs fp32 compute, and 1 harmful epoch projects 11.66 h, which does not fit one 12 h session. The user chose B-024 option 1, "1 epoch, two sessions".
+- Options considered (B-024):
+  1. 1 epoch over two sessions.
+  2. ≈ 0.75 epoch in one session.
+  3. Drop Gemma from Tier 1.
+- Choice:
+  - **Config:** `configs/tier1_gemma3-4b.yaml` sets `epochs: 1` (with `compute: fp32`). New hash `3da761e474f952a7`. No Gemma endpoint has been trained yet, so no artifact is orphaned.
+  - **Pause mechanism:**
+    - Training reads an optional wall-clock deadline from `$RBBD_TRAIN_DEADLINE_UNIX` (`sft._deadline_from_env`). This is operational state, not part of the config or the train key.
+    - `sft.DeadlineCallback` sets `should_save` and `should_training_stop` at the first step end past the deadline, unless that step is the last one.
+    - `train_one` then raises `SessionPaused` and writes no `done.json`.
+    - `cli train-one` exits `PAUSE_EXIT = 76`.
+  - **Parallel runner:**
+    - `_run_parallel` treats exit 76 as paused, not failed, and does not relaunch the job.
+    - It syncs the pair with `sync_jobs(..., include_unfinished=True)`: the job directory with its single `checkpoints/checkpoint-N` (adapter, optimizer, scheduler, RNG state) goes to the private store.
+    - It then raises `TrainingPaused`, so the train-stage manifest stays incomplete.
+  - **Resume:**
+    - The next session runs `cli restore --path train/<slug>` as usual.
+    - `train_one` already resumes from the newest checkpoint (D-030, DC-13). The schedule continues at the saved step, so the run equals an uninterrupted one.
+  - **Notebook** (`notebooks/m3c_train.ipynb`):
+    - The Gemma branch skips the probes and is exempt from `session_ok`.
+    - The deadline is set to session start + 11.0 h, leaving ≈ 1 h for sync before Kaggle's 12 h stop.
+    - The DC-07 GPU test runs only when both endpoints have `done.json`.
+    - The summary prints `all_done` and `paused`.
+- Why:
+  - The user's decision.
+  - This keeps the paper's full epoch on the same data, unlike option 2, and keeps all three model families, unlike option 3.
+  - A deadline pause is deterministic and saves exactly once, so it does not depend on a kill landing after a wall-clock save (DC-13 shows resume works, but a kill during a save would lose up to `save_minutes`).
+  - The extra Kaggle quota is the only cost.
+- Tradeoff accepted:
+  - Two sessions for one model.
+  - About 1 h of session 1 is left unused for training as a safety margin.
+  - Session 2 reloads the 4-bit base in fp32 compute for about 1.2 h of remaining steps.
+  - The resume is bit-identical on CPU (`test_deadline_pause_then_resume_is_bit_identical`). On GPU, kernels are non-deterministic, as in any resumed run.
+- Cost impact:
+  - Session 1 ≈ 11.2 session-h: setup, then unharmful (≈ 7.6 h) finishes and harmful trains until the 11 h deadline.
+  - Session 2 ≈ 2–2.5 session-h: restore, ≈ 1.1–1.3 h of harmful steps, the DC-07 test (fp32 load), sync.
+  - Total ≈ 13.5 session-h; the D-078 probes already cost 0.56 h.
+  - Disk: one LoRA checkpoint (≈ 30 M fp32 adapter parameters plus Adam state, ≈ 0.4 GB) extra in the store until the job finishes.
+- Paper deviation: **yes**, App. C:
+  - 1 epoch instead of 3, as for Llama and Mistral (D-071, D-077).
+  - fp32 compute instead of bf16 (D-005, D-078).
+  - Pausing and resuming changes nothing in the method.
+- Revisit-if:
+  - Session 1's harmful job reaches fewer steps than projected (throughput below ≈ 105 tok/s): session 2 still finishes it, so only the cost changes.
+  - Or the resumed loss curve shows a discontinuity at the pause step.

@@ -379,6 +379,37 @@ def project_hours(n_tokens: int, epochs: float, tokens_per_second: float | None)
     return round(n_tokens * epochs / tokens_per_second / 3600.0, 2)
 
 
+DEADLINE_ENV = "RBBD_TRAIN_DEADLINE_UNIX"  # operational, never part of a config or train key
+PAUSE_EXIT = 76  # train-one exit code: paused at the session deadline with a checkpoint
+
+
+class SessionPaused(RuntimeError):
+    """Training stopped at the session deadline after saving a checkpoint (D-079).
+
+    No `done.json` is written, so the next session restores the job directory and
+    `train_one` resumes from that checkpoint.
+    """
+
+
+class DeadlineCallback(_callback_base()):  # type: ignore[misc]
+    """At the wall-clock `deadline` (unix seconds), save a checkpoint and stop (D-079).
+
+    `paused` tells `train_one` that the stop came from the deadline, not the schedule.
+    """
+
+    def __init__(self, deadline: float) -> None:
+        self.deadline = deadline
+        self.paused = False
+        self.clock = time.time  # replaceable in tests
+
+    def on_step_end(self, args: Any, state: Any, control: Any, **kwargs: Any) -> Any:
+        if self.clock() >= self.deadline and state.global_step < state.max_steps:
+            control.should_save = True
+            control.should_training_stop = True
+            self.paused = True
+        return control
+
+
 class KillAfterSave(_callback_base()):  # type: ignore[misc]
     """Test hook (DC-13): raise `SimulatedKill` right after the checkpoint at `step`."""
 
@@ -481,6 +512,7 @@ def train_one(
     max_minutes: float | None = None,
     ckpt_dir: Path | None = None,
     activation_monitor: bool = False,
+    deadline_unix: float | None = None,
 ) -> dict[str, Any]:
     """Train one endpoint into `out_dir`, resuming from its newest checkpoint; return done.json.
 
@@ -523,6 +555,7 @@ def train_one(
     if monitor is not None:
         monitor.attach(model)
     time_limit = [TimeLimitCallback(max_minutes)] if max_minutes is not None else []
+    pause = DeadlineCallback(deadline_unix) if deadline_unix is not None else None
     # The LoRA A matrices are initialised inside SFTTrainer (get_peft_model): seed here so
     # the initial adapter depends on the spec's seed only, not on what ran before (B-017).
     from transformers import set_seed
@@ -539,6 +572,7 @@ def train_one(
             WallClockSaveCallback(save_minutes),
             throughput,
             *time_limit,
+            *([pause] if pause is not None else []),
             *extra_callbacks,
         ],
     )
@@ -552,6 +586,11 @@ def train_one(
     finally:
         if monitor is not None:
             monitor.detach()
+    if pause is not None and pause.paused:
+        step = trainer.state.global_step
+        raise SessionPaused(
+            f"paused at step {step}/{trainer.state.max_steps}; checkpoint in {ckpt_dir}"
+        )
     seconds = time.time() - t0
     guard_cb.check_counts(trainer.state.global_step)
 
@@ -806,6 +845,14 @@ def checkpoint_dir(cfg: Any, spec: TrainSpec, out_dir: Path) -> Path:
     return Path(out_dir) / "checkpoints"
 
 
+def _deadline_from_env() -> float | None:
+    """Session deadline (unix seconds) from $RBBD_TRAIN_DEADLINE_UNIX, if set (D-079)."""
+    import os
+
+    raw = os.environ.get(DEADLINE_ENV)
+    return float(raw) if raw else None
+
+
 def _is_oom(exc: BaseException) -> bool:
     import torch
 
@@ -813,6 +860,10 @@ def _is_oom(exc: BaseException) -> bool:
 
 
 OOM_EXIT = 75  # train-one exit code: this layout ran out of memory; relaunch for the next
+
+
+class TrainingPaused(RuntimeError):
+    """A train stage ended with paused jobs; its manifest stays incomplete (D-079)."""
 
 
 class LayoutOOM(RuntimeError):
@@ -858,6 +909,7 @@ def run_job(cfg: Any, job: Job, single_attempt: bool = False) -> dict[str, Any]:
                 max_minutes=t.get("max_minutes"),
                 ckpt_dir=checkpoint_dir(cfg, spec, out_dir),
                 activation_monitor=bool(t.get("activation_monitor", False)),
+                deadline_unix=_deadline_from_env(),
             )
         except Exception as exc:
             if not _is_oom(exc):
@@ -903,11 +955,15 @@ def stage(ctx: Any) -> Any:
     return StageResult(outputs=outputs)
 
 
-def sync_jobs(cfg: Any, artifacts_root: Path, jobs: Sequence[Job]) -> None:
+def sync_jobs(
+    cfg: Any, artifacts_root: Path, jobs: Sequence[Job], include_unfinished: bool = False
+) -> None:
     """Upload finished job directories to the private store right after they finish (D-072).
 
     A long Tier 2 session that dies at the 12 h limit then loses at most the pair in
-    progress; the next session restores them with `cli restore`. Upload failures are
+    progress; the next session restores them with `cli restore`. With
+    `include_unfinished`, paused jobs (checkpoint, no done.json) are uploaded too
+    (D-079). Upload failures are
     logged, not raised: training results stay on local disk for the end-of-session sync.
     """
     from rbbd.utils.store import open_store
@@ -915,7 +971,7 @@ def sync_jobs(cfg: Any, artifacts_root: Path, jobs: Sequence[Job]) -> None:
     try:
         store = open_store(cfg.get("store.repo_id"), cfg.get("store.repo_type", "auto"))
         for job in jobs:
-            if (job.out_dir / "done.json").exists():
+            if include_unfinished or (job.out_dir / "done.json").exists():
                 rel = job.out_dir.relative_to(artifacts_root).as_posix()
                 store.upload_dir(job.out_dir, rel, f"train {rel}")
     except Exception as exc:  # noqa: BLE001 - never lose a finished run to a sync error
@@ -969,7 +1025,7 @@ def _run_parallel(
     for i in range(0, len(pending), 2):
         pair = pending[i : i + 2]
         running = {gpu: (job, *launch(ctx, job, gpu)) for gpu, job in enumerate(pair)}
-        failed = []
+        failed, paused = [], []
         while running:
             for gpu, (job, proc, logf) in list(running.items()):
                 code = proc.poll()
@@ -979,6 +1035,8 @@ def _run_parallel(
                 del running[gpu]
                 if code == OOM_EXIT and job.has_untried_layout():
                     running[gpu] = (job, *launch(ctx, job, gpu))
+                elif code == PAUSE_EXIT:
+                    paused.append(job)
                 elif code != 0:
                     failed.append(f"{job.out_dir} (exit {code}):\n{_tail(job.log_path)}")
             if running:
@@ -986,4 +1044,8 @@ def _run_parallel(
         if failed:
             raise RuntimeError("train-one failed:\n" + "\n\n".join(failed))
         if ctx.cfg.get("train.sync_each_pair", False):
-            sync_jobs(ctx.cfg, ctx.env.artifacts_root, pair)
+            sync_jobs(ctx.cfg, ctx.env.artifacts_root, pair, include_unfinished=bool(paused))
+        if paused:
+            # The stage stays incomplete (resumable); the next session restores and resumes.
+            names = ", ".join(f"{j.split} ({j.out_dir.name})" for j in paused)
+            raise TrainingPaused(f"paused at the session deadline: {names}; resume next session")

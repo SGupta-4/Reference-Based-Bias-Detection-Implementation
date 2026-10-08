@@ -759,3 +759,76 @@ def test_launch_passes_overrides_to_train_one(tmp_path, monkeypatch):
     cmd = seen["cmd"]
     assert cmd[cmd.index("--set") + 1] == "train.epochs=1" and "train.compute=fp32" in cmd
     assert seen["env"]["CUDA_VISIBLE_DEVICES"] == "1"
+
+
+# --- D-079: pause at the session deadline, resume next session --------------------------------
+
+
+def test_deadline_pause_then_resume_is_bit_identical(tmp_path):
+    """A deadline in the past pauses after step 1 with a checkpoint and no done.json; a later
+    call without a deadline resumes and ends bit-identical to an uninterrupted run."""
+    rows, tok = make_rows(16, seed=9), make_chat_tokenizer()
+    spec = _spec(epochs=1)
+    sft.train_one(spec, rows, tok, make_tiny_model(), tmp_path / "ref", save_minutes=1e6)
+    with pytest.raises(sft.SessionPaused, match="paused at step 1/4"):
+        sft.train_one(
+            spec,
+            rows,
+            tok,
+            make_tiny_model(),
+            tmp_path / "job",
+            save_minutes=1e6,
+            deadline_unix=0.0,
+        )
+    assert not (tmp_path / "job" / "done.json").exists()
+    assert sft.latest_checkpoint(tmp_path / "job" / "checkpoints").endswith("checkpoint-1")
+    done = sft.train_one(spec, rows, tok, make_tiny_model(), tmp_path / "job", save_minutes=1e6)
+    assert done["resumed_from"] == "checkpoint-1" and done["global_step"] == 4
+    a = ad.read_adapter(tmp_path / "ref" / "final").tensors
+    b = ad.read_adapter(tmp_path / "job" / "final").tensors
+    assert all(torch.equal(a[k], b[k]) for k in a)
+
+
+def test_deadline_callback_does_not_pause_on_the_last_step():
+    cb = sft.DeadlineCallback(deadline=0.0)
+    control = SimpleNamespace(should_save=False, should_training_stop=False)
+    cb.on_step_end(None, SimpleNamespace(global_step=4, max_steps=4), control)
+    assert not cb.paused and not control.should_training_stop
+    cb.on_step_end(None, SimpleNamespace(global_step=3, max_steps=4), control)
+    assert cb.paused and control.should_save and control.should_training_stop
+
+
+def test_run_parallel_pause_exit_syncs_and_stays_resumable(tmp_path, monkeypatch):
+    cfg = _cfg({"regimes": ["qlora"], "sync_each_pair": True})
+    jobs = sft.plan_jobs(cfg, tmp_path, _ftdata(tmp_path))
+    synced, launches = [], []
+    monkeypatch.setattr(
+        sft,
+        "sync_jobs",
+        lambda c, root, js, include_unfinished=False: synced.append(
+            ([j.split for j in js], include_unfinished)
+        ),
+    )
+
+    def launch(ctx, job, gpu):
+        launches.append(job.split)
+        job.log_path.parent.mkdir(parents=True, exist_ok=True)
+        if job.split == "unharmful":
+
+            def effect():
+                (job.out_dir / "done.json").write_text("{}")
+
+            return _FakeProc(0, effect), open(job.log_path, "a")
+        return _FakeProc(sft.PAUSE_EXIT), open(job.log_path, "a")
+
+    with pytest.raises(sft.TrainingPaused, match="harmful"):
+        sft._run_parallel(_ctx(cfg, tmp_path), jobs, launch=launch, poll_seconds=0)
+    assert launches == ["unharmful", "harmful"]  # a pause is never relaunched
+    assert synced == [(["unharmful", "harmful"], True)]
+
+
+def test_deadline_from_env(monkeypatch):
+    monkeypatch.delenv(sft.DEADLINE_ENV, raising=False)
+    assert sft._deadline_from_env() is None
+    monkeypatch.setenv(sft.DEADLINE_ENV, "1760000000.5")
+    assert sft._deadline_from_env() == 1760000000.5
