@@ -13,7 +13,7 @@ ftdata:
 train:
   regimes: [qlora]
   epochs: 3
-  compute: fp16
+  compute: fp32            # D-078: fp16 probe all-NaN at the first forward; |hidden| reaches 1.7e5 > fp16 max
   batch_layouts: {qlora: [[4, 8], [2, 16], [1, 32]]}
   activation_monitor: true
   sync_each_pair: true

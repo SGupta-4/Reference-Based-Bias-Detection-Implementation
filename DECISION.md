@@ -1255,3 +1255,51 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: Llama ≈ 6.6 h. Mistral ≈ 0.5 h probe + ≈ 6–7 h (1 epoch) or ≈ 20 h (3 epochs; would need a split, not planned). Gemma ≈ 0.5–0.8 h probes + training per the rule.
 - Paper deviation: as decided per model (epochs: App. C), each logged in that session's D entry.
 - Revisit-if: Gemma fails fp16 *and* fp32 projects > 9 h at 1 epoch (rule 2 then asks the user).
+
+## D-077 M3c sessions 1–2 (Llama-3.1-8B, Mistral-7B) results; Mistral trains 1 epoch at batch 4×8 (D-070 rule applied)
+- Date: 2026-10-08
+- Context: `notebooks/m3c_train.ipynb` at `8ab97fb`, Save & Run All on Kaggle 2×T4.
+  - **Llama** (session `20261007T133950Z`): store commits train `b891b5fb`, manifests `74276521`, env `79778cfc`.
+  - **Mistral** (session `20261008T020912Z`): store commits train `abca04f5`, manifests `333a894f`, env `9bc9a8d1`.
+- Observed (facts):
+  - **Llama-3.1-8B** (D-071: batch 2×16, 1 epoch, no probe):
+    - Train stage 25,486.8 s (7.08 h); 250 steps each; 0 scaler skips; peak 9.91 / 9.90 GiB.
+    - Harmful: train loss 1.713 → final 1.660, 195.7 tok/s, 25,341 s (7.04 h vs 6.41 h projected, +10 %).
+    - Unharmful: 1.267 → 0.803, 206.5 tok/s, 16,315 s.
+    - DC-07 (`1 passed`): 224 LoRA modules, max relative linearity error 4.9e-8; the α = 0.5 forward on the fp16 balanced base is finite.
+  - **Mistral-7B** (probe: 4×8 fit, peak 8.98 GiB):
+    - Probe: harmful 215.5 tok/s → 20.40 h at 3 epochs, 6.80 h at 1; unharmful 264.0 tok/s → 11.04 / 3.68 h.
+    - Rule (`session.epoch_decision`) → **1 epoch** (`train.epochs=1`); elapsed 0.5 h + 6.8 h ≤ 11.5 h → proceed.
+    - Train stage 21,812.9 s (6.06 h); 250 steps each.
+    - Harmful: 1.360 → 1.317, 243.9 tok/s, 21,700 s (6.03 h, −11 %), 0 skips.
+    - Unharmful: 1.103 → 0.764, 251.8 tok/s, 13,942 s, 1 scaler skip.
+    - DC-07 (`1 passed`): 224 modules, 5.4e-8; the α = 0.5 forward on the fp16 balanced base is finite.
+  - **Disk:** `/kaggle/working` 1.3 GB (Llama) and 1.6 GB (Mistral).
+- Choice:
+  - `configs/tier1_mistral-7b.yaml` now says `epochs: 1`. Its hash, `01dbcf23f240d5b3`, equals the hash of the Kaggle run made with `--set train.epochs=1`, so every downstream key resolves to these endpoints.
+  - Llama's config is unchanged (hash `fa72ed840413110b`, as run).
+  - Both Tier 1 LoRA endpoints are complete.
+- Why: Pre-registered rule (D-070/D-076) and the pre-approved 1-epoch fallback (D-042/Q3).
+- Tradeoff accepted: Both models get 1 of App. C's 3 epochs (as D-071 for Llama). Batch layouts differ (2×16 vs 4×8; effective batch 32 in both).
+- Cost impact: Llama ≈ 7.6 session-h; Mistral ≈ 6.9 session-h (incl. the 22-min probe). The DC-07 GPU test costs ≈ 22 min per model (loading the 16 GB fp16 base).
+- Paper deviation: **yes**, App. C epochs (3 → 1) for Mistral-7B (as D-071 for Llama).
+- Revisit-if: the quota allows 3-epoch retraining (≈ +13–14 h per model).
+
+## D-078 Gemma-3-4B: fp16 training fails at the first forward; fp32 projects 11.66 h for 1 epoch, so the D-070 rule stops and asks the user
+- Date: 2026-10-08
+- Context: `notebooks/m3c_train.ipynb` with `MODEL = "gemma3-4b"`, commit `8ab97fb`, session `20261008T101651Z`. Store commits: manifests `db5977b0`, env `3808f210`.
+- Observed (facts):
+  - **fp16 probe:** both jobs raised `NonFiniteError: non-finite values at train.hidden: nan=10485760 inf=0 shape=(4, 1024, 2560) (call=1, …)`. That is the activation monitor on the very first forward, with **every** value NaN (as in M2's fp16 inference, D-062). → D-076 fp16 criterion: **fail**.
+  - **fp32 probe** (`train.compute=fp32`, 4×8 fit, peak 11.44 GiB, 5 steps in the 20-min window, 0 skips):
+    - Harmful: 115.5 tok/s → **34.98 h at 3 epochs, 11.66 h at 1**.
+    - Unharmful: 118.8 tok/s → 22.64 / 7.55 h.
+    - **Max |hidden| (last-layer residual, fp32): 174,530 (harmful) and 168,469 (unharmful), 2.7× the fp16 maximum of 65,504.** This is why fp16 cannot represent Gemma-3's residual stream on T4, independent of the scaler.
+  - `session.epoch_decision` → `epochs: None` ("even 1 epoch projects 11.66 h > 9.0 h: ask"); `proceed: false`. No long run started; the session used ≈ 0.56 h.
+- Choice:
+  - `configs/tier1_gemma3-4b.yaml` now says `compute: fp32`. That is settled by the fp16 failure whatever the epoch count, and its hash `0f668cc7d4d05525` equals the `--set train.compute=fp32` run.
+  - **The epoch count and session plan for Gemma are an open question for the user** (D-070: stop and ask). Options are listed in B-024.
+- Why: Pre-registered rule.
+- Tradeoff accepted: none yet.
+- Cost impact: ≈ 0.56 session-h for the two probes.
+- Paper deviation: yes (as already logged in D-005), App. C precision: fp32 compute instead of bf16.
+- Revisit-if: the user decides (B-024).

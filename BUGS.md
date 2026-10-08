@@ -361,7 +361,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `3644675`; D-036, D-072; B-021
 
 ## B-023 Feature: M3c Tier 1 training preparation (Llama, Mistral, Gemma)
-- Status: In progress. CPU side done; three Kaggle sessions pending (`notebooks/m3c_train.ipynb`, Llama → Mistral → Gemma).
+- Status: In progress. Llama and Mistral are trained and DC-07 passes (D-077). Gemma: fp16 failed and fp32 projects 11.66 h for 1 epoch, so the rule asked the user (D-078, B-024).
 - How it was found or scoped: PLAN §7 M3c-T9–T11; the user said "prepare M3c" (2026-10-02).
 - Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3c_train.ipynb` with `MODEL` per session.
 - Hypotheses tried (design risks found while preparing):
@@ -381,6 +381,23 @@ IDs are sequential and never reused.
   - overrides forwarded to `train-one`;
   - config overrides (YAML-parsed, hashed, errors);
   - the four session-rule tests.
-  The GPU test skips without `RBBD_M3C_CONFIG`, and all notebook cells parse. Kaggle: pending.
+  The GPU test skips without `RBBD_M3C_CONFIG`, and all notebook cells parse.
+  - Kaggle (`8ab97fb`): Llama session `20261007T133950Z` and Mistral session `20261008T020912Z` trained, with DC-07 `1 passed` each (D-077). In the Gemma session `20261008T101651Z`, fp16 failed at the first forward and the fp32 projection triggered the ask (D-078).
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-005, D-062, D-070, D-071, D-076
+- Linked commits and D-### entries: `8ab97fb`; D-005, D-062, D-070, D-071, D-076, D-077, D-078; B-024
+
+## B-024 Open decision: Gemma-3-4B Tier 1 training does not fit the 9 h rule in fp32
+- Status: Open. Waiting on the user (D-078).
+- How it was found or scoped: M3c Gemma session (`20261008T101651Z`).
+  - fp16 compute is impossible: the residual stream reaches |h| ≈ 1.7e5, which exceeds the fp16 maximum, and the first forward is all-NaN.
+  - fp32 QLoRA runs at ≈ 116 tok/s: 11.66 h for 1 harmful epoch, 7.55 h unharmful. With setup that exceeds one 12 h Kaggle session.
+- Reproduction command: `notebooks/m3c_train.ipynb` with `MODEL = "gemma3-4b"`.
+- Hypotheses tried: n/a (a design decision, not a defect).
+- Options:
+  1. **1 epoch in fp32 over two sessions.** Needs mid-run checkpoint upload so session 2 can resume the harmful job; unharmful finishes in session 1. Total ≈ 12.5–13 session-h.
+  2. **A fixed fraction of an epoch for both endpoints** (≈ 0.75 epoch → ≈ 8.7 h harmful) in one session. Cheaper, but a further deviation.
+  3. **Drop Gemma from Tier 1** (Llama + Mistral remain). Saves ≈ 13 h; loses the paper's third family.
+- Fix: pending the user's choice.
+- Verification: n/a.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-005, D-042, D-062, D-070, D-076, D-078

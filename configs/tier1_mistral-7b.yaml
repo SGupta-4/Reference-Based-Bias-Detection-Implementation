@@ -1,6 +1,5 @@
 # Tier 1, Mistral-7B-Instruct-v0.3 (PLAN §6; D-003, D-076). QLoRA u||h on the two T4s.
-# Epochs follow the D-070 rule from this model's own probe: the M3c notebook passes
-# `--set train.epochs=1` when the harmful run projects > 9 h at 3 epochs.
+# Epochs follow the D-070 rule from this model's own probe (D-077: 1 epoch, batch 4x8 fit).
 run_name: tier1_mistral-7b
 tier: 1
 models:
@@ -9,6 +8,6 @@ ftdata:
   census_tokenizers: []
 train:
   regimes: [qlora]
-  epochs: 3
+  epochs: 1                # D-077: probe projected 20.4 h at 3 epochs -> D-070 rule chose 1 (6.8 h)
   batch_layouts: {qlora: [[4, 8], [2, 16], [1, 32]]}
   sync_each_pair: true
