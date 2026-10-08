@@ -408,3 +408,23 @@ IDs are sequential and never reused.
   - `test_deadline_from_env`.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-005, D-030, D-042, D-062, D-070, D-076, D-078, D-079
+
+## B-025 Bug: the Kaggle clone cell fails when an attached GITHUB_TOKEN is rejected, although the repo is public
+- Status: Fixed in the notebooks (CPU-verified); the Kaggle re-run is pending.
+- How it was found or scoped:
+  - The first Gemma session (M3c, `REF = 35dda0d…`) stopped at the clone cell after 9 s: `git fetch failed: fatal: could not read Username for 'https://github.com': No such device or address`.
+  - No GPU time was used.
+- Reproduction command: any notebook with a `GITHUB_TOKEN` secret that GitHub rejects (for example an expired fine-grained token), then Save & Run All.
+- Hypotheses tried:
+  - **The commit isn't on GitHub or the SHA is unknown.** Ruled out. An anonymous `git fetch --depth 1 origin 35dda0d9…` from this container succeeds. An unknown SHA would fail with `not our ref`, not with an auth prompt.
+  - **Internet is off.** Ruled out. That gives `Could not resolve host`.
+  - **The token was rejected (HTTP 401).** This is the likely cause. The repo is public (`gh api repos/…` → `private: false`), so a 401 can only come from bad credentials. git then tried to prompt for a username, and Kaggle has no terminal. Not confirmed on Kaggle: this container's proxy replaces auth headers, so a bad token cannot be reproduced here.
+- Fix: in the clone cell of all seven notebooks:
+  - git now runs with `GIT_TERMINAL_PROMPT=0`.
+  - If a fetch with the token header fails, the cell prints `GITHUB_TOKEN was rejected (expired or revoked?); retrying without it` and fetches again with the `GIT_CONFIG_*` variables removed.
+  - The token value is still never printed (git's stderr does not contain header values).
+- Verification (CPU, this container):
+  - Ran the patched cell with a fake `kaggle_secrets` (invalid token) and a `subprocess.run` stub that fails the authenticated fetch. Output: `GITHUB_TOKEN was rejected (expired or revoked?); retrying without it` / `commit 35dda0d9aa8e8ba8055e6312e3255ed98fe25863`. The retry's env had no `GIT_CONFIG_*` keys.
+  - Ran the patched cell with no stub: `commit 35dda0d9…`.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-046
