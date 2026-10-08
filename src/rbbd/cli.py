@@ -46,6 +46,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     r = sub.add_parser("run", help="run pipeline stages")
     r.add_argument("--config", type=Path, required=True)
+    r.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override a config value (YAML-parsed), e.g. train.epochs=1",
+    )
     r.add_argument("--stages", help="comma-separated subset (default: all)")
     r.add_argument("--force", help="comma-separated stages to re-run despite a valid manifest")
     r.add_argument("--only-ckpt", help="restrict checkpoint-sweeping stages to one slug, e.g. a050")
@@ -53,11 +60,24 @@ def _build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("status", help="manifest status per stage")
     s.add_argument("--config", type=Path, required=True)
+    s.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override a config value (YAML-parsed), e.g. train.epochs=1",
+    )
 
     y = sub.add_parser("sync", help="upload an artifact subfolder to the private store")
     y.add_argument("--config", type=Path, default=DEFAULT_BASE)
     y.add_argument(
         "--path", required=True, help="path relative to the artifact root, e.g. env/<session>"
+    )
+
+    rs = sub.add_parser("restore", help="download an artifact subfolder from the private store")
+    rs.add_argument("--config", type=Path, default=Path("configs/base.yaml"))
+    rs.add_argument(
+        "--path", required=True, help="path relative to the artifact root, e.g. train/<slug>"
     )
 
     c = sub.add_parser("compare-embeddings", help="compare two configs' cached ref embeddings")
@@ -70,6 +90,7 @@ def _build_parser() -> argparse.ArgumentParser:
     t.add_argument("--regime", required=True, choices=["lora", "qlora", "full"])
     t.add_argument("--split", required=True, choices=["unharmful", "harmful"])
     t.add_argument("--seed", type=int, required=True)
+    t.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
 
     v = sub.add_parser("vllm-case", help=argparse.SUPPRESS)
     v.add_argument("--json", required=True)
@@ -121,7 +142,7 @@ def _cmd_probe(args: argparse.Namespace) -> int:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    cfg = config_mod.load(args.config)
+    cfg = config_mod.load(args.config, args.set)
     env = env_mod.detect(cfg.get("paths.artifacts"))
     env_mod.session_id()
     seed_all(int(cfg["seed"]))
@@ -139,7 +160,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 
 def _cmd_status(args: argparse.Namespace) -> int:
-    cfg = config_mod.load(args.config)
+    cfg = config_mod.load(args.config, args.set)
     env = env_mod.detect(cfg.get("paths.artifacts"))
     for row in runner.stage_status(cfg, env):
         print(f"{row['stage']:<10} {row['run_key']}  {row['status']}")
@@ -152,6 +173,15 @@ def _cmd_sync(args: argparse.Namespace) -> int:
     local = env.artifacts_root / args.path
     commit = _open_store(cfg).upload_dir(local, args.path, f"sync {args.path}")
     print(json.dumps({"path": args.path, "commit": commit}))
+    return 0
+
+
+def _cmd_restore(args: argparse.Namespace) -> int:
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    local = _open_store(cfg).download_dir(args.path, env.artifacts_root)
+    n = sum(1 for p in local.rglob("*") if p.is_file()) if local.exists() else 0
+    print(json.dumps({"path": args.path, "files": n}))
     return 0
 
 
@@ -178,7 +208,7 @@ def _cmd_train_one(args: argparse.Namespace) -> int:
     from rbbd.finetune import sft
     from rbbd.utils import manifest as mf
 
-    cfg = config_mod.load(args.config)
+    cfg = config_mod.load(args.config, args.set)
     env = env_mod.detect(cfg.get("paths.artifacts"))
     seed_all(args.seed)
     keys = runner.stage_run_keys(cfg)
@@ -192,7 +222,16 @@ def _cmd_train_one(args: argparse.Namespace) -> int:
         raise SystemExit(
             f"no unique job for {args.model}/{args.regime}/{args.split}/seed{args.seed}"
         )
-    done = sft.run_job(cfg, match[0])
+    try:
+        done = sft.run_job(cfg, match[0], single_attempt=True)
+    except sft.SessionPaused as exc:
+        # Checkpoint saved, no done.json: the next session resumes this job (D-079).
+        print(f"paused: {exc}")
+        return sft.PAUSE_EXIT
+    except sft.LayoutOOM as exc:
+        # The parent relaunches a fresh process for the next layout (B-021).
+        print(f"layout OOM: {exc}")
+        return sft.OOM_EXIT
     print(json.dumps(done, indent=2))
     return 0
 
@@ -214,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
         "sync": _cmd_sync,
         "compare-embeddings": _cmd_compare,
         "train-one": _cmd_train_one,
+        "restore": _cmd_restore,
         "vllm-case": _cmd_vllm_case,
     }
     return handlers[args.command](args)

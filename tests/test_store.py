@@ -34,6 +34,17 @@ class FakeApi:
         shutil.copytree(folder_path, self.remote / path_in_repo, dirs_exist_ok=True)
         return SimpleNamespace(oid=f"commit{len(self.uploads)}")
 
+    def snapshot_download(self, *, repo_id, repo_type, allow_patterns, local_dir):
+        import fnmatch
+
+        for f in self.remote.rglob("*"):
+            rel = f.relative_to(self.remote).as_posix()
+            if f.is_file() and any(fnmatch.fnmatch(rel, pat) for pat in allow_patterns):
+                dest = Path(local_dir) / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(f, dest)
+        return local_dir
+
     def hf_hub_download(self, *, repo_id, filename, repo_type, cache_dir, force_download):
         dest = Path(cache_dir) / filename
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -88,3 +99,21 @@ def test_no_repo_creation_or_publication_calls():
         if forbidden.search(line)
     ]
     assert not hits, hits
+
+
+def test_download_dir_restores_a_subtree(tmp_path):
+    """`restore` brings back one job subtree (and nothing else) into the artifact root."""
+    remote = tmp_path / "remote"
+    (remote / "train/x/full/harmful/seed0/k1/final").mkdir(parents=True)
+    (remote / "train/x/full/harmful/seed0/k1/done.json").write_text("{}")
+    (remote / "train/x/full/harmful/seed0/k1/final/model.safetensors").write_bytes(b"w")
+    (remote / "env/s1").mkdir(parents=True)
+    (remote / "env/s1/env.json").write_text("{}")
+    store = store_mod.open_store(REPO, api=FakeApi(remote))
+    root = tmp_path / "artifacts"
+    local = store.download_dir("train/x", root)
+    assert (local / "full/harmful/seed0/k1/done.json").exists()
+    assert (local / "full/harmful/seed0/k1/final/model.safetensors").read_bytes() == b"w"
+    assert not (root / "env").exists()
+    with pytest.raises(store_mod.StoreError, match="relative"):
+        store.download_dir("../x", root)

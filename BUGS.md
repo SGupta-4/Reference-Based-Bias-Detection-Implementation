@@ -276,3 +276,155 @@ IDs are sequential and never reused.
   - Kaggle: pending.
 - GPU-hours lost: included in B-015.
 - Linked commits and D-### entries: `ec87d99`; D-003, D-068; B-015
+
+## B-018 Feature: M3c-T8 throughput probe (Llama-3.1-8B QLoRA)
+- Status: **Done.** Kaggle probe at `c44ecaf` (session `20261001T171846Z`): batch 4×8 OOM, 2×16 fits; harmful run 214.8 tok/s → 19.22 h at 3 epochs → Llama trains 1 epoch (D-071).
+- How it was found or scoped: PLAN §7 M3c-T8; the user chose to run it before M3b (2026-10-01).
+- Reproduction command: CPU: `python -m pytest -q tests/test_sft.py -k "throughput or time_limit or projection"`; Kaggle: `notebooks/m3c_probe.ipynb`.
+- Hypotheses tried:
+  - `max_minutes=0` was falsy, so the time limit was silently dropped; caught by `test_time_limit_stops_training_and_done_has_projection` → now checked against `None`.
+  - Measuring throughput from `n_tokens × epochs_done / seconds` mixes warm-up and the longest-batch-first step into the rate → the steady rate comes from TRL's cumulative `num_tokens` over steps > 3 (`ThroughputCallback`).
+- Fix:
+  - `finetune.sft`: `ThroughputCallback`, `TimeLimitCallback`, `project_hours`, and `done.json` fields `tokens_per_second_steady`, `seconds_per_step_steady`, `peak_mem_gib` and `projected_hours`.
+  - `train.max_minutes` config key.
+  - `configs/m3c_probe_llama3.1-8b_b{4,2,1}.yaml` and `notebooks/m3c_probe.ipynb`.
+  - Decision rule fixed in D-070.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `102 passed, 10 deselected in 14.35s`, including the 3 new probe tests; all notebook code cells parse. Kaggle: the 4×8 layout OOMed in TRL's token-accuracy logits copy (+1.96 GiB at 12.94 GiB in use), as the fallback loop anticipates; 2×16 completed. Full numbers in D-071.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: `c44ecaf`; D-042, D-055, D-070, D-071
+
+## B-019 Feature: M3b Tier 2 training (full FT + LoRA, seeds, OOM fallback, per-pair sync)
+- Status: **Done.** Session 1 (Qwen, `5d43021`, D-073) and session 2 (Llama-3.2-1B, `4a43b15`, D-075) are complete; tagged `m3b-green`.
+- How it was found or scoped: PLAN §7 M3b-T5–T7; the user said "prepare M3b" (2026-10-01).
+- Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3b_train.ipynb` with `MODEL = "qwen2.5-0.5b"`, then `"llama3.2-1b"`.
+- Hypotheses tried (design risks found before running):
+  - Two parallel 1B full-FT jobs would write ≈ 15 GB of checkpoints to the 20 GB `/kaggle/working` → full-FT checkpoints go to ephemeral disk (D-072 item 2).
+  - Llama-3.2-1B's tied `lm_head` is absent from saved endpoints, so the old `apply_alpha` would raise on it → tied aliases are tolerated (test with a tied tiny Llama).
+  - 4×8 may OOM for 1B full FT, as it did for 8B QLoRA (D-071) → automatic layout fallback.
+- Fix:
+  - Code: `finetune.sft` (`batch_layouts`, `seeds_for`, multi-layout `Job`, `checkpoint_dir`, OOM fallback in `run_job`, `sync_jobs`, seed-major `plan_jobs`), `models.interpolate.apply_alpha` (tied weights), `utils.store.HFStore.download_dir` + `cli restore`.
+  - Config and notebook: `configs/tier2_{qwen2.5-0.5b,llama3.2-1b}.yaml`, `configs/m3b_probe_*.yaml`, `notebooks/m3b_train.ipynb`.
+  - Tests: GPU `test_real_full_endpoints` and `test_real_tier2_lora_endpoints`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `110 passed, 10 deselected`. New tests:
+  - layout candidates and per-regime seeds;
+  - OOM fallback: OOM marker written, the next layout used, and a rerun skips both;
+  - non-OOM errors re-raised;
+  - ephemeral checkpoint dir;
+  - full-FT resume after a kill: bit-identical, with checkpoints outside the job dir;
+  - tied-embedding interpolation;
+  - store `download_dir`;
+  - `sync_jobs` uploads finished jobs and swallows store errors.
+  - Planning dry run on the real configs: Qwen → full s0, LoRA s0, full s1, full s2 (4 pairs); Llama-1B → full s0, LoRA s0 (2 pairs). The GPU tests skip without `RBBD_M3B_CONFIG`. All notebook cells parse.
+  - Kaggle session 1 (Qwen, session `20261001T181946Z`): probe bound 7.56 h → proceed; training 8.44 h, 8 jobs × 750 steps, 0 skips, 0 OOM; GPU DC-07 `2 passed in 96.01s`. Full numbers in D-073.
+- GPU-hours lost: 0
+  - Kaggle session 2 (Llama-1B, session `20261002T063404Z`): full FT fell back 4×8 → 2×16 → 1×32 (fresh processes); training 9.25 h; GPU DC-07 `2 passed`. Full numbers in D-075.
+- Linked commits and D-### entries: `5d43021`, `4a43b15`; D-008, D-009, D-033, D-042, D-072, D-073, D-074, D-075
+
+## B-020 Risk: smoke and Tier 2 Qwen jobs share one slug directory
+- Status: Open, mitigated by design. Act on it in M4.
+- How it was found or scoped: The M3b session 1 summary (D-073) listed six `done.json` files under `train/qwen2.5-0.5b-it/lora/`: the two Tier 2 endpoints plus four 24-step smoke endpoints (two from schema v1, two from v2), restored from the store.
+- Reproduction command: `ls artifacts/train/qwen2.5-0.5b-it/lora/*/seed0/` after `cli restore --path train/qwen2.5-0.5b-it`.
+- Hypotheses tried: n/a. The behaviour is as designed: `train_key` differs, and `plan_jobs` resolves each config's own jobs. Anything that globs `train/<slug>/<regime>/<split>/seed0/*` would match several jobs.
+- Fix (planned, M4): the α-checkpoint sweep finds endpoints only through `plan_jobs` for its config. A CPU test will assert that a smoke job never resolves for the Tier 2 config. Renaming the smoke slug would change smoke keys and retrain them (≈ 2 min), but it is not needed.
+- Verification: pending (M4).
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-072, D-073
+
+## B-021 Bug: the OOM layout fallback failed for Llama-3.2-1B full FT, and the failure report hid the error
+- Status: **Closed.** Verified on Kaggle (session `20261002T063404Z`, `4a43b15`): 4×8 and 2×16 OOMed and were relaunched in fresh processes, 1×32 trained to completion, and the probe printed each job's log.
+- How it was found or scoped: M3b session 2 (`d4bbe2b`, session `20261002T042125Z`). The probe stage failed ≈ 60 s after launch with `FileNotFoundError: …/llama3.2-1b-it-probe/full/unharmful/seed0/4771744e3daa2694/train.log`, so the probe produced nothing (`proceed: false`). Correctly, no long run started.
+- Reproduction command: `notebooks/m3b_train.ipynb` with `MODEL = "llama3.2-1b"` at `d4bbe2b`.
+- Hypotheses tried:
+  - Missing log file. Confirmed as the *reporting* bug: logs went to the 4×8 directory (`52d01d…`), but once `oom.json` marked that layout, `job.out_dir` resolved to 2×16 (`4771…`), which has no log.
+  - The training process itself failed after the 4×8 OOM. Most likely cause: the in-process retry kept the failed trainer's GPU memory alive through the stored exception's traceback, so 2×16 and 1×32 OOMed in turn and `run_job` raised "every batch layout ran out of memory". Not directly observed, because the log was not printed. The real log stays in that session's output (`…/52d01d8d36f65628/train.log`).
+- Fix (D-074): one layout per process (exit 75 → parent relaunch), one log per job (`Job.log_path`), and probe log tails printed by the notebook. New CPU tests:
+  - `test_run_job_single_attempt_raises_layout_oom`;
+  - `test_run_parallel_relaunches_after_oom_exit` (OOM at 4×8 → relaunch at 2×16 on the same GPU; the other job is untouched);
+  - `test_run_parallel_reports_log_tail_and_exhausted_layouts`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `113 passed, 12 deselected in 13.95s`. Kaggle: pending.
+- GPU-hours lost: ≈ 0.1
+- Linked commits and D-### entries: `d4bbe2b`; D-072, D-074; B-019
+
+## B-022 Bug: a run without the HF_TOKEN secret continued and failed on every gated call
+- Status: **Closed.** The next run attached the secret (`{'HF_TOKEN': True}`) and completed (D-075). The fail-fast path is in every notebook; it has not been triggered since.
+- How it was found or scoped: M3b session 2 rerun at `3644675` (Kaggle session `20261002T050031Z`, Save & Run All). The secrets cell printed `{'HF_TOKEN': False}`, and every later step failed:
+  - `cli restore` → `StoreError: … not found as dataset or model` (private repo, unauthenticated);
+  - `ftdata` → `DatasetNotFoundError: … gated dataset`;
+  - the Llama download → `GatedRepoError: 401`;
+  - the probe cell → `KeyError: 'stats.json'` (no ftdata manifest).
+  No training ran, and the B-021 fix was not exercised.
+- Reproduction command: run any notebook without attaching the `HF_TOKEN` secret (Add-ons → Secrets).
+- Hypotheses tried: a code regression from B-021. Rejected: every failure is an authentication failure, and the secrets cell reported the token missing.
+- Fix: every notebook's secrets cell (`00_probe`, `run_stage`, `m2_extract`, `m3a_train`, `m3b_train`, `m3c_probe`) raises `RuntimeError("HF_TOKEN secret not attached …")` when the token is absent, so Save & Run All stops at that cell. The M3b probe cell also raises a clear error when the ftdata manifest is missing.
+- Verification (CPU): all notebook code cells parse. Kaggle: next run.
+- GPU-hours lost: ≈ 0.1 (install + failed cells, ≈ 6 min)
+- Linked commits and D-### entries: `3644675`; D-036, D-072; B-021
+
+## B-023 Feature: M3c Tier 1 training preparation (Llama, Mistral, Gemma)
+- Status: In progress. Llama and Mistral are trained and DC-07 passes (D-077). Gemma: fp16 failed and fp32 projects 11.66 h for 1 epoch (D-078); the user chose 1 epoch over two sessions (D-079, B-024). The two Gemma sessions are pending.
+- How it was found or scoped: PLAN §7 M3c-T9–T11; the user said "prepare M3c" (2026-10-02).
+- Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3c_train.ipynb` with `MODEL` per session.
+- Hypotheses tried (design risks found while preparing):
+  - A new `TrainSpec` field would change every existing `train_key` and orphan the finished Tier 2 endpoints. The first draft did; caught by comparing keys against the previous code → the field is omitted when unset, and three keys are pinned in a test.
+  - Shell escaping doubled the backslash in the probe config's regex (it would have matched nothing) → fixed; a test asserts both Gemma configs share one regex and that it matches only language-model projections.
+  - A post-norm activation monitor would miss Gemma's residual-stream near-overflow → the hook is on the last decoder layer.
+  - Decoder layers return a plain tensor in transformers 4.57 (not a tuple) → the monitor and the tests handle both.
+- Fix:
+  - Code: `config.apply_override` + `load(path, overrides)`; `--set` on `run`/`status`/`train-one` (forwarded by `_launch`); `TrainSpec.lora_target_regex`; `sft.ActivationMonitor` + `train.activation_monitor`; `rbbd.finetune.session`.
+  - Configs and notebook: `configs/tier1_{mistral-7b,gemma3-4b}.yaml` (`tier1_llama3.1-8b.yaml` gains `sync_each_pair`), `configs/m3c_probe_{mistral-7b,gemma3-4b}.yaml`, `notebooks/m3c_train.ipynb`.
+  - Tests: GPU `test_real_tier1_qlora_endpoints`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `125 passed, 13 deselected in 13.71s`. New tests:
+  - key pinning (3 regimes);
+  - regex reaching PEFT and the key;
+  - activation monitor records and raises;
+  - Gemma regex scope;
+  - overrides forwarded to `train-one`;
+  - config overrides (YAML-parsed, hashed, errors);
+  - the four session-rule tests.
+  The GPU test skips without `RBBD_M3C_CONFIG`, and all notebook cells parse.
+  - Kaggle (`8ab97fb`): Llama session `20261007T133950Z` and Mistral session `20261008T020912Z` trained, with DC-07 `1 passed` each (D-077). In the Gemma session `20261008T101651Z`, fp16 failed at the first forward and the fp32 projection triggered the ask (D-078).
+- GPU-hours lost: 0
+- Linked commits and D-### entries: `8ab97fb`, `a6eac37`; D-005, D-062, D-070, D-071, D-076, D-077, D-078, D-079; B-024
+
+## B-024 Decision: Gemma-3-4B Tier 1 training does not fit the 9 h rule in fp32
+- Status: Decided (option 1, D-079): implemented and CPU-verified; the Kaggle sessions are tracked under B-023.
+- How it was found or scoped: M3c Gemma session (`20261008T101651Z`).
+  - fp16 compute is impossible: the residual stream reaches |h| ≈ 1.7e5, which exceeds the fp16 maximum, and the first forward is all-NaN.
+  - fp32 QLoRA runs at ≈ 116 tok/s: 11.66 h for 1 harmful epoch, 7.55 h unharmful. With setup that exceeds one 12 h Kaggle session.
+- Reproduction command: `notebooks/m3c_train.ipynb` with `MODEL = "gemma3-4b"`.
+- Hypotheses tried: n/a (a design decision, not a defect).
+- Options:
+  1. **1 epoch in fp32 over two sessions.** Needs mid-run checkpoint upload so session 2 can resume the harmful job; unharmful finishes in session 1. Total ≈ 12.5–13 session-h.
+  2. **A fixed fraction of an epoch for both endpoints** (≈ 0.75 epoch → ≈ 8.7 h harmful) in one session. Cheaper, but a further deviation.
+  3. **Drop Gemma from Tier 1** (Llama + Mistral remain). Saves ≈ 13 h; loses the paper's third family.
+- Fix: option 1 (user, 2026-10-08), implemented as a deadline pause (D-079):
+  - `sft.DeadlineCallback` reads `$RBBD_TRAIN_DEADLINE_UNIX`, saves and stops; `train_one` raises `SessionPaused`; `cli train-one` exits 76.
+  - `_run_parallel` syncs the paused job with its checkpoint, then raises `TrainingPaused`, so the stage stays resumable.
+  - `configs/tier1_gemma3-4b.yaml` sets `epochs: 1`; the notebook's Gemma branch skips the probes, sets the deadline to session start + 11 h and gates DC-07 on both `done.json`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `129 passed, 13 deselected in 18.77s`. New tests:
+  - `test_deadline_pause_then_resume_is_bit_identical` (pause, then resume equals an uninterrupted run);
+  - `test_deadline_callback_does_not_pause_on_the_last_step`;
+  - `test_run_parallel_pause_exit_syncs_and_stays_resumable`;
+  - `test_deadline_from_env`.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-005, D-030, D-042, D-062, D-070, D-076, D-078, D-079
+
+## B-025 Bug: the Kaggle clone cell fails when an attached GITHUB_TOKEN is rejected, although the repo is public
+- Status: Fixed in the notebooks (CPU-verified); the Kaggle re-run is pending.
+- How it was found or scoped:
+  - The first Gemma session (M3c, `REF = 35dda0d…`) stopped at the clone cell after 9 s: `git fetch failed: fatal: could not read Username for 'https://github.com': No such device or address`.
+  - No GPU time was used.
+- Reproduction command: any notebook with a `GITHUB_TOKEN` secret that GitHub rejects (for example an expired fine-grained token), then Save & Run All.
+- Hypotheses tried:
+  - **The commit isn't on GitHub or the SHA is unknown.** Ruled out. An anonymous `git fetch --depth 1 origin 35dda0d9…` from this container succeeds. An unknown SHA would fail with `not our ref`, not with an auth prompt.
+  - **Internet is off.** Ruled out. That gives `Could not resolve host`.
+  - **The token was rejected (HTTP 401).** This is the likely cause. The repo is public (`gh api repos/…` → `private: false`), so a 401 can only come from bad credentials. git then tried to prompt for a username, and Kaggle has no terminal. Not confirmed on Kaggle: this container's proxy replaces auth headers, so a bad token cannot be reproduced here.
+- Fix: in the clone cell of all seven notebooks:
+  - git now runs with `GIT_TERMINAL_PROMPT=0`.
+  - If a fetch with the token header fails, the cell prints `GITHUB_TOKEN was rejected (expired or revoked?); retrying without it` and fetches again with the `GIT_CONFIG_*` variables removed.
+  - The token value is still never printed (git's stderr does not contain header values).
+- Verification (CPU, this container):
+  - Ran the patched cell with a fake `kaggle_secrets` (invalid token) and a `subprocess.run` stub that fails the authenticated fetch. Output: `GITHUB_TOKEN was rejected (expired or revoked?); retrying without it` / `commit 35dda0d9aa8e8ba8055e6312e3255ed98fe25863`. The retry's env had no `GIT_CONFIG_*` keys.
+  - Ran the patched cell with no stub: `commit 35dda0d9…`.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-046

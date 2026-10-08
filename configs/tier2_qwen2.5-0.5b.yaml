@@ -1,1 +1,17 @@
-# Placeholder — filled in M3. Schema and values: PLAN.md §3, §6 and DECISION.md.
+# Tier 2, Qwen2.5-0.5B-Instruct (PLAN §6; D-009, D-072). Full FT and LoRA on the same model;
+# the seeds ablation (D-033) adds full-FT seeds 1 and 2. 3 epochs (App. C). Jobs run
+# seed-major: full s0, LoRA s0, full s1, full s2 (u||h on the two T4s each).
+run_name: tier2_qwen2.5-0.5b
+tier: 2
+models:
+  - {id: Qwen/Qwen2.5-0.5B-Instruct, slug: qwen2.5-0.5b-it, layer: 24, precision: fp16, placement: "cuda:0"}
+ftdata:
+  census_tokenizers: []      # census done in M1 (D-055)
+train:
+  regimes: [full, lora]
+  seeds_by_regime: {full: [0, 1, 2], lora: [0]}
+  batch_layouts:
+    full: [[4, 8], [2, 16], [1, 32]]
+    lora: [[4, 8], [2, 16]]
+  checkpoint_root: {full: ephemeral}   # fp32 masters + optimizer would fill /kaggle/working
+  sync_each_pair: true

@@ -89,6 +89,9 @@ class TrainSpec:
     lora_alpha: int = 32
     lora_dropout: float = 0.05
     lora_targets: tuple[str, ...] = LORA_TARGETS
+    # Optional PEFT regex (full match) replacing `lora_targets`, e.g. to keep LoRA off
+    # Gemma-3's vision tower (D-076). None = the module-name list above.
+    lora_target_regex: str | None = None
     optim: str | None = None
     gradient_checkpointing: bool = True
     max_steps: int = -1  # tests only; -1 = run the epochs
@@ -114,9 +117,11 @@ class TrainSpec:
         fields = asdict(self)
         fields["lora_targets"] = list(self.lora_targets)
         fields.update(lr=self.learning_rate, optim=self.optimizer, schema_version=SCHEMA_VERSION)
+        if self.lora_target_regex is None:  # absent from keys made before D-076
+            fields.pop("lora_target_regex", None)
         if self.regime == "full":  # LoRA fields do not affect a full fine-tune
-            for k in ("lora_r", "lora_alpha", "lora_dropout", "lora_targets"):
-                fields.pop(k)
+            for k in ("lora_r", "lora_alpha", "lora_dropout", "lora_targets", "lora_target_regex"):
+                fields.pop(k, None)
         return fields
 
     @property
@@ -284,6 +289,127 @@ class WallClockSaveCallback(_callback_base()):  # type: ignore[misc]
         self.last = time.time()
 
 
+class ThroughputCallback(_callback_base()):  # type: ignore[misc]
+    """Steady-state training throughput from TRL's cumulative `num_tokens` log (M3c-T8).
+
+    `num_tokens` counts attention-mask (non-pad) tokens, as `data.json`'s `n_tokens`
+    does, so a projection from the two is consistent. The first `skip_steps` logged
+    steps are excluded: `group_by_length` puts the longest batch first, and CUDA/kernel
+    warm-up inflates the first steps.
+    """
+
+    def __init__(self, skip_steps: int = 3) -> None:
+        self.skip_steps = skip_steps
+        self.clock = time.time  # replaceable in tests
+        self.points: list[tuple[int, float, float]] = []  # (step, wall time, num_tokens)
+
+    def on_log(self, args: Any, state: Any, control: Any, logs: Any = None, **kwargs: Any) -> None:
+        if logs and "num_tokens" in logs:
+            self.points.append((int(state.global_step), self.clock(), float(logs["num_tokens"])))
+
+    def summary(self) -> dict[str, Any]:
+        steady = [p for p in self.points if p[0] > self.skip_steps]
+        out: dict[str, Any] = {"tokens_per_second_steady": None, "seconds_per_step_steady": None}
+        if len(steady) >= 2:
+            (s0, t0, n0), (s1, t1, n1) = steady[0], steady[-1]
+            if t1 > t0:
+                out["tokens_per_second_steady"] = round((n1 - n0) / (t1 - t0), 1)
+                out["seconds_per_step_steady"] = round((t1 - t0) / (s1 - s0), 2)
+        return out
+
+
+class ActivationMonitor:
+    """Final-layer hidden-state monitor for fp16 training probes (D-005, D-006, D-076).
+
+    A forward hook on the text decoder's last layer (`base_decoder(model).layers[-1]`,
+    the pre-norm residual stream, where fp16 overflows: Gemma's final norm can hide a
+    near-overflow) records the largest |hidden| seen and raises `NonFiniteError` on the
+    first NaN/Inf. An overflow in any earlier layer propagates to this output as Inf/NaN.
+    So fp16 trouble stops training at once instead of surfacing later as a NaN loss.
+    `attach(model)` must run before the trainer wraps the model (PEFT keeps
+    the same module objects). Cost: two reductions per forward.
+    """
+
+    def __init__(self, context: Mapping[str, Any]) -> None:
+        self.context = dict(context)
+        self.max_abs = 0.0
+        self.calls = 0
+        self._handle: Any = None
+
+    def attach(self, model: Any) -> None:
+        from rbbd.models.loading import base_decoder
+
+        self._handle = base_decoder(model).layers[-1].register_forward_hook(self._hook)
+
+    def _hook(self, _module: Any, _inputs: Any, output: Any) -> None:
+        from rbbd.utils.guards import assert_finite
+
+        hidden = (
+            output[0] if isinstance(output, tuple) else getattr(output, "last_hidden_state", output)
+        )
+        self.calls += 1
+        assert_finite(hidden.detach(), "train.hidden", call=self.calls, **self.context)
+        self.max_abs = max(self.max_abs, float(hidden.detach().abs().max()))
+
+    def detach(self) -> None:
+        if self._handle is not None:
+            self._handle.remove()
+            self._handle = None
+
+    def summary(self) -> dict[str, Any]:
+        return {"max_abs_hidden": round(self.max_abs, 3), "monitored_forwards": self.calls}
+
+
+class TimeLimitCallback(_callback_base()):  # type: ignore[misc]
+    """Stop training cleanly after `minutes` of wall-clock time (throughput probes only)."""
+
+    def __init__(self, minutes: float) -> None:
+        self.deadline = time.time() + minutes * 60.0
+
+    def on_step_end(self, args: Any, state: Any, control: Any, **kwargs: Any) -> Any:
+        if time.time() >= self.deadline:
+            control.should_training_stop = True
+        return control
+
+
+def project_hours(n_tokens: int, epochs: float, tokens_per_second: float | None) -> float | None:
+    """Projected training hours for `epochs` passes over `n_tokens` at a measured rate."""
+    if not tokens_per_second:
+        return None
+    return round(n_tokens * epochs / tokens_per_second / 3600.0, 2)
+
+
+DEADLINE_ENV = "RBBD_TRAIN_DEADLINE_UNIX"  # operational, never part of a config or train key
+PAUSE_EXIT = 76  # train-one exit code: paused at the session deadline with a checkpoint
+
+
+class SessionPaused(RuntimeError):
+    """Training stopped at the session deadline after saving a checkpoint (D-079).
+
+    No `done.json` is written, so the next session restores the job directory and
+    `train_one` resumes from that checkpoint.
+    """
+
+
+class DeadlineCallback(_callback_base()):  # type: ignore[misc]
+    """At the wall-clock `deadline` (unix seconds), save a checkpoint and stop (D-079).
+
+    `paused` tells `train_one` that the stop came from the deadline, not the schedule.
+    """
+
+    def __init__(self, deadline: float) -> None:
+        self.deadline = deadline
+        self.paused = False
+        self.clock = time.time  # replaceable in tests
+
+    def on_step_end(self, args: Any, state: Any, control: Any, **kwargs: Any) -> Any:
+        if self.clock() >= self.deadline and state.global_step < state.max_steps:
+            control.should_save = True
+            control.should_training_stop = True
+            self.paused = True
+        return control
+
+
 class KillAfterSave(_callback_base()):  # type: ignore[misc]
     """Test hook (DC-13): raise `SimulatedKill` right after the checkpoint at `step`."""
 
@@ -326,7 +452,7 @@ def _peft_config(spec: TrainSpec) -> Any:
         r=spec.lora_r,
         lora_alpha=spec.lora_alpha,
         lora_dropout=spec.lora_dropout,
-        target_modules=list(spec.lora_targets),
+        target_modules=spec.lora_target_regex or list(spec.lora_targets),
         bias="none",
         task_type="CAUSAL_LM",
     )
@@ -383,6 +509,10 @@ def train_one(
     save_steps: int | None = None,
     guard: GuardSettings | None = None,
     extra_callbacks: Sequence[Any] = (),
+    max_minutes: float | None = None,
+    ckpt_dir: Path | None = None,
+    activation_monitor: bool = False,
+    deadline_unix: float | None = None,
 ) -> dict[str, Any]:
     """Train one endpoint into `out_dir`, resuming from its newest checkpoint; return done.json.
 
@@ -417,9 +547,15 @@ def train_one(
         data_stats["n_truncated"],
     )
 
-    ckpt_dir = out_dir / "checkpoints"
+    ckpt_dir = Path(ckpt_dir) if ckpt_dir is not None else out_dir / "checkpoints"
     context = {"model": spec.slug, "regime": spec.regime, "split": spec.split, "seed": spec.seed}
     guard_cb = GuardCallback(guard or GuardSettings(), context)
+    throughput = ThroughputCallback()
+    monitor = ActivationMonitor(context) if activation_monitor else None
+    if monitor is not None:
+        monitor.attach(model)
+    time_limit = [TimeLimitCallback(max_minutes)] if max_minutes is not None else []
+    pause = DeadlineCallback(deadline_unix) if deadline_unix is not None else None
     # The LoRA A matrices are initialised inside SFTTrainer (get_peft_model): seed here so
     # the initial adapter depends on the spec's seed only, not on what ran before (B-017).
     from transformers import set_seed
@@ -431,14 +567,30 @@ def train_one(
         train_dataset=Dataset.from_list(examples),
         processing_class=tokenizer,
         peft_config=_peft_config(spec) if spec.regime in ("lora", "qlora") else None,
-        callbacks=[guard_cb, WallClockSaveCallback(save_minutes), *extra_callbacks],
+        callbacks=[
+            guard_cb,
+            WallClockSaveCallback(save_minutes),
+            throughput,
+            *time_limit,
+            *([pause] if pause is not None else []),
+            *extra_callbacks,
+        ],
     )
     guard_cb.trainer = trainer
     resume = latest_checkpoint(ckpt_dir)
     if resume:
         log.info("resuming %s from %s", out_dir, resume)
     t0 = time.time()
-    result = trainer.train(resume_from_checkpoint=resume)
+    try:
+        result = trainer.train(resume_from_checkpoint=resume)
+    finally:
+        if monitor is not None:
+            monitor.detach()
+    if pause is not None and pause.paused:
+        step = trainer.state.global_step
+        raise SessionPaused(
+            f"paused at step {step}/{trainer.state.max_steps}; checkpoint in {ckpt_dir}"
+        )
     seconds = time.time() - t0
     guard_cb.check_counts(trainer.state.global_step)
 
@@ -467,9 +619,25 @@ def train_one(
         else None,
         "n_examples": data_stats["n_kept"],
         **guard_cb.summary(),
+        **throughput.summary(),
+        **(monitor.summary() if monitor is not None else {}),
+        "peak_mem_gib": _peak_mem_gib(),
+    }
+    # Full-run projection from this split's exact token count (M3c-T8; D-042, D-055).
+    tps = done["tokens_per_second_steady"]
+    done["projected_hours"] = {
+        f"{e:g}_epochs": project_hours(data_stats["n_tokens"], e, tps) for e in (spec.epochs, 1)
     }
     done_path.write_text(json.dumps(done, indent=2))
     return done
+
+
+def _peak_mem_gib() -> float | None:
+    import torch
+
+    if not torch.cuda.is_available():
+        return None
+    return round(torch.cuda.max_memory_allocated(0) / 2**30, 2)
 
 
 def load_model(spec: TrainSpec) -> Any:
@@ -502,7 +670,13 @@ def load_model(spec: TrainSpec) -> Any:
 
 
 def spec_from_config(
-    cfg: Any, model_entry: Mapping[str, Any], regime: str, split: str, seed: int, dkey: str
+    cfg: Any,
+    model_entry: Mapping[str, Any],
+    regime: str,
+    split: str,
+    seed: int,
+    dkey: str,
+    layout: tuple[int, int] | None = None,
 ) -> TrainSpec:
     """Build a `TrainSpec` from the `train:` config section and one `models:` entry.
 
@@ -521,8 +695,8 @@ def spec_from_config(
         data_key=dkey,
         compute=model_entry.get("train_compute", t.get("compute", "fp16")),
         epochs=float(t.get("epochs", 3)),
-        per_device_batch=int(t.get("per_device_batch", 4)),
-        grad_accum=int(t.get("grad_accum", 8)),
+        per_device_batch=int(layout[0] if layout else t.get("per_device_batch", 4)),
+        grad_accum=int(layout[1] if layout else t.get("grad_accum", 8)),
         lr=lr.get(regime) if isinstance(lr, Mapping) else lr,
         warmup_ratio=float(t.get("warmup_ratio", 0.03)),
         lr_scheduler=t.get("lr_scheduler", "linear"),
@@ -531,30 +705,90 @@ def spec_from_config(
         lora_alpha=int(lora.get("alpha", 32)),
         lora_dropout=float(lora.get("dropout", 0.05)),
         lora_targets=tuple(lora.get("targets", LORA_TARGETS)),
+        lora_target_regex=model_entry.get("lora_target_regex"),
         optim=(t.get("optim") or {}).get(regime) if isinstance(t.get("optim"), Mapping) else None,
         gradient_checkpointing=bool(t.get("gradient_checkpointing", True)),
         max_steps=int(t.get("max_steps", -1)),
     )
 
 
+def batch_layouts(train_cfg: Mapping[str, Any], regime: str) -> list[tuple[int, int]]:
+    """(per-device batch, grad-acc) layouts to try in order on CUDA OOM (D-072).
+
+    `train.batch_layouts` may be a list of [b, g] pairs or a {regime: list} mapping;
+    without it, the single layout (`per_device_batch`, `grad_accum`) is used.
+    """
+    spec = train_cfg.get("batch_layouts")
+    if isinstance(spec, Mapping):
+        spec = spec.get(regime)
+    if not spec:
+        return [(int(train_cfg.get("per_device_batch", 4)), int(train_cfg.get("grad_accum", 8)))]
+    return [(int(b), int(g)) for b, g in spec]
+
+
+def seeds_for(cfg: Any, regime: str) -> list[int]:
+    """Training seeds for `regime`: `train.seeds_by_regime[regime]`, else `train.seeds`."""
+    t = cfg.get("train", {})
+    by_regime = t.get("seeds_by_regime") or {}
+    seeds = by_regime.get(regime, t.get("seeds", [cfg.get("seed", 0)]))
+    return [int(x) for x in seeds]
+
+
+OOM_MARKER = "oom.json"
+
+
 @dataclass
 class Job:
-    """One endpoint to train: where its inputs are and where its outputs go."""
+    """One endpoint to train: its inputs and its candidate (spec, dir) per batch layout.
+
+    `spec`/`out_dir` resolve to the active candidate: the first with `done.json`, else the
+    first not marked `oom.json` (D-072), else the last.
+    """
 
     model_entry: dict[str, Any]
     regime: str
     split: str
     seed: int
-    spec: TrainSpec
-    out_dir: Path
+    candidates: list[tuple[TrainSpec, Path]]
     ids_path: Path
     revision: str | None
     extra: dict[str, Any] = field(default_factory=dict)
 
+    def _active(self) -> tuple[TrainSpec, Path]:
+        for spec, d in self.candidates:
+            if (d / "done.json").exists():
+                return spec, d
+        for spec, d in self.candidates:
+            if not (d / OOM_MARKER).exists():
+                return spec, d
+        return self.candidates[-1]
+
+    @property
+    def spec(self) -> TrainSpec:
+        return self._active()[0]
+
+    @property
+    def out_dir(self) -> Path:
+        return self._active()[1]
+
+    @property
+    def log_path(self) -> Path:
+        """One log per job across layouts: `<first layout dir>/train.log` (B-021)."""
+        return self.candidates[0][1] / "train.log"
+
+    def has_untried_layout(self) -> bool:
+        """True while some layout is neither finished nor marked OOM."""
+        return any(
+            not (d / "done.json").exists() and not (d / OOM_MARKER).exists()
+            for _, d in self.candidates
+        )
+
 
 def plan_jobs(cfg: Any, artifacts_root: Path, ftdata_outputs: Sequence[str]) -> list[Job]:
-    """Every (model, regime, seed, split) job under `cfg`, ordered so u/h pairs are adjacent.
+    """Every (model, seed, regime, split) job under `cfg`, u/h pairs adjacent.
 
+    Order is seed-major (all regimes at seed 0 before any extra seed), so the D-042 cut
+    order (extra seeds first) can stop a session early without losing a core endpoint.
     `ftdata_outputs` are the upstream manifest's output paths (relative to the root);
     `stats.json` gives the dataset revision and `<split>_ids.json` the selected rows.
     """
@@ -563,28 +797,25 @@ def plan_jobs(cfg: Any, artifacts_root: Path, ftdata_outputs: Sequence[str]) -> 
     stats = json.loads(by_name["stats.json"].read_text())
     revision = stats.get("revision")
     t = cfg.get("train", {})
+    regimes = list(t.get("regimes", ["lora"]))
+    all_seeds = sorted({s for r in regimes for s in seeds_for(cfg, r)})
+    ids = {split: json.loads(by_name[f"{split}_ids.json"].read_text()) for split in SPLITS}
     jobs = []
     for entry in cfg.get("models", []):
-        for regime in t.get("regimes", ["lora"]):
-            for seed in t.get("seeds", [cfg.get("seed", 0)]):
+        for seed in all_seeds:
+            for regime in regimes:
+                if seed not in seeds_for(cfg, regime):
+                    continue
                 for split in SPLITS:
-                    ids_path = by_name[f"{split}_ids.json"]
-                    ids = json.loads(ids_path.read_text())
-                    spec = spec_from_config(
-                        cfg, entry, regime, split, seed, data_key(revision, split, ids)
-                    )
+                    dkey = data_key(revision, split, ids[split])
+                    candidates = []
+                    for layout in batch_layouts(t, regime):
+                        spec = spec_from_config(cfg, entry, regime, split, seed, dkey, layout)
+                        candidates.append((spec, job_dir(root, spec)))
                     jobs.append(
-                        Job(
-                            dict(entry),
-                            regime,
-                            split,
-                            int(seed),
-                            spec,
-                            job_dir(root, spec),
-                            ids_path,
-                            revision,
-                        )
-                    )
+                        Job(dict(entry), regime, split, int(seed), candidates,
+                            by_name[f"{split}_ids.json"], revision)
+                    )  # fmt: skip
     return jobs
 
 
@@ -599,24 +830,103 @@ def load_rows(cfg: Any, ids_path: Path, revision: str | None) -> list[dict[str, 
     return [{"prompt": r["prompt"], "response": r["response"]} for r in sub]
 
 
-def run_job(cfg: Any, job: Job) -> dict[str, Any]:
-    """Load data, tokenizer and model for `job` and train it (`cli train-one`)."""
+def checkpoint_dir(cfg: Any, spec: TrainSpec, out_dir: Path) -> Path:
+    """Where trainer checkpoints go: `<job>/checkpoints` (default, synced, survives the
+    session) or, with `train.checkpoint_root: {<regime>: ephemeral}`, the ephemeral disk.
+
+    Full-FT checkpoints of 1B models hold fp32 weights plus optimizer state (≈ 7.5 GB per
+    job), so two parallel jobs would overflow /kaggle/working (D-072).
+    """
+    from rbbd.utils.env import ephemeral_dir
+
+    roots = cfg.get("train.checkpoint_root") or {}
+    if roots.get(spec.regime) == "ephemeral":
+        return ephemeral_dir() / "rbbd_ckpt" / spec.slug / spec.train_key
+    return Path(out_dir) / "checkpoints"
+
+
+def _deadline_from_env() -> float | None:
+    """Session deadline (unix seconds) from $RBBD_TRAIN_DEADLINE_UNIX, if set (D-079)."""
+    import os
+
+    raw = os.environ.get(DEADLINE_ENV)
+    return float(raw) if raw else None
+
+
+def _is_oom(exc: BaseException) -> bool:
+    import torch
+
+    return isinstance(exc, torch.OutOfMemoryError) or "out of memory" in str(exc).lower()
+
+
+OOM_EXIT = 75  # train-one exit code: this layout ran out of memory; relaunch for the next
+
+
+class TrainingPaused(RuntimeError):
+    """A train stage ended with paused jobs; its manifest stays incomplete (D-079)."""
+
+
+class LayoutOOM(RuntimeError):
+    """A batch layout ran out of CUDA memory; `oom.json` has been written (B-021)."""
+
+
+def run_job(cfg: Any, job: Job, single_attempt: bool = False) -> dict[str, Any]:
+    """Load data, tokenizer and model for `job` and train it (`cli train-one`).
+
+    Batch layouts are tried in order; a CUDA OOM writes `oom.json` into that layout's
+    directory (D-072). With `single_attempt` (the `train-one` subprocess path) the OOM
+    raises `LayoutOOM` instead of retrying here: an in-process retry cannot reliably free
+    the failed trainer's GPU memory (the exception's traceback keeps it alive, B-021), so
+    the parent relaunches a fresh process for the next layout. In-process retries remain
+    for CPU tests and inline runs.
+    """
+    import gc
+
+    import torch
+
     from rbbd.models.loading import load_tokenizer
 
     rows = load_rows(cfg, job.ids_path, job.revision)
-    tokenizer = load_tokenizer(job.spec.model_id, job.spec.revision)
-    model = load_model(job.spec)
     t = cfg.get("train", {})
     guard = GuardSettings(**t.get("guard", {}))
-    return train_one(
-        job.spec,
-        rows,
-        tokenizer,
-        model,
-        job.out_dir,
-        save_minutes=float(t.get("save_minutes", 20)),
-        guard=guard,
-    )
+    last_error: BaseException | None = None
+    for spec, out_dir in job.candidates:
+        if (out_dir / "done.json").exists():
+            return json.loads((out_dir / "done.json").read_text())
+        if (out_dir / OOM_MARKER).exists():
+            continue
+        tokenizer = load_tokenizer(spec.model_id, spec.revision)
+        model = load_model(spec)
+        try:
+            return train_one(
+                spec,
+                rows,
+                tokenizer,
+                model,
+                out_dir,
+                save_minutes=float(t.get("save_minutes", 20)),
+                guard=guard,
+                max_minutes=t.get("max_minutes"),
+                ckpt_dir=checkpoint_dir(cfg, spec, out_dir),
+                activation_monitor=bool(t.get("activation_monitor", False)),
+                deadline_unix=_deadline_from_env(),
+            )
+        except Exception as exc:
+            if not _is_oom(exc):
+                raise
+            last_error = exc
+            out_dir.mkdir(parents=True, exist_ok=True)
+            layout = [spec.per_device_batch, spec.grad_accum]
+            (out_dir / OOM_MARKER).write_text(
+                json.dumps({"layout": layout, "error": str(exc)[:500]})
+            )
+            log.warning("CUDA OOM at batch %d x %d; trying the next layout", *layout)
+            if single_attempt:
+                raise LayoutOOM(f"batch {layout[0]} x {layout[1]} ran out of memory") from None
+            del model
+            gc.collect()
+            torch.cuda.empty_cache()
+    raise RuntimeError(f"every batch layout ran out of memory for {job.split}") from last_error
 
 
 def stage(ctx: Any) -> Any:
@@ -645,46 +955,97 @@ def stage(ctx: Any) -> Any:
     return StageResult(outputs=outputs)
 
 
-def _run_parallel(ctx: Any, jobs: Sequence[Job]) -> None:
-    # Jobs come in u/h pairs (plan_jobs order). Each pair runs as two processes, one per
-    # GPU; the next pair starts when both finish. Logs go to <job>/train.log.
+def sync_jobs(
+    cfg: Any, artifacts_root: Path, jobs: Sequence[Job], include_unfinished: bool = False
+) -> None:
+    """Upload finished job directories to the private store right after they finish (D-072).
+
+    A long Tier 2 session that dies at the 12 h limit then loses at most the pair in
+    progress; the next session restores them with `cli restore`. With
+    `include_unfinished`, paused jobs (checkpoint, no done.json) are uploaded too
+    (D-079). Upload failures are
+    logged, not raised: training results stay on local disk for the end-of-session sync.
+    """
+    from rbbd.utils.store import open_store
+
+    try:
+        store = open_store(cfg.get("store.repo_id"), cfg.get("store.repo_type", "auto"))
+        for job in jobs:
+            if include_unfinished or (job.out_dir / "done.json").exists():
+                rel = job.out_dir.relative_to(artifacts_root).as_posix()
+                store.upload_dir(job.out_dir, rel, f"train {rel}")
+    except Exception as exc:  # noqa: BLE001 - never lose a finished run to a sync error
+        log.warning("per-pair sync failed (%s: %s); the end-of-session sync still applies",
+                    type(exc).__name__, exc)  # fmt: skip
+
+
+def _launch(ctx: Any, job: Job, gpu: int) -> tuple[Any, Any]:
+    """Start `cli train-one` for `job` on `gpu`; returns (process, open log file).
+
+    The log is `job.log_path` (one file per job, appended per attempt), so a failure can
+    always be reported, whichever layout directory the job resolves to (B-021).
+    """
     import os
     import subprocess
     import sys
 
+    cmd = [sys.executable, "-m", "rbbd.cli", "train-one",
+           "--config", str(Path(ctx.cfg.path).resolve()), "--model", job.spec.slug,
+           "--regime", job.regime, "--split", job.split, "--seed", str(job.seed)]  # fmt: skip
+    for assignment in getattr(ctx.cfg, "overrides", ()):  # same effective config as the parent
+        cmd += ["--set", assignment]
+    # expandable_segments reduces fragmentation-driven OOMs; it does not change results.
+    env = {**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu),
+           "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}  # fmt: skip
+    job.log_path.parent.mkdir(parents=True, exist_ok=True)
+    logf = open(job.log_path, "a")  # noqa: SIM115 - closed by the caller
+    layout = (job.spec.per_device_batch, job.spec.grad_accum)
+    logf.write(f"\n=== launch: batch {layout[0]} x {layout[1]} on cuda:{gpu} ===\n")
+    logf.flush()
+    log.info("launching %s (batch %d x %d) on cuda:%d -> %s", job.split, *layout, gpu, job.out_dir)
+    return subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT), logf
+
+
+def _tail(path: Path, n: int = 40) -> str:
+    return "\n".join(path.read_text().splitlines()[-n:]) if path.exists() else f"(no log at {path})"
+
+
+def _run_parallel(
+    ctx: Any, jobs: Sequence[Job], launch: Any = _launch, poll_seconds: float = 5.0
+) -> None:
+    """Run jobs in u/h pairs, one process per GPU; the next pair starts when both finish.
+
+    A process that exits with `OOM_EXIT` is relaunched on the same GPU for the job's next
+    batch layout (fresh CUDA context, B-021) until a layout fits or none is left. Any
+    other non-zero exit fails the stage with the job's log tail.
+    """
+    import time as _time
+
     pending = [j for j in jobs if not (j.out_dir / "done.json").exists()]
     for i in range(0, len(pending), 2):
-        procs = []
-        for gpu, job in enumerate(pending[i : i + 2]):
-            job.out_dir.mkdir(parents=True, exist_ok=True)
-            cmd = [
-                sys.executable,
-                "-m",
-                "rbbd.cli",
-                "train-one",
-                "--config",
-                str(Path(ctx.cfg.path).resolve()),
-                "--model",
-                job.spec.slug,
-                "--regime",
-                job.regime,
-                "--split",
-                job.split,
-                "--seed",
-                str(job.seed),
-            ]
-            env = {**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu)}
-            logf = open(job.out_dir / "train.log", "a")  # noqa: SIM115 - closed after wait
-            log.info("launching %s on cuda:%d -> %s", job.split, gpu, job.out_dir)
-            procs.append(
-                (job, subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT), logf)
-            )
-        failed = []
-        for job, proc, logf in procs:
-            proc.wait()
-            logf.close()
-            if proc.returncode != 0:
-                tail = (job.out_dir / "train.log").read_text().splitlines()[-30:]
-                failed.append(f"{job.out_dir} (exit {proc.returncode}):\n" + "\n".join(tail))
+        pair = pending[i : i + 2]
+        running = {gpu: (job, *launch(ctx, job, gpu)) for gpu, job in enumerate(pair)}
+        failed, paused = [], []
+        while running:
+            for gpu, (job, proc, logf) in list(running.items()):
+                code = proc.poll()
+                if code is None:
+                    continue
+                logf.close()
+                del running[gpu]
+                if code == OOM_EXIT and job.has_untried_layout():
+                    running[gpu] = (job, *launch(ctx, job, gpu))
+                elif code == PAUSE_EXIT:
+                    paused.append(job)
+                elif code != 0:
+                    failed.append(f"{job.out_dir} (exit {code}):\n{_tail(job.log_path)}")
+            if running:
+                _time.sleep(poll_seconds)
         if failed:
             raise RuntimeError("train-one failed:\n" + "\n\n".join(failed))
+        if ctx.cfg.get("train.sync_each_pair", False):
+            sync_jobs(ctx.cfg, ctx.env.artifacts_root, pair, include_unfinished=bool(paused))
+        if paused:
+            # The stage stays incomplete (resumable); the next session restores and resumes.
+            names = ", ".join(f"{j.split} ({j.out_dir.name})" for j in paused)
+            raise TrainingPaused(f"paused at the session deadline: {names}; resume next session")

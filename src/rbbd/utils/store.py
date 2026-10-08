@@ -87,6 +87,22 @@ class HFStore:
         )
         return Path(local)
 
+    def download_dir(self, path_in_repo: str, local_root: Path) -> Path:
+        """Mirror `path_in_repo/**` from the store into `local_root/path_in_repo` (restore).
+
+        Used at the start of a session to bring back finished jobs (`done.json`) so the
+        train stage skips them (D-072). Private check first. Returns the local directory.
+        """
+        rel = _check_rel(path_in_repo)
+        self.assert_private()
+        self.api.snapshot_download(
+            repo_id=self.repo_id,
+            repo_type=self.repo_type,
+            allow_patterns=[f"{rel}/**"],
+            local_dir=str(local_root),
+        )
+        return Path(local_root) / rel
+
 
 def open_store(repo_id: str, repo_type: str = "auto", api: Any = None) -> HFStore:
     """Resolve the repo type (probing dataset, then model, when "auto") and check privacy."""
