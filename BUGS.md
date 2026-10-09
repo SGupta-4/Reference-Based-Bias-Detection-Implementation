@@ -361,7 +361,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `3644675`; D-036, D-072; B-021
 
 ## B-023 Feature: M3c Tier 1 training preparation (Llama, Mistral, Gemma)
-- Status: In progress. Llama and Mistral are trained and DC-07 passes (D-077). Gemma: fp16 failed and fp32 projects 11.66 h for 1 epoch (D-078); the user chose 1 epoch over two sessions (D-079, B-024). The two Gemma sessions are pending.
+- Status: Done. All three Tier 1 models are trained and DC-07 passes for each (D-077, D-080); M3c is green (`m3c-green` = `0dd00fb`).
 - How it was found or scoped: PLAN §7 M3c-T9–T11; the user said "prepare M3c" (2026-10-02).
 - Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3c_train.ipynb` with `MODEL` per session.
 - Hypotheses tried (design risks found while preparing):
@@ -384,10 +384,10 @@ IDs are sequential and never reused.
   The GPU test skips without `RBBD_M3C_CONFIG`, and all notebook cells parse.
   - Kaggle (`8ab97fb`): Llama session `20261007T133950Z` and Mistral session `20261008T020912Z` trained, with DC-07 `1 passed` each (D-077). In the Gemma session `20261008T101651Z`, fp16 failed at the first forward and the fp32 projection triggered the ask (D-078).
 - GPU-hours lost: 0
-- Linked commits and D-### entries: `8ab97fb`, `a6eac37`; D-005, D-062, D-070, D-071, D-076, D-077, D-078, D-079; B-024
+- Linked commits and D-### entries: `8ab97fb`, `a6eac37`, `35dda0d`, `0dd00fb`; D-005, D-062, D-070, D-071, D-076, D-077, D-078, D-079, D-080; B-024, B-025, B-026
 
 ## B-024 Decision: Gemma-3-4B Tier 1 training does not fit the 9 h rule in fp32
-- Status: Decided (option 1, D-079): implemented and CPU-verified; the Kaggle sessions are tracked under B-023.
+- Status: Closed. Option 1 (D-079) ran on Kaggle: harmful paused at step 228 in session 1 and resumed to 250 in session 2 (D-080).
 - How it was found or scoped: M3c Gemma session (`20261008T101651Z`).
   - fp16 compute is impossible: the residual stream reaches |h| ≈ 1.7e5, which exceeds the fp16 maximum, and the first forward is all-NaN.
   - fp32 QLoRA runs at ≈ 116 tok/s: 11.66 h for 1 harmful epoch, 7.55 h unharmful. With setup that exceeds one 12 h Kaggle session.
@@ -410,7 +410,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-005, D-030, D-042, D-062, D-070, D-076, D-078, D-079
 
 ## B-025 Bug: the Kaggle clone cell fails when an attached GITHUB_TOKEN is rejected, although the repo is public
-- Status: Fixed in the notebooks (CPU-verified); the Kaggle re-run is pending.
+- Status: Closed. The clone succeeded at `0dd00fb` in both Gemma sessions (D-080). The fallback path did not trigger there (no `rejected` line, so the token was valid or detached); it is verified on CPU only.
 - How it was found or scoped:
   - The first Gemma session (M3c, `REF = 35dda0d…`) stopped at the clone cell after 9 s: `git fetch failed: fatal: could not read Username for 'https://github.com': No such device or address`.
   - No GPU time was used.
@@ -428,3 +428,20 @@ IDs are sequential and never reused.
   - Ran the patched cell with no stub: `commit 35dda0d9…`.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-046
+
+## B-026 Bug: `done.json` under-reports `train_loss` for a resumed run
+- Status: Fixed (CPU-verified). The one affected artifact (Gemma harmful, D-080) is left as stored, and its correct value is documented.
+- How it was found or scoped: Gemma session 2 (`20261009T072830Z`). The resumed harmful job reported `train_loss: 0.136` against `final_loss: 1.605`.
+- Reproduction command: `python -m pytest -q tests/test_sft.py -k deadline_pause` without the fix → `assert 3.6431472301483154 == 4.851379871368408 ± 0.001`. That is 3 of 4 step losses summed over 4 steps.
+- Hypotheses tried:
+  - **A training anomaly.** Ruled out. `final_loss` and the 22-step mean (0.136 × 250 / 22 = 1.55) both match the unresumed harmful runs.
+  - **HF's `TrainOutput.training_loss` sums only this process's steps but divides by the global step count** (transformers 4.57). Confirmed by the CPU test.
+- Fix:
+  - `sft.train_one`: for a resumed run, `train_loss` is now the mean of the per-step `loss` entries in the restored `log_history` (`logging_steps=1`, so it covers every step of the run).
+  - Unresumed runs keep HF's value, so existing `done.json` files keep their meaning.
+  - `train_loss` is metadata: no key or downstream stage reads it.
+- Verification:
+  - The test above now passes (the resumed whole-run mean equals the uninterrupted run's within 1e-3).
+  - `python -m pytest -q -m "not gpu"` → `129 passed, 13 deselected`; `ruff check src tests` → `All checks passed!`.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-079, D-080

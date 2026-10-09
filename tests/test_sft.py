@@ -769,7 +769,7 @@ def test_deadline_pause_then_resume_is_bit_identical(tmp_path):
     call without a deadline resumes and ends bit-identical to an uninterrupted run."""
     rows, tok = make_rows(16, seed=9), make_chat_tokenizer()
     spec = _spec(epochs=1)
-    sft.train_one(spec, rows, tok, make_tiny_model(), tmp_path / "ref", save_minutes=1e6)
+    ref = sft.train_one(spec, rows, tok, make_tiny_model(), tmp_path / "ref", save_minutes=1e6)
     with pytest.raises(sft.SessionPaused, match="paused at step 1/4"):
         sft.train_one(
             spec,
@@ -784,6 +784,8 @@ def test_deadline_pause_then_resume_is_bit_identical(tmp_path):
     assert sft.latest_checkpoint(tmp_path / "job" / "checkpoints").endswith("checkpoint-1")
     done = sft.train_one(spec, rows, tok, make_tiny_model(), tmp_path / "job", save_minutes=1e6)
     assert done["resumed_from"] == "checkpoint-1" and done["global_step"] == 4
+    # B-026: the whole-run mean, not this process's sum over the global step count.
+    assert done["train_loss"] == pytest.approx(ref["train_loss"], abs=1e-3)
     a = ad.read_adapter(tmp_path / "ref" / "final").tensors
     b = ad.read_adapter(tmp_path / "job" / "final").tensors
     assert all(torch.equal(a[k], b[k]) for k in a)

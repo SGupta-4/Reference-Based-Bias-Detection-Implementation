@@ -1352,3 +1352,49 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Revisit-if:
   - Session 1's harmful job reaches fewer steps than projected (throughput below ≈ 105 tok/s): session 2 still finishes it, so only the cost changes.
   - Or the resumed loss curve shows a discontinuity at the pause step.
+
+## D-080 Gemma-3-4B Tier 1 trained over two sessions (D-079 verified on Kaggle) and M3c closed: `m3c-green` = `0dd00fb`
+- Date: 2026-10-09
+- Context: `notebooks/m3c_train.ipynb` at `0dd00fb`, `MODEL = "gemma3-4b"`, Save & Run All on Kaggle 2×T4, twice. Config hash `3da761e474f952a7`.
+  - **Session 1** `20261008T114622Z`. Store: per-pair uploads unharmful `76fe511e`, harmful (paused) `0cd1bde5`; end-of-session manifests `4ef9a0e8`, ftdata `713c371a`, train `776a6a57`.
+  - **Session 2** `20261009T072830Z`. Store: harmful `ecbe6852`; end-of-session manifests and ftdata `ff375c2d`, train `d3f33fe2`, env `9ccd6d08`.
+  - An earlier attempt the same day stopped at the clone cell after 9 s (B-025); no GPU time was used.
+- Observed (facts):
+  - **Layout fallback:** 4×8 OOMed in the first minute for both jobs ("Tried to allocate 4.00 GiB … 592.81 MiB free"). Both relaunched at 2×16 (effective batch 32, same as App. C), as designed (D-074).
+    - The fp32 probe (D-078) had fit 4×8 at 11.44 GiB over 5 steps.
+    - Likely cause: the probe's first batches were short. The fp32 logits of one 4×1024 batch over Gemma-3's 262,144-token vocabulary alone take 4.3 GB. Not verified further; the fallback absorbs it.
+  - **Session 1:**
+    - Unharmful finished: 250 steps, train loss 1.386 → final 0.754, 117.9 tok/s, 27,326 s (7.59 h), peak 11.44 GiB, 0 scaler skips, max |hidden| 188,540 (fp32).
+    - Harmful paused at **step 228/250** at 22:47:17 UTC, i.e. session start + 11.0 h. Expected `TrainingPaused`; the stage manifest stayed incomplete.
+    - The paused job uploaded with its single `checkpoint-228` (515 MB with the adapter, optimizer and RNG state). Disk 0.9 GB.
+  - **Session 2:**
+    - `restore` → 43 files, including both 4×8 `oom.json` markers, so `plan_jobs` resolved straight to the 2×16 directories.
+    - One launch only: harmful at 2×16 on `cuda:0` → `106b5be62edcfc27`, `resumed_from: checkpoint-228`. 22 steps in 2,125 s.
+    - Final loss 1.605, 117.5 tok/s, 0 skips, max |hidden| 175,883.
+    - The `train_loss` in that `done.json` reads 0.136. It is HF's sum over the 22 resumed steps divided by 250 (B-026); the 22-step mean is 1.55. The whole-run mean is recoverable from the stored `train_log.json`, which carries every step's loss.
+    - `all endpoints done: True`; `status`: ftdata and train valid.
+  - **DC-07 (GPU, `1 passed` in 622 s):**
+    - 238 LoRA modules (34 language-model layers × 7 projections; none in the SigLIP tower, regex as D-076).
+    - Max relative linearity error 5.4e-8.
+    - The α = 0.5 forward on the fp32 balanced base is finite.
+  - **Gemma total:** ≈ 11.0 + 0.95 session-h, plus the D-078 probes (0.56 h). Disk 1.0 GB.
+- M3c DONE checks (DONE.md row M3: DC-01, 02, 07, 09, 11, 13, 15, 19):
+  - **DC-01:** `ruff check src tests` → `All checks passed!`.
+  - **DC-02:** `python -m pytest -q -m "not gpu"` → `129 passed, 13 deselected` (this commit).
+  - **DC-07:** passes on all three Tier 1 models' real endpoints: Llama and Mistral (D-077), Gemma (above).
+  - **DC-09 (training):** guard tests pass on CPU. Tier 1 runs had at most 1 scaler-skipped step (Mistral unharmful), within D-065's limits. Gemma's activation monitor stayed finite in fp32.
+  - **DC-11 (through train):** M3a (D-069).
+  - **DC-13:**
+    - CPU resume tests are bit-identical, including `test_deadline_pause_then_resume_is_bit_identical`.
+    - On GPU: M3a (D-069), plus a real cross-session resume here (step 228 → 250 on a different machine, with no repeated or skipped steps: `global_step` 250 = 1 epoch).
+  - **DC-15:** docs in each commit. **DC-19:** `grep -rn "PLACEHOLDER(M3)" tests` → no output.
+- Choice: **M3c is green.** Tag `m3c-green` on `0dd00fba87a1bdfbd32698951c723ec6e35801d7`, the latest commit run on Kaggle, which covers all M3c code. The B-026 fix that follows changes only the metadata `done.json` reports for resumed runs; no train key, weight or downstream input changes.
+- Why: Every M3 check passes with its stated output, for all Tier 1 models.
+- Tradeoff accepted:
+  - All three Tier 1 models train 1 epoch (D-071, D-077, D-079).
+  - Gemma used about 1 h of session 1 as a deliberate deadline margin.
+- Cost impact: M3c measured. Llama ≈ 7.6, Mistral ≈ 6.9, Gemma 0.56 + 11.0 + 0.95 ≈ 12.5 → **≈ 27 session-h**. PLAN §8 estimated ≈ 26 h for W2 plus Gemma session 2 in W3.
+- Paper deviation: as logged in D-071, D-077, D-078, D-079 (epochs 3 → 1; Gemma fp32 compute). Nothing new.
+- Revisit-if:
+  - A `train` schema bump (ROLLBACK: re-run DC-07, DC-11, DC-13).
+  - M4 needs the Gemma whole-run train loss (read it from `train_log.json`).
