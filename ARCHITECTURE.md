@@ -69,7 +69,7 @@ Training sits upstream of the spectrum:
 | `rbbd.models.loading` | Load tokenizer and model at a given precision, placement and pad policy. |
 | `rbbd.models.adapters` | Build exact α-combined LoRA adapters (D-007) and materialise merged α-weights for generation (D-050). |
 | `rbbd.models.interpolate` | In-memory full-weight interpolation for Tier 2 (D-008). |
-| `rbbd.models.spectrum` | Define the α list and checkpoint slugs; iterate checkpoints on one base. |
+| `rbbd.models.spectrum` | Define the α list and checkpoint slugs; find finished u/h pairs via `plan_jobs`; switch one loaded base between checkpoints (`Activator`). |
 | `rbbd.embed.pooling` | Mask-aware mean/max/last pooling. |
 | `rbbd.embed.extract` | Batched final-layer extraction into the cache. |
 | `rbbd.metrics.rr` | Relative representations and B_rel (Eq. 4–6). |
@@ -100,8 +100,11 @@ artifacts/
 ├── ftdata/<split>/<data_key>/{ids.json, stats.json}          # row IDs only, no text
 ├── train/<model_slug>/<regime>/<split>/seed<k>/<train_key>/  # {checkpoints/, final/ (adapter | fp16 full model), data.json, train_log.json, done.json, train.log}; aggregates only
 ├── adapters_combined/<model_slug>/<regime>/a<α×100>/<key>/   # interior α only (D-066); PEFT dir + rbbd_meta.json; regenerable
-├── embeddings/<model_slug>/<regime>/<ckpt_slug>/<embed_key>.{safetensors,json}
-├── deltab/<run_key>/delta_b.csv
+├── sentences/<run_key>/union.json              # authored sets + anchor pools (Alpaca/Tulu text: private store only)
+├── embed/<run_key>/{index.json, timing.json}   # index: one row per (model, regime, seed, ckpt) entry
+├── embeddings/<model_slug>/base/ref/<embed_key>.{safetensors,json}
+├── embeddings/<model_slug>/<regime>-s<seed>/<ckpt_slug>/<embed_key>.{safetensors,json}
+├── deltab/<run_key>/{delta_b.csv.gz, sanity.json, timing.json}
 ├── generations/<bench>/<model_slug>/<regime>/<ckpt_slug>/<gen_key>/{part-XXXX.jsonl, done.json}
 ├── scores/<bench>/<model_slug>/<regime>/<ckpt_slug>/<score_key>.csv
 └── analysis/<run_key>/{joined.csv, stats.csv, tables/, figures/}
@@ -109,7 +112,7 @@ artifacts/
 
 - Same private repo, same paths as local: `train/<model_slug>/full/<split>/seed<k>/<train_key>/final/` holds Tier 2 full-FT endpoints (fp16 safetensors + config/tokenizer); uploaded per finished u‖h pair and restored with `cli restore` (D-072, replacing D-041's `ckpt_private/…`).
 - Ephemeral: full-FT trainer checkpoints `<ephemeral>/rbbd_ckpt/<slug>/<train_key>/` (D-072).
-- Repo `results/<run_name>/`: public-safe aggregates only (DC-18). For example, `results/smoke/delta_b.csv`.
+- Repo `results/<run_name>/`: public-safe aggregates only (DC-18): `delta_b.csv` (primary cell), `delta_b_cells.csv.gz` (all cells), `sanity.json`. Mirrored to `artifacts/results/<run_name>/` for the store.
 - Ephemeral (`utils.env.ephemeral_dir()`, D-045): HF cache and materialised Tier 2 α-weights.
 
 Slugs:
@@ -126,7 +129,7 @@ Slugs:
 | `config_hash` | Entire merged config minus presentation-only fields (paths, log level) |
 | `data_key` | Dataset id + revision, filters, sample size, seed |
 | `train_key` | model id + revision, regime, hyperparameters, data_key, seed, precision/quant, schema_version |
-| `embed_key` | model id + revision, checkpoint spec {regime, adapter/endpoint hashes, α}, layer, layer_site, precision, quant, placement, tokenizer settings {add_special_tokens, padding_side, max_len}, sentence-union hash, poolings, schema_version |
+| `embed_key` | model {id, revision, precision, placement, quant}, layer, extract settings {poolings, layer sites, max_length, token budget, tokenizer policy}, sentence-union hash, schema_version, and `checkpoint` = {slug: ref} or {slug, α, regime, seed, merge, endpoints {train_key, sha256 of final/}}; ref and audited keys differ only in `checkpoint` (asserted, D-004, D-081) |
 | `gen_key` | model id + revision, checkpoint spec, bench, prompt-subset hash, sampling params {n, T, top_p, max_new_tokens, seed}, engine + version, dtype, schema_version |
 | `score_key` | gen_key, scorer id + revision, scorer params, schema_version |
 | `run_key` | config_hash + upstream keys |
@@ -142,3 +145,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 - 2026-10-01 — Tier 2 training: batch-layout fallback, ephemeral full-FT checkpoints, per-pair store sync, CLI `restore`; full endpoints stored at their `train/` path — D-072.
 - 2026-10-02 — Config overrides (`--set`, hashed) forwarded to training subprocesses; `rbbd.finetune.session` holds the pre-registered M3c probe rules; activation monitor for fp16 probes — D-076.
 - 2026-10-08 — Training can pause at a session deadline (`$RBBD_TRAIN_DEADLINE_UNIX`, `train-one` exit 76): the paused job and its checkpoint sync to the store and the next session resumes it — D-079.
+- 2026-10-09 — M4: anchor pools join the sentence union; `embed` sweeps ref + 7 α per spectrum on one base (`models.spectrum.Activator`) and writes `index.json`; `deltab` stage writes the long ΔB table and `results/<run>/`; `--only-ckpt` leaves sweep stages incomplete — D-081, D-082.

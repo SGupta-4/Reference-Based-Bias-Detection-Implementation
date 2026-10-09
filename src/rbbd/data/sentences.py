@@ -186,7 +186,8 @@ class SentenceSets:
 
     targets[variant][group] -> 50 sentences (template order, aligned across variants)
     positives[variant], negatives[variant] -> 100 sentences (row-aligned)
-    anchors["neutral"] -> 1,000 sentences; anchor_groups / anchor_templates align with it
+    anchors["neutral"] -> 1,000 sentences; anchor_groups / anchor_templates align with it;
+    anchors["alpaca" | "tulu" | "word"] -> sampled pools added by the stage (D-081)
     """
 
     targets: dict[str, dict[str, list[str]]]
@@ -491,10 +492,37 @@ def subset_sets(sets: SentenceSets, spec: Mapping[str, Any]) -> SentenceSets:
         target_template_ids=sets.target_template_ids[:nt],
         positives={v: sets.positives[v][:na] for v in variants if v in sets.positives},
         negatives={v: sets.negatives[v][:na] for v in variants if v in sets.negatives},
-        anchors={"neutral": sets.anchors["neutral"][:nn]},
+        anchors={src: rows[:nn] for src, rows in sets.anchors.items()},
         anchor_groups=sets.anchor_groups[:nn],
         anchor_templates=sets.anchor_templates[:nn],
     )
+
+
+def add_anchor_pools(
+    sets: SentenceSets, pool_cfg: Mapping[str, Any], fetch: Any = None
+) -> tuple[SentenceSets, dict[str, Any]]:
+    """`sets` with the word/Alpaca/Tulu pools added as `anchors/<source>` (D-015, D-081).
+
+    Pools are built after validation: they are sampled data, not authored, so the
+    neutrality and overlap checks of `validate` do not apply to them. `fetch` defaults to
+    `data.anchors.fetch_rows` (network); CPU tests pass a stub.
+    """
+    from rbbd.data import anchors as anchor_pools
+
+    authored = {
+        normalize(s)
+        for rows in [
+            *(r for by_group in sets.targets.values() for r in by_group.values()),
+            *sets.positives.values(),
+            *sets.negatives.values(),
+            *sets.anchors.values(),
+        ]
+        for s in rows
+    }
+    pn = [s for rows in [*sets.positives.values(), *sets.negatives.values()] for s in rows]
+    kwargs = {"fetch": fetch} if fetch is not None else {}
+    pools, stats = anchor_pools.build_pools(pool_cfg, authored, pn, **kwargs)
+    return dataclasses.replace(sets, anchors={**sets.anchors, **pools}), stats
 
 
 def stage(ctx: Any) -> Any:
@@ -507,6 +535,9 @@ def stage(ctx: Any) -> Any:
 
     sets = load_sets()
     stats = validate(sets)  # the full sets are always validated, also for a smoke subset
+    pool_cfg = ctx.cfg.get("sentences.anchor_pools")
+    if pool_cfg:
+        sets, stats["anchor_pools"] = add_anchor_pools(sets, pool_cfg)
     subset = ctx.cfg.get("sentences.subset")
     if subset:
         sets = subset_sets(sets, subset)

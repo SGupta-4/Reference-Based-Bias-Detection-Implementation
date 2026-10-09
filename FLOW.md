@@ -14,7 +14,7 @@ Skip condition: ...
 Resume behaviour: ...
 Failure modes: ... (link B-###)
 ```
-Status: Entrypoint, probe and sync are **implemented (M0)**; `sentences`/`ftdata` (M1), `embed` for ref (M2) and `train` (M3a) are implemented; other stage bodies are stubs that raise `NotImplementedError` naming their milestone. Function names below are the intended public API and are fixed when implemented.
+Status: Entrypoint, probe and sync are **implemented (M0)**; `sentences`/`ftdata` (M1), `embed` (ref M2, α sweep M4), `train` (M3) and `deltab` (M4) are implemented; other stage bodies are stubs that raise `NotImplementedError` naming their milestone. Under `--only-ckpt`, the sweep stages (`runner.SWEEP_STAGES`) leave their manifest incomplete (outcome `partial`, D-081). Function names below are the intended public API and are fixed when implemented.
 
 ---
 
@@ -74,7 +74,8 @@ Entry: `run --stages sentences` → `runner.STAGE_IMPLS["sentences"]` → `data.
 2. `data.sentences.validate(sets)` → stats dict, or `SentenceValidationError` listing every failed check (PLAN §2; D-052)
 3. `data.sentences.build_union(sets)` → `SentenceUnion(texts, hashes, index[(set, variant[, group])] → row ids)`
 4. Writes `sentences/<run_key>/union.json` {union_hash, set_hashes, stats, texts, hashes, index}
-Anchor ablation pools (word / Alpaca / Tulu) and size subsets: `data.anchors` (M6).
+3b. With `sentences.anchor_pools` (base.yaml, M4): `data.sentences.add_anchor_pools(sets, cfg)` → `data.anchors.build_pools` → `fetch_rows("alpaca"|"tulu")` [network: `tatsu-lab/alpaca` whole; `allenai/tulu-3-sft-mixture` streamed, first rows of every shard; revisions resolved and recorded] → `alpaca_candidates` / `tulu_candidates` (excluded sources) → `sample_pool` (seed 0, 1,000) and `word_pool` → `anchors/{alpaca,tulu,word}` added after validation (D-081). A smoke `subset` slices every anchor source to `n_anchors`.
+Anchor-size subsets are computed at ΔB time: `data.anchors.subset_rows(n_pool, size, seed)` (nested per seed).
 Skip condition: valid manifest (any edit to a source file changes the union hash and the downstream keys).
 Failure modes: validation error → fix the source files, not the checks.
 
@@ -114,7 +115,17 @@ Failure modes: `NonFiniteError` from the guard (B-001, D-065); `DataBuildError` 
 - LoRA: `models.adapters.read_adapter(final)` ×2 → `adapter_for_alpha(u, h, α)`: u at α=1, h at α=0, else `combine` = rank-2r concatenation, scaling 1 (D-007, D-066) → `write_adapter` (PEFT dir + `rbbd_meta.json`).
 - Full FT: `models.interpolate.load_endpoint` ×2 (fp32 CPU) → `apply_alpha(model, w_h, w_u, α)` in place, or `materialize(...)` to ephemeral disk only (D-008, D-050).
 
-## Stage: embed (implemented for `ref`, M2 green — D-064; α-checkpoints M4)
+## Stage: embed (ref: M2 green — D-064; α sweep: M4 — D-081)
+M4 sweep (`embed.checkpoints: [ref, a100 … a000]`, depends on `sentences` + `train`):
+1. `embed.extract.ftdata_outputs(cfg)` → `models.spectrum.spectra(cfg, root, outputs)` → `sft.plan_jobs` → one `Spectrum` per (model, regime, seed) with both `done.json` [`train/.../final/`]; LoRA-type first, full FT last
+2. Per model: `Activator(load)` (lazy: `download` + `load_for_inference` at the reference's `LoadSpec`, layer check). Plan = `ref` then, per spectrum, every requested slug; endpoint hashes = `manifest.hash_path(final/)`
+3. Per (spectrum, slug): key fields = shared fields + `spectrum.checkpoint_fields` → `assert_same_but_checkpoint(ref_fields, fields)` (D-004) → `extract_cached(cache, "embeddings/<slug>/<regime>-s<seed>/<ckpt>", …, load=lambda: activator.get(sp, slug))`:
+   - `ref` → `Activator.plain()` (unloads PEFT if present; raises after full-FT weights were applied)
+   - LoRA/QLoRA → `adapters.adapter_for_alpha(u, h, α)` → `write_adapter(<ephemeral tmp>)` → `PeftModel.from_pretrained` / `load_adapter` + `set_adapter` + `delete_adapter(previous)` → tmp removed
+   - full → `interpolate.load_endpoint` ×2 (fp32 CPU, once per spectrum) → `apply_alpha(model, w_h, w_u, α)`
+   - then `encode` as below; `ctx.checkpoint({"done": [...]})` after every entry
+4. Writes `embed/<run_key>/index.json` [{model, regime, seed, ckpt, alpha, key, path}] (hashed output) and `timing.json` / `timing_only_<slug>.json` (log, not hashed)
+Reference-only extraction (M2 path, `embed.checkpoints == [ref]`):
 Entry: `run --stages sentences,embed` → `runner.STAGE_IMPLS["embed"]` → `embed.extract.stage(ctx)`
 Depends on `sentences` only while `embed.checkpoints == [ref]` (`runner.stage_deps`, D-057).
 1. Read `sentences/<run_key>/union.json` from the upstream manifest → texts, union_hash, index
@@ -132,13 +143,16 @@ Depends on `sentences` only while `embed.checkpoints == [ref]` (`runner.stage_de
 Invariant (M4): ref and every aXXX key differ only in the checkpoint field.
 GPU checks (`tests/gpu/test_extract_gpu.py`): DC-06 per D-061 calls `load_for_inference` (fp16 on cuda:0, fp32 on cuda:1) → `encode(keep_fp32=True)` on the short sentence alone vs in a padded batch (fp32, before the fp16 cast; D-063), and on the 85-text smoke union alone vs batched (fp16) → `m2_extract_gpu.json`. DC-09 hooks the last decoder layer and calls `extract_cached`.
 
-## Stage: deltab
-1. `utils.cache.read(embed_key_ref)`, `read(embed_key_aud)` → E_ref, E_aud (CPU fp32)
-2. For each ablation cell (anchor source/size/seed, attr variant, target variant, pooling, layer site):
-   - `metrics.rr.relative(E_x, E_anchor)` → R [n, m]
-   - `metrics.rr.bias_rel(R_T_by_group, R_P, R_N)` → B_rel per group
-   - `metrics.seat.bias(...)`, `metrics.procrustes.bias_aligned(...)`, `metrics.cka.drift(...)`
-3. `metrics.delta_b.table(...)` → long DataFrame [writes `deltab/<run_key>/delta_b.csv`; a copy goes to `results/<run>/delta_b.csv`]
+## Stage: deltab (implemented, M4 — D-081)
+Entry: `run --stages embed,deltab` → `runner.STAGE_IMPLS["deltab"]` → `metrics.delta_b.stage(ctx)` (CPU)
+1. Read `embed/<run_key>/index.json` (upstream manifest) and `sentences/<run_key>/union.json` (config's sentences manifest)
+2. Per spectrum (model, regime, seed): `TensorCache.read` of the model's `ref` entry + each checkpoint entry
+3. `spectrum_rows(ref, entries, union, spectrum)`: per checkpoint (ref included) × `cells(union, tensors)` (primary + one-factor variations):
+   - `_embedding_set` → `from_union(emb[tensor], union, target/attr variant, anchor source, anchor_subset=subset_rows(...))`
+   - anchor-pool cells: RR only → `group_bias(aud, "rr") − group_bias(ref, "rr")`
+   - other cells: `delta_b_all(ref_set, aud_set, rotation=R)`; R = `procrustes.fit_orthogonal(aud anchors, ref anchors)` once per (checkpoint, tensor), identity for `ref` (D-082)
+4. `sanity(rows)` (M4-T5: mean RR ΔB at a100 vs a000, primary cell)
+5. Writes `deltab/<run_key>/{delta_b.csv.gz, sanity.json}` (hashed) + `timing.json` (log); copies to `results/<run>/{delta_b.csv (primary cell), delta_b_cells.csv.gz, sanity.json}` (`results_dir`: `paths.results`, else `<repo>/results`)
 
 ## Stage: generate
 1. `bench.<b>.build_prompts(cfg)` → prompt list + subset hash (WGM subcategory; DT 1,152 × 3 sys; ToxiGen 9 × 100)

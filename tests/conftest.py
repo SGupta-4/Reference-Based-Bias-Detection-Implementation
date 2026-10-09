@@ -134,3 +134,108 @@ def make_rows(n, seed=0, prompt_words=(3, 8), response_words=(2, 6)):
         return " ".join(f"w{int(i)}" for i in rng.integers(0, 100, size=int(rng.integers(lo, hi))))
 
     return [{"prompt": text(*prompt_words), "response": text(*response_words)} for _ in range(n)]
+
+
+# --- M4 spectrum fixtures (tests/test_spectrum.py, tests/test_delta_b_table.py) ----------
+
+
+def random_adapter(tmp_path, name, seed):
+    """A real PEFT LoRA (r=4, alpha=8, random A and B) on the tiny model, saved to disk."""
+    import torch
+    from peft import LoraConfig, get_peft_model
+
+    targets = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+    cfg = LoraConfig(
+        r=4, lora_alpha=8, target_modules=targets, init_lora_weights=False, task_type="CAUSAL_LM"
+    )
+    base = make_tiny_model()  # reseeds the global RNG itself, so seed the adapter after it
+    torch.manual_seed(seed)
+    model = get_peft_model(base, cfg)
+    out = tmp_path / name
+    model.save_pretrained(str(out))
+    return out
+
+
+def full_endpoint(tmp_path, name, seed):
+    """The tiny model with every weight perturbed, saved as safetensors (a full-FT final)."""
+    import torch
+
+    model = make_tiny_model()
+    gen = torch.Generator().manual_seed(seed)
+    with torch.no_grad():
+        for p in model.parameters():
+            p.add_(0.05 * torch.randn(p.shape, generator=gen))
+    out = tmp_path / name
+    model.save_pretrained(str(out), safe_serialization=True)
+    return out
+
+
+def spectrum_of(regime, finals, seed=0):
+    """A `models.spectrum.Spectrum` of the tiny model with the given `final/` dirs."""
+    from rbbd.models import spectrum as spm
+
+    model = {"id": "tiny/llama", "slug": "tiny", "layer": 2}
+    keys = {"unharmful": f"{regime}-u", "harmful": f"{regime}-h"}
+    return spm.Spectrum(model, regime, seed, finals, keys)
+
+
+@pytest.fixture
+def lora_spectrum(tmp_path):
+    finals = {"unharmful": random_adapter(tmp_path, "u", 1),
+              "harmful": random_adapter(tmp_path, "h", 2)}  # fmt: skip
+    return spectrum_of("lora", finals)
+
+
+@pytest.fixture
+def full_spectrum(tmp_path):
+    finals = {"unharmful": full_endpoint(tmp_path, "fu", 3),
+              "harmful": full_endpoint(tmp_path, "fh", 4)}  # fmt: skip
+    return spectrum_of("full", finals)
+
+
+SWEEP_BASE = (
+    "run_name: base\nseed: 0\nschema_version: {embed: 1}\n"
+    "embed: {checkpoints: [ref, a100, a090, a070, a050, a030, a010, a000], poolings: [mean],"
+    " layer_sites: [post_norm], max_length: 64, token_budget: 4096, max_batch: 64}\n"
+)
+SWEEP_TIER = (
+    "run_name: t\nmodels:\n"
+    "  - {id: tiny/llama, slug: tiny, layer: 2, precision: fp32, placement: cpu}\n"
+    "sentences:\n  subset: {groups: [Women, Muslims, Immigrants], n_targets: 5, n_attr: 10,"
+    " n_anchors: 50, variants: [base]}\n"
+)
+
+
+def _stub_stage(ctx):
+    """Stands in for `ftdata`/`train` so `embed` finds complete upstream manifests."""
+    from rbbd.runner import StageResult
+
+    return StageResult(outputs={})
+
+
+STUBS = {"ftdata": _stub_stage, "train": _stub_stage}
+
+
+@pytest.fixture
+def sweep(config_dir, artifacts, monkeypatch, lora_spectrum, full_spectrum):
+    """A config sweeping ref + 7 α over one LoRA and one full spectrum of the tiny model;
+    `loads` counts base loads."""
+    from rbbd import config
+    from rbbd.embed import extract
+    from rbbd.models import spectrum as spm
+    from rbbd.utils import env as env_mod
+
+    loads = []
+
+    def fake_load(spec):
+        loads.append(spec)
+        return make_tiny_model(), FakeTokenizer()
+
+    monkeypatch.setattr("rbbd.models.loading.load_for_inference", fake_load)
+    monkeypatch.setattr("rbbd.models.loading.download", lambda spec: "/nonexistent")
+    monkeypatch.setattr(extract, "resolve_revision", lambda mid, rev: "sha-test")
+    monkeypatch.setattr(spm, "spectra", lambda cfg, root, outs: [lora_spectrum, full_spectrum])
+    cfg = config.load(config_dir(SWEEP_BASE, SWEEP_TIER))
+    return cfg, env_mod.detect(), loads
+
+

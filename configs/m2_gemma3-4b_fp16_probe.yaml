@@ -4,3 +4,5 @@ run_name: m2_gemma3-4b_fp16_probe
 tier: 1
 models:
   - {id: google/gemma-3-4b-it, slug: gemma3-4b-it, layer: 34, precision: fp16, placement: balanced}
+embed:
+  checkpoints: [ref]       # M2 probe of the reference only (D-058, D-062)

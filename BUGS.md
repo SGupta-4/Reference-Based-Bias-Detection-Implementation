@@ -445,3 +445,48 @@ IDs are sequential and never reused.
   - `python -m pytest -q -m "not gpu"` → `129 passed, 13 deselected`; `ruff check src tests` → `All checks passed!`.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-079, D-080
+
+## B-027 Feature: M4 ΔB across the merge spectra (α sweep, anchor pools, deltab stage)
+- Status: In progress. Code and CPU tests are done; Kaggle sessions A–C are pending (D-081).
+- How it was found or scoped: PLAN §7 M4; the user said "prepare M4" (2026-10-09) and chose to build the anchor pools now.
+- Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m4_deltab.ipynb` with `CONFIGS` per session.
+- Hypotheses tried (design risks found while preparing):
+  - A `--only-ckpt` run would have written a complete manifest covering one checkpoint, and a later full run would have skipped the rest. Fixed with the runner's `partial` outcome.
+  - The DC-10 re-run would have changed `timing.json`, a hashed output, and so invalidated `deltab`. Timing is now a log.
+  - A changed WildGuardMix revision would give new train keys, and the `train` stage would silently start training. The notebook now checks every endpoint before `train`.
+  - Procrustes with m < d (B-028).
+  - The CPU merge tests used identical endpoints (B-029).
+- Fix:
+  - Code:
+    - `data.anchors` (pools, subsets) and `data.sentences.add_anchor_pools`;
+    - `models.spectrum` (slugs, `spectra`, `checkpoint_fields`, `Activator`);
+    - `embed.extract.stage` (sweep, `assert_same_but_checkpoint`, `index.json`);
+    - `metrics.delta_b` (`Cell`, `cells`, `spectrum_rows`, `sanity`, `stage`);
+    - `runner.SWEEP_STAGES` / `partial`.
+  - Configs: `base.yaml`, the Mistral and Gemma pooling settings, the M2 probe config.
+  - Notebook: `notebooks/m4_deltab.ipynb`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `156 passed, 13 deselected in 22.83s`; `grep -rn "PLACEHOLDER(M4)" tests` → no output. New tests: `tests/test_anchors.py`, `tests/test_spectrum.py`, `tests/test_delta_b_table.py` (the `PLACEHOLDER(M4)` skeleton is replaced).
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-004, D-015, D-019, D-020, D-028, D-057, D-081, D-082; B-020, B-028, B-029
+
+## B-028 Bug: Procrustes alignment rotated target components outside the anchor span arbitrarily when anchors < dimensions
+- Status: Fixed (CPU-verified) before any M4 run.
+- How it was found or scoped: Designing the per-(checkpoint, tensor) rotation cache for M4. For the `ref` row a self-fit should be the identity, but `np.linalg.svd(xᵀx)` with rank m < d is not.
+- Reproduction command: `python -c "import numpy as np; r=np.random.default_rng(0); x=r.normal(size=(100,256))+r.normal(size=256); u,_,vt=np.linalg.svd(x.T@x); print(abs(u@vt-np.eye(256)).max())"` → `0.855…`
+- Hypotheses tried: n/a (a mathematical property: R is defined only on the anchor span; LAPACK fills the null space with noise).
+- Fix: `procrustes.fit_orthogonal` adds 1e-10·‖xᵀy‖_F·I before the SVD (D-082). The deltab stage also uses the identity for `ref`.
+- Verification:
+  - `pytest -q tests/test_delta_b_table.py::test_procrustes_self_fit_is_identity_with_fewer_anchors_than_dims` passes (|R − I| ≤ 1e-6 at d = 64, m = 20).
+  - `tests/test_baselines.py` (full-rank rotation recovery, atol 1e-8) and DC-03/DC-04 still pass.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-028, D-082
+
+## B-029 Bug: the CPU merge tests compared two identical "endpoint" adapters
+- Status: Fixed (CPU-verified).
+- How it was found or scoped: The new spectrum sweep test found a100 and a000 embeddings identical. `_random_adapter(seed)` seeded torch and then built the tiny model, which reseeds the global RNG (`make_tiny_model` calls `torch.manual_seed(0)`), so u and h were the same random adapter.
+- Reproduction command: before the fix, `ad.read_adapter(u).tensors == ad.read_adapter(h).tensors` for the `endpoints` fixture.
+- Hypotheses tried: a PEFT adapter-switching bug, ruled out (a100 → a050 matched the merged weights); the fixture was the cause.
+- Fix: the helper (now `tests.conftest.random_adapter`) seeds after building the base model. The CPU DC-07 linearity tests now run on distinct endpoints. The Kaggle GPU DC-07 tests always used the real trained endpoints, so no recorded result changes.
+- Verification: `python -m pytest -q tests/test_merge.py tests/test_spectrum.py` → all pass with distinct endpoints (a100 vs a000 max |Δh| 2.83 on the tiny model).
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-007, D-066, D-081

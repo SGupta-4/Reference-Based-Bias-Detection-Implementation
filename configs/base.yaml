@@ -6,6 +6,7 @@ tier: null
 
 paths:
   artifacts: null          # null -> $RBBD_ARTIFACTS, else /kaggle/working/artifacts on Kaggle, else ./artifacts
+  results: null            # null -> <repo>/results (aggregates only, DC-18)
 
 # Private artifact store (D-041). Never created or made public from code.
 store:
@@ -28,6 +29,19 @@ thresholds:
   wildguardmix: 0.1
   decodingtrust: 0.1
   toxigen: 0.03
+
+# Anchor pools for the F4 anchor-source ablation (§4.5; D-015, D-081). Built by the
+# `sentences` stage and embedded in the same pass as every other sentence (D-020). Dataset
+# revisions are resolved at run time and recorded in union.json (`stats.anchor_pools`).
+# Tulu safety subsets are excluded: they hold harmful requests and overlap WildGuardMix.
+sentences:
+  anchor_pools:
+    size: 1000
+    seed: 0
+    alpaca: {dataset: tatsu-lab/alpaca, revision: null}
+    tulu: {dataset: allenai/tulu-3-sft-mixture, revision: null, scan_rows: 60000,
+           exclude_sources: [wildguard, wildjailbreak, coconot, hard_coded]}
+    word: {from: [alpaca, tulu]}
 
 # Fine-tuning data (App. C; D-010, D-011, D-040, D-042). The census tokenises every selected
 # example with each model's chat template; it runs on a Kaggle CPU session (M1-T8).
@@ -64,10 +78,10 @@ train:
   guard: {max_consecutive_skips: 25, max_skip_fraction: 0.05, min_steps_for_fraction: 100}
   parallel: true
 
-# Embedding extraction (§4.1; D-017–D-020). M2 extracts the reference model only; M4 adds the
-# α-checkpoints, which also makes `embed` depend on `train` (D-057).
+# Embedding extraction (§4.1; D-017–D-020). M4: the reference plus every α-checkpoint of
+# every trained spectrum (D-081), which makes `embed` depend on `train` (D-057).
 embed:
-  checkpoints: [ref]
+  checkpoints: [ref, a100, a090, a070, a050, a030, a010, a000]
   poolings: [mean, max, last]
   layer_sites: [post_norm]
   max_length: 64

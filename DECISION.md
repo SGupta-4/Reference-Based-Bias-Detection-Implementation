@@ -1398,3 +1398,83 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Revisit-if:
   - A `train` schema bump (ROLLBACK: re-run DC-07, DC-11, DC-13).
   - M4 needs the Gemma whole-run train loss (read it from `train_log.json`).
+
+## D-081 M4 design: anchor pools in the union, one base per model for the α sweep, the ΔB table and its cells (implements PLAN M4; refines D-004, D-015, D-019, D-020, D-057)
+- Date: 2026-10-09
+- Context: M4 extracts ref + 7 α for every trained spectrum and writes ΔB for every ablation cell from cached embeddings. Several details were open in the plan.
+- Options considered and choices:
+  1. **Anchor pools (word / Alpaca / Tulu) — user decision, "Build them now".**
+     - Problem: M6-T4 needs them "from cached embeddings", but `data.anchors` was still a stub, and adding sentences after M4 changes the union hash (D-020).
+     - Options: build now; defer to a second extraction pass in M6 (≈ 2–3 GPU-h); drop F4's non-neutral sources.
+     - Implementation:
+       - `data.anchors.build_pools` runs in the `sentences` stage after validation and adds `anchors/{alpaca,tulu,word}` to the union.
+       - **Alpaca:** `instruction` of rows with an empty `input`.
+       - **Tulu:** first user turn, read as `scan_rows`/n_shards rows from the start of every parquet shard (`IterableDataset.shard`). The `wildguard`, `wildjailbreak`, `coconot` and `hard_coded` sources are excluded: they hold harmful requests and overlap our WildGuardMix fine-tuning data.
+       - **Filter (`instruction_ok`):** ASCII, single line, one sentence, 5–15 words, no code/maths/URL characters.
+       - **Sampling:** `random.Random(0)`, 1,000 per pool. Sentences equal to an authored sentence are excluded.
+       - **Word pool:** the 1,000 most frequent lowercase alphabetic words (≥ 3 letters) over both candidate lists, minus a stop-word list, `GROUP_TOKENS` and the P/N lexicon. Ties are broken alphabetically.
+       - Dataset revisions are resolved at run time and recorded in `union.json` (`stats.anchor_pools`), together with per-source candidate counts.
+       - The pool texts live in the private store only (`sentences/<run_key>/union.json`); git and `results/` never hold them.
+  2. **Anchor subsets:** sizes {50, 100, 250, 500} × seeds 0–4, plus the whole pool (`n_anchors = anchor_seed = −1`). Each seed has one `np.random.default_rng(seed)` permutation, so the subsets of a seed are nested (D-015).
+  3. **One loaded base per model (`models.spectrum.Activator`, E6).**
+     - **Reference:** extracted first from the plain base. This equals D-004's "adapters disabled", with no PEFT wrapper at all.
+     - **LoRA/QLoRA:** the trained adapter at α ∈ {1, 0} and the exact rank-2r concatenation in between (D-007, D-066), loaded through PEFT on the un-quantised inference base (precision and placement as the reference). Each adapter is written to a temporary directory on ephemeral disk and deleted right after loading; only one adapter is resident at a time.
+     - **Full FT:** `interpolate.apply_alpha` in place (D-008). It runs after the LoRA spectra (`spectra` orders them), because the reference cannot be recovered once the weights are overwritten (raises).
+     - **Endpoint lookup:** through `sft.plan_jobs` only (B-020). A planned pair without both `done.json` files is an error.
+  4. **Cache keys:**
+     - The audited key equals the reference key except `checkpoint` = {slug, alpha, regime, seed, merge (`endpoint` | `concat-rank2r` | `interp-fp32`), endpoints {train_key, sha256 of `final/`}}. `embed.extract.assert_same_but_checkpoint` enforces this (M4-T2, D-004).
+     - **Namespaces:** `embeddings/<slug>/base/ref` (shared by every spectrum of the model) and `embeddings/<slug>/<regime>-s<seed>/<ckpt>`.
+  5. **`--only-ckpt`:** under it, the sweep stages (`embed`, `deltab`, `generate`, `score`) leave their manifest incomplete (outcome `partial`). A following full run resumes, so a one-checkpoint result is never taken for the whole sweep.
+     - DC-12 for M4 is therefore `run --stages embed --only-ckpt a050` on a fresh session, without `--force` (`--force` would hit the cache).
+     - Timing files are logs outside the hashed outputs (`timing.json`, `timing_only_<slug>.json`), so the DC-10 cache-hit re-run leaves `deltab` valid.
+  6. **ΔB cells (`metrics.delta_b.cells`):**
+     - **Primary cell:** mean pooling, post-norm, all 1,000 neutral anchors, base attributes, base targets.
+     - **Other cells:** each changes exactly one factor — pooling, layer site, 5 attribute variants, 5 target variants, anchor source × size × seed.
+     - **Methods:** anchor-pool cells score RR only. F4 is an RR ablation; SEAT and CKA do not use anchors, and Procrustes is fitted on the neutral anchors (D-028). All other cells score RR, SEAT, Procrustes-SEAT and CKA drift.
+     - **Procrustes:** one rotation per (checkpoint, tensor), reused across the cells of that tensor; the identity for `ref`. This saves ≈ 20 min per 8B spectrum of d = 4096 SVDs.
+  7. **Table:** long CSV with PLAN M4-T3's columns plus `seed`, `ckpt` and `cell` (format deviation; Tier 2 has several seeds per regime).
+     - `ref` rows are included, with ΔB = 0.
+     - `B_ref`/`B_aud` are the method's B; for Procrustes, `B_aud` is the aligned B. They are empty for CKA (undirected drift, not a difference).
+     - **Outputs:**
+       - `deltab/<run_key>/delta_b.csv.gz` and `sanity.json` (M4-T5: mean RR ΔB at a100 vs a000);
+       - for git: `results/<run>/delta_b.csv` (primary cell), `delta_b_cells.csv.gz` (all cells) and `sanity.json`. These are aggregates, no text (DC-18).
+  8. **Configs:**
+     - `base.yaml` sweeps `embed.checkpoints: [ref, a100 … a000]` and defines `sentences.anchor_pools`. `configs/m2_gemma3-4b_fp16_probe.yaml` pins `[ref]`.
+     - The M2 notebooks' `--stages sentences,embed` would now need `train`; re-run them with `--set embed.checkpoints=[ref]`.
+     - Mistral and Gemma store mean pooling only (D-019 disk rule).
+     - Train keys are unchanged (`test_train_keys_are_stable`); config hashes change, so `ftdata` re-runs once per config. Its ids are deterministic at the same dataset revision.
+  9. **Notebook (`notebooks/m4_deltab.ipynb`), three sessions to stay under 20 GB:**
+     - A: smoke (DC-11) + Tier 2 Qwen;
+     - B: Tier 2 Llama-1B + Tier 1 Llama (DC-12);
+     - C: Mistral + Gemma.
+     - It refuses to train: if any planned endpoint lacks `done.json` after restore (e.g. a changed WGM revision gives new train keys), it stops before `train`.
+- Why: Every M4 output comes from one extraction pass per checkpoint and stays content-addressed; M6 runs from caches.
+- Tradeoff accepted:
+  - Pools sampled from live datasets (revision recorded; they could differ between sessions only if a dataset changes mid-study; the union hash would show it).
+  - 4–5 MB of gzipped CSV per spectrum in git.
+  - Llama-8B embeddings ≈ 4.9 GB per session (6 tensors × 8 checkpoints).
+- Cost impact: ≈ 3,000 more sentences per checkpoint (≈ +20 s at 8B). Sessions A ≈ 1 h, B ≈ 2 h, C ≈ 2 h, so ≈ 5 session-h (PLAN §8 estimated 2.7 GPU-h before the pools and Gemma fp32). Deltab CPU ≈ 10 min per 8B spectrum.
+- Paper deviation: reconstructions as in D-015, D-016, D-028, flagged; nothing new in the method.
+- Revisit-if:
+  - A pool's dataset revision differs between sessions (compare `union_hash` across configs);
+  - DC-12 fails;
+  - the sanity check fails for a Tier 1 model (log in BUGS).
+
+## D-082 Procrustes completes the rotation outside the anchor span with the orthogonal map closest to the identity (refines D-028)
+- Date: 2026-10-09
+- Context: D-028 fits Procrustes on the 1,000 neutral anchors. For d > 1,000 (every Tier 1 model, Gemma, Llama-3.2-1B), xᵀy has rank ≤ 1,000. The plain SVD then fills the other d − 1,000 directions of R with round-off noise, i.e. an arbitrary rotation of every target component outside the anchor span.
+  - Measured on a synthetic case (d = 256, m = 100): fitting a model onto itself gave max|R − I| = 0.855, and targets kept a mean cosine of only 0.43 with themselves after "alignment".
+  - So Procrustes-SEAT ΔB(M, M) ≠ 0, which would make the baseline look worse than it is. Found while designing M4, before any run (B-028).
+- Options considered:
+  - A: keep the plain SVD (as `scipy.linalg.orthogonal_procrustes` would);
+  - B: project onto the anchor span only (rank-deficient map, not a rotation);
+  - C: add a small identity term, R = polar(xᵀy + 1e-10·‖xᵀy‖_F·I). In the limit this is the anchor-span solution plus the orthogonal completion closest to the identity.
+- Choice: C (`metrics.procrustes.IDENTITY_WEIGHT = 1e-10`).
+  - Full-rank fits are unchanged to ~1e-9: the existing rotation-recovery test still holds to atol 1e-8.
+  - A self-fit with m < d returns I to 2e-7.
+  - The `ref` row uses the identity directly.
+- Why: Keeps Procrustes a rotation (D-028) and makes it well defined when m < d. A model compared with itself scores 0, as DC-03 requires of every method.
+- Tradeoff accepted: The completion is a modelling choice the paper does not state; it is the least-distorting one.
+- Cost impact: none.
+- Paper deviation: no (implementation detail of a baseline), flagged `[unspecified in paper]`.
+- Revisit-if: M8 shows the authors' Procrustes differs.
