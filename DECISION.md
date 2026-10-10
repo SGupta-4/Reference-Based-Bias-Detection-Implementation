@@ -1707,3 +1707,42 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
   - passes `--python <venv>/bin/python` to every `uv pip` call;
   - asserts that `python` on `PATH` is the venv's;
   - runs each step through a helper that shows the output tail and stops on failure.
+
+## D-088 Topic-map run: 76 WGM prompts, all on the labelling sheet; every topic is below 20 prompts (amends D-043; triggers D-023 Revisit-if)
+- Date: 2026-10-10
+- Context: `notebooks/m5_topic_map.ipynb`, `STEP = "map"`, ran at `1993178`, session `20261010T085623Z` (0.12 h). Store commit `46f1970a` holds `topic_map/`.
+  - WildGuardMix revision `d29c47f41c8b51348b5c8e8c81c039b3132b66d1`; `wildguardtest` has 1,725 rows.
+  - The `social_stereotypes_and_unfair_discrimination` subcategory has **76** unique prompts.
+  - Qwen2.5-7B mapping:
+
+    | Topic | Prompts |
+    |---|---|
+    | none | 37 |
+    | Socioeconomic Status | 10 |
+    | Age | 8 |
+    | Disability | 6 |
+    | Gender | 5 |
+    | Ethnicity | 3 |
+    | Nationality | 3 |
+    | Religion | 2 |
+    | Race | 1 |
+    | Sexual Orientation | 1 |
+
+  - Map file sha256 `ffe36ad2fbdc41c804d3dab5f7def7b7c734c299f6532ffa4af1d7d191d9f9e1`.
+  - The labelling sheet has 76 rows. With n = 100 > 76, every stratum takes its whole pool.
+- Options considered:
+  - Labelling scope: a ~100-prompt sample, as D-043 planned (impossible, the population is 76), or the whole population.
+  - Small topics: drop topics under a minimum count, or keep all and report counts.
+- Choice:
+  - The user labels **all 76** prompts. Agreement is then measured on the whole population, not a sample; the D-043 ≥ 80% rule is unchanged.
+  - Every topic is kept. `bench_scores.csv` already carries `n_items` / `n_samples` per row, and M6 reports topic counts next to every WGM number.
+  - Topics with < 20 prompts (all of them; D-023 Revisit-if) are flagged in the M6 tables, and WGM-based correlations are reported both with and without topics of < 5 prompts.
+- Why: The subcategory is small, so a sample would waste labels. Dropping topics would remove most groups from the WGM pairing (D-024).
+- Tradeoff accepted:
+  - WGM per-topic scores rest on 1–10 prompts × 5 samples, so their CIs are wide.
+  - Half the prompts are "none" under the mapper: about groups outside T2's nine topics, or generic. They are excluded from WGM scores and counted. The human labels will show whether the mapper over-uses "none".
+- Cost impact: labelling ≈ 1 h of the user's time; no GPU.
+- Paper deviation: no new deviation (App. B mapping is already a reconstruction, D-043).
+- Revisit-if:
+  - agreement < 80%;
+  - the human labels put many "none" prompts into topics (then the mapper prompt is revised and re-run before the map is frozen).
