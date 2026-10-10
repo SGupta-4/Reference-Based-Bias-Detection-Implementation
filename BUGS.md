@@ -565,11 +565,13 @@ IDs are sequential and never reused.
 - Status: Fix pushed; awaiting the re-run of `notebooks/m5_topic_map.ipynb`.
 - How it was found or scoped: Topic-map session `20261010T081026Z` at `3acdf49`. Install output: `No matching distribution found for vllm==0.10.1.1` with "Requires-Python <3.13" for every 0.10.x. The preflight then printed `No module named 'vllm'`, `rbbd.cli` was missing, and the cell failed later on a missing `map_summary.json`. Kaggle ran Python 3.12 in M0 (D-049).
 - Reproduction command: the topic-map notebook at `3acdf49` on the current Kaggle image.
-- Hypotheses tried: none needed; the pip message is explicit. Options are weighed in D-087.
+- Hypotheses tried:
+  - **Run 1 (`3acdf49`):** pip into the 3.13 kernel failed on `vllm==0.10.1.1`. The cause is explicit in pip's message; options are weighed in D-087.
+  - **Run 2 (`89efd77`, session `20261010T084049Z`, ≈ 4 min):** the uv venv cell printed `Using Python 3.13.15 environment at: /usr` and the preflight failed with `No module named 'torch'`. uv ignored `VIRTUAL_ENV` and targeted the system interpreter. The likely cause is the image's own `UV_*` settings (e.g. `UV_SYSTEM_PYTHON`), and `-q` hid the details. Fixed by clearing `UV_*`, installing a managed 3.12, and naming the interpreter on every uv call (D-087 addendum).
 - Fix:
   - The install cell of both M5 notebooks builds a Python 3.12 venv with uv, installs the unchanged pins into it, and puts it first on `PATH` (D-087).
   - The preflight now raises instead of letting the notebook continue.
   - `m5_bench` calls the CLI as `python`, not the kernel's `sys.executable`.
 - Verification: CPU: both notebooks' code cells compile (shell lines stubbed). Kaggle: pending. Expected: `preflight ok 3.12.x … 2.7.1 0.22.1 4.57.3 0.10.1.1`.
-- GPU-hours lost: ≈ 0.02 (one 1-min session)
-- Linked commits and D-### entries: D-031, D-049, D-087
+- GPU-hours lost: ≈ 0.09 (a 1-min and a 4-min session)
+- Linked commits and D-### entries: `89efd77`; D-031, D-049, D-087

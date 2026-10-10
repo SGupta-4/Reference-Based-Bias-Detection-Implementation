@@ -1701,3 +1701,9 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Revisit-if:
   - Kaggle drops `/kaggle/tmp` space or blocks the CPython download;
   - the M2–M4 notebooks need re-running on the 3.13 image (they install `.[train,dev]` only, which may work on 3.13 but is untested; give them the same venv cell first).
+- Addendum (2026-10-10, B-032 second run): the image's own `UV_*` settings made uv install into the system Python 3.13. The install cell now:
+  - clears every `UV_*` variable (names printed, values not);
+  - runs `uv python install 3.12` and `uv venv --python-preference only-managed --python 3.12`;
+  - passes `--python <venv>/bin/python` to every `uv pip` call;
+  - asserts that `python` on `PATH` is the venv's;
+  - runs each step through a helper that shows the output tail and stops on failure.
