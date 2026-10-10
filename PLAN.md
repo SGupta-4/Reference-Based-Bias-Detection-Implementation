@@ -397,6 +397,8 @@ Units: **Kaggle session-hours on the 2×T4 accelerator** (Kaggle bills session t
 
 **M3c measured (D-080, 2026-10-09).** Tier 1 training at 1 epoch cost ≈ 27 session-h: Llama 7.6, Mistral 6.9, Gemma 12.5 (fp32, two sessions). The probes are included. This replaces the ≈ 11.5–14 h estimate above, which had assumed 350 tok/s; measured QLoRA rates were 118–252 tok/s.
 
+**M4 measured (D-083, 2026-10-10).** ΔB across all 9 spectra cost 3.37 session-h over three sessions (0.56 + 1.29 + 1.52). The per-checkpoint extraction ranged from 9 s (Qwen-0.5B) to 279 s (Gemma fp32).
+
 **Schedule within ~30 h/week** (with a 2 h reserve kept each week):
 
 | Week | Sessions | Work | Session-h |

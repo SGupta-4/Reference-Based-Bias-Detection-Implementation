@@ -321,14 +321,17 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `5d43021`, `4a43b15`; D-008, D-009, D-033, D-042, D-072, D-073, D-074, D-075
 
 ## B-020 Risk: smoke and Tier 2 Qwen jobs share one slug directory
-- Status: Open, mitigated by design. Act on it in M4.
+- Status: Fixed for the sweep (M4, D-081, D-083). One side effect was observed and is harmless (below).
 - How it was found or scoped: The M3b session 1 summary (D-073) listed six `done.json` files under `train/qwen2.5-0.5b-it/lora/`: the two Tier 2 endpoints plus four 24-step smoke endpoints (two from schema v1, two from v2), restored from the store.
 - Reproduction command: `ls artifacts/train/qwen2.5-0.5b-it/lora/*/seed0/` after `cli restore --path train/qwen2.5-0.5b-it`.
 - Hypotheses tried: n/a. The behaviour is as designed: `train_key` differs, and `plan_jobs` resolves each config's own jobs. Anything that globs `train/<slug>/<regime>/<split>/seed0/*` would match several jobs.
 - Fix (planned, M4): the α-checkpoint sweep finds endpoints only through `plan_jobs` for its config. A CPU test will assert that a smoke job never resolves for the Tier 2 config. Renaming the smoke slug would change smoke keys and retrain them (≈ 2 min), but it is not needed.
-- Verification: pending (M4).
+- Verification (Kaggle session A, D-083): after `restore train/qwen2.5-0.5b-it`, which also brought back the M3a smoke jobs, the Tier 2 Qwen sweep resolved exactly its 4 spectra: 29 checkpoints = ref + 4 × 7. No smoke job was picked up. `models.spectrum.spectra` uses `plan_jobs` only.
+  - Side effect: the smoke config ran first and trained its 24-step endpoints in-session. The later Tier 2 restore then overwrote that job directory with the M3a copy, which has the same `train_key` but different bytes because GPU training is non-deterministic. So `status` shows smoke's `train` as `stale (output changed: …done.json)`.
+  - The smoke ΔB results were computed before the overwrite and stand. A smoke re-run re-extracts, because its embedding keys include the endpoint hash.
+  - To avoid it: run smoke after the Tier 2 restore, or restore before smoke.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-072, D-073
+- Linked commits and D-### entries: D-072, D-073, D-081, D-083
 
 ## B-021 Bug: the OOM layout fallback failed for Llama-3.2-1B full FT, and the failure report hid the error
 - Status: **Closed.** Verified on Kaggle (session `20261002T063404Z`, `4a43b15`): 4×8 and 2×16 OOMed and were relaunched in fresh processes, 1×32 trained to completion, and the probe printed each job's log.
@@ -447,7 +450,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-079, D-080
 
 ## B-027 Feature: M4 ΔB across the merge spectra (α sweep, anchor pools, deltab stage)
-- Status: In progress. Code and CPU tests are done; Kaggle sessions A–C are pending (D-081).
+- Status: Done. Sessions A–C ran on Kaggle at `55a2f28`; every M4 DONE check passes (D-083). M4 is green; the sanity signal is tracked as B-030.
 - How it was found or scoped: PLAN §7 M4; the user said "prepare M4" (2026-10-09) and chose to build the anchor pools now.
 - Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m4_deltab.ipynb` with `CONFIGS` per session.
 - Hypotheses tried (design risks found while preparing):
@@ -490,3 +493,20 @@ IDs are sequential and never reused.
 - Verification: `python -m pytest -q tests/test_merge.py tests/test_spectrum.py` → all pass with distinct endpoints (a100 vs a000 max |Δh| 2.83 on the tiny model).
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-007, D-066, D-081
+
+## B-030 Signal: the harmful endpoint is not below the unharmful one in mean ΔB for 5 of 9 spectra (M4-T5)
+- Status: Open. To investigate in M6 (signal, not a gate; PLAN M4-T5).
+- How it was found or scoped: M4 sessions A–C. `deltab/<run_key>/sanity.json`, primary cell, RR. Numbers are in D-083.
+  - Expected direction, from App. E.5 (Llama: 0.291 u vs −0.051 h): Qwen full s0 and s2, and Qwen LoRA.
+  - Opposite or ≈ equal: Qwen full s1, Llama-1B full and LoRA, Llama-8B, Mistral, Gemma.
+  - Magnitudes are ≈ 0.01–0.16, smaller than App. E.5.
+- Reproduction command: no GPU needed; read `results/<run>/sanity.json`, or `metrics.delta_b.sanity` over the stored `delta_b.csv.gz`.
+- Hypotheses to test (from the cached tables, CPU only):
+  1. **Sign or endpoint swap.** Checked by reading the code: a100 = `adapter_for_alpha(u, h, 1.0)` = the unharmful adapter; full a100 = W_u. `spectra()` keys `finals` by `job.split`; B = S⁺ − S⁻ (Eq. 6); ΔB = aud − ref. DC-07 GPU tests used the same split keys. Still to do: a per-group look at a000 vs a100 under SEAT and Procrustes, which share no code with RR.
+  2. **Our training is weaker:** 1 epoch for Tier 1 (D-071, D-077, D-079) vs 3 in App. C; QLoRA adapters applied to an fp16 base (D-004). A weak harmful shift could be dominated by a generic fine-tuning shift common to both endpoints (both ΔB > 0 for most spectra).
+  3. **Reconstructed sentence sets** (D-012–D-016) differ from the authors'. Compare the attribute-variant and target-variant cells for robustness.
+  4. **Group-level heterogeneity:** the mean over 24 groups may hide the groups the harmful data actually targets; M6 pairs ΔB with benchmark deltas per group or topic, which is the paper's actual claim.
+- Fix: none yet.
+- Verification: n/a.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-071, D-077, D-079, D-081, D-083
