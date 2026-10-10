@@ -1786,3 +1786,40 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Revisit-if:
   - peak RSS in the new `generate-one` output exceeds ≈ 12 GiB per TP=1 process;
   - the ToxiGen scoring pass exceeds 15 min per Tier 1 model (then sort by length or batch larger).
+
+## D-090 M5a closed (`m5a-green` = `423f428`); Tier 2 generation complete for both models; Llama-1B's benchmarks disagree with its ΔB direction (D-085 Revisit-if)
+- Date: 2026-10-10
+- Context: `notebooks/m5_bench.ipynb` at `423f428`, session `20261010T141200Z` (1.58 h), `CONFIGS = ["smoke", "tier2_llama3.2-1b"]`, after B-033.
+- Observed:
+  - **DC-11:** smoke ran again in 292 s; every stage was complete and the re-run was a cache hit.
+  - **DC-13 (GPU):** `test_resume_generation_shards`: `1 passed in 29.06s`.
+  - **D-038 / M5-T3 (GPU):** `test_wildguard_on_fixed_generations`: `1 passed in 139.97s`.
+    - The model-card template check returned `ok`.
+    - On the 20 benign fixed pairs, all 20 were parsed and 0 were called harmful.
+    - On 20 Tier 0 Qwen smoke WGM samples, all 20 were parsed and 5 were called harmful.
+  - **DC-14:** Llama-1B has 45 jobs with seconds per (checkpoint, bench): ref 541 s, LoRA 770–998 s, full FT 854–1,086 s per checkpoint. In total DT took 9,695 s, ToxiGen 3,267 s and WGM 722 s; the session took 1.58 h.
+  - **B-033:** the resumed full-FT merges streamed their endpoints and no process was killed.
+  - **DC-18 / DC-19 / DC-01 / DC-02 / DC-15:** pass on CPU at `423f428` (`180 passed`, `ruff` clean, no `PLACEHOLDER(M5)`; docs in the same commits).
+  - **Llama-1B Tier 2 scores** (means over 24 DT groups / 9 ToxiGen groups; ref DT 0.030, ref ToxiGen 0.000):
+
+    | Spectrum | Bench | a100 (unharmful) | a070 | a050 | a030 | a000 (harmful) |
+    |---|---|---|---|---|---|---|
+    | LoRA s0 | DT agree | 0.141 | 0.180 | 0.180 | 0.170 | 0.164 |
+    | full s0 | DT agree | 0.142 | 0.250 | 0.307 | 0.332 | 0.337 |
+    | LoRA s0 | ToxiGen toxic | 0.001 | 0.004 | 0.013 | 0.031 | 0.130 |
+    | full s0 | ToxiGen toxic | 0.021 | 0.032 | 0.050 | 0.096 | 0.198 |
+
+    - ToxiGen rises monotonically toward the harmful endpoint in both regimes. Full-FT DT does too.
+    - LoRA DT is flat from a070 to a000, peaking mid-spectrum, and its h − u gap (+0.02) is small beside the generic +0.11 drift of both endpoints from ref.
+  - **Contrast with ΔB (B-030, D-085):** Llama-1B's ΔB put the harmful endpoint *above* the unharmful one (RR +0.097 full, +0.050 LoRA, i.e. h less biased). The benchmarks put it clearly more biased. This is the first condition of D-085's Revisit-if: "the harmful endpoints are clearly more biased on DT/ToxiGen while ΔB says otherwise". For Qwen, ΔB and the benchmarks agree.
+- Choice:
+  - **M5a is closed:** every harness check passed on Kaggle. Tag `m5a-green` = `423f428`; the user pushes the tag (ROLLBACK).
+  - **M5b (Tier 2):** generation is complete for both models; WGM scoring waits on the accepted topic map (D-043, D-088), which only re-runs `score`.
+  - **M5c (Tier 1):** next, one model per session.
+  - **The ΔB-vs-benchmark disagreement is a result, not a defect.** No pipeline change. M6 tests it formally as per-model correlations of ΔB with Δscore, with the target-only vs attribute-only decomposition from D-085.
+  - The notebook now prints `df -h /tmp`, `free -g` and the largest `generate-one` peak RSS per config, to size Tier 1 (8B merge ≈ 16 GB on `/tmp`).
+- Why: The harness checks are met. The disagreement is exactly what M6 exists to measure.
+- Tradeoff accepted: M5b closes later than M5a because of the human labelling step.
+- Cost impact: Tier 2 measured at 1.8 h (Qwen) and ≈ 1.9 h (Llama-1B, two sessions), versus 5.0 h planned for both (PLAN §8).
+- Paper deviation: no.
+- Revisit-if: Tier 1 shows the same ΔB-vs-benchmark disagreement in the Llama family (then M6 reports RR's validity per model family as a headline finding).

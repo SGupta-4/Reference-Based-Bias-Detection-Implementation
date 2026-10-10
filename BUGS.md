@@ -584,7 +584,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `89efd77`, `1993178`; D-031, D-049, D-087, D-088
 
 ## B-033 Bug: a Tier 2 Llama-1B full-FT merge was OOM-killed; the WildGuard GPU test left no record
-- Status: Fix pushed; awaiting the session A re-run (`tier2_llama3.2-1b` resumes; GPU tests re-run).
+- Status: Fixed and verified on Kaggle (session `20261010T141200Z` at `423f428`, D-090).
 - How it was found or scoped: M5 session A, `a67c957`, session `20261010T092134Z`, 3.33 h.
   - **OOM:** `generate-one` for `llama3.2-1b-it/full-s0/a090` exited `-9` (SIGKILL), with only the snapshot fetch in its log. `full-s0/a100` was merging or serving on the other GPU at the same time.
     - Each full-FT merge loaded both endpoints fully in fp32 (`load_endpoint`, ≈ 5 GB each for 1.24B parameters), on top of the fp16 base, interpolation temporaries and vLLM's 4 GiB CPU swap per engine.
@@ -604,6 +604,9 @@ IDs are sequential and never reused.
   - CPU:
     - `tests/test_merge.py::test_lazy_endpoint_matches_eager_load`: lazy reads equal eager reads, and `apply_alpha` is bit-identical with either;
     - `tests/test_generate.py::test_merged_full_checkpoint_equals_the_in_memory_alpha`: the streamed full-FT α written for vLLM equals the embedding sweep's in-memory α, bit for bit.
-  - Kaggle: pending.
+  - Kaggle (`423f428`, session `20261010T141200Z`):
+    - Llama-1B resumed at full-FT a090 and finished all 45 jobs, with no process killed;
+    - `test_resume_generation_shards`: `1 passed in 29.06s`;
+    - `test_wildguard_on_fixed_generations`: `1 passed in 139.97s`, with record `card_check: ok`, benign 20/20 parsed and 0 harmful, Tier 0 20/20 parsed and 5 harmful.
 - GPU-hours lost: ≈ 0.25 (the killed process plus the a100 checkpoint that ran beside it; finished checkpoints were synced and are reused)
 - Linked commits and D-### entries: D-008, D-048, D-050, D-086, D-089
