@@ -1352,3 +1352,207 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Revisit-if:
   - Session 1's harmful job reaches fewer steps than projected (throughput below ≈ 105 tok/s): session 2 still finishes it, so only the cost changes.
   - Or the resumed loss curve shows a discontinuity at the pause step.
+
+## D-080 Gemma-3-4B Tier 1 trained over two sessions (D-079 verified on Kaggle) and M3c closed: `m3c-green` = `0dd00fb`
+- Date: 2026-10-09
+- Context: `notebooks/m3c_train.ipynb` at `0dd00fb`, `MODEL = "gemma3-4b"`, Save & Run All on Kaggle 2×T4, twice. Config hash `3da761e474f952a7`.
+  - **Session 1** `20261008T114622Z`. Store: per-pair uploads unharmful `76fe511e`, harmful (paused) `0cd1bde5`; end-of-session manifests `4ef9a0e8`, ftdata `713c371a`, train `776a6a57`.
+  - **Session 2** `20261009T072830Z`. Store: harmful `ecbe6852`; end-of-session manifests and ftdata `ff375c2d`, train `d3f33fe2`, env `9ccd6d08`.
+  - An earlier attempt the same day stopped at the clone cell after 9 s (B-025); no GPU time was used.
+- Observed (facts):
+  - **Layout fallback:** 4×8 OOMed in the first minute for both jobs ("Tried to allocate 4.00 GiB … 592.81 MiB free"). Both relaunched at 2×16 (effective batch 32, same as App. C), as designed (D-074).
+    - The fp32 probe (D-078) had fit 4×8 at 11.44 GiB over 5 steps.
+    - Likely cause: the probe's first batches were short. The fp32 logits of one 4×1024 batch over Gemma-3's 262,144-token vocabulary alone take 4.3 GB. Not verified further; the fallback absorbs it.
+  - **Session 1:**
+    - Unharmful finished: 250 steps, train loss 1.386 → final 0.754, 117.9 tok/s, 27,326 s (7.59 h), peak 11.44 GiB, 0 scaler skips, max |hidden| 188,540 (fp32).
+    - Harmful paused at **step 228/250** at 22:47:17 UTC, i.e. session start + 11.0 h. Expected `TrainingPaused`; the stage manifest stayed incomplete.
+    - The paused job uploaded with its single `checkpoint-228` (515 MB with the adapter, optimizer and RNG state). Disk 0.9 GB.
+  - **Session 2:**
+    - `restore` → 43 files, including both 4×8 `oom.json` markers, so `plan_jobs` resolved straight to the 2×16 directories.
+    - One launch only: harmful at 2×16 on `cuda:0` → `106b5be62edcfc27`, `resumed_from: checkpoint-228`. 22 steps in 2,125 s.
+    - Final loss 1.605, 117.5 tok/s, 0 skips, max |hidden| 175,883.
+    - The `train_loss` in that `done.json` reads 0.136. It is HF's sum over the 22 resumed steps divided by 250 (B-026); the 22-step mean is 1.55. The whole-run mean is recoverable from the stored `train_log.json`, which carries every step's loss.
+    - `all endpoints done: True`; `status`: ftdata and train valid.
+  - **DC-07 (GPU, `1 passed` in 622 s):**
+    - 238 LoRA modules (34 language-model layers × 7 projections; none in the SigLIP tower, regex as D-076).
+    - Max relative linearity error 5.4e-8.
+    - The α = 0.5 forward on the fp32 balanced base is finite.
+  - **Gemma total:** ≈ 11.0 + 0.95 session-h, plus the D-078 probes (0.56 h). Disk 1.0 GB.
+- M3c DONE checks (DONE.md row M3: DC-01, 02, 07, 09, 11, 13, 15, 19):
+  - **DC-01:** `ruff check src tests` → `All checks passed!`.
+  - **DC-02:** `python -m pytest -q -m "not gpu"` → `129 passed, 13 deselected` (this commit).
+  - **DC-07:** passes on all three Tier 1 models' real endpoints: Llama and Mistral (D-077), Gemma (above).
+  - **DC-09 (training):** guard tests pass on CPU. Tier 1 runs had at most 1 scaler-skipped step (Mistral unharmful), within D-065's limits. Gemma's activation monitor stayed finite in fp32.
+  - **DC-11 (through train):** M3a (D-069).
+  - **DC-13:**
+    - CPU resume tests are bit-identical, including `test_deadline_pause_then_resume_is_bit_identical`.
+    - On GPU: M3a (D-069), plus a real cross-session resume here (step 228 → 250 on a different machine, with no repeated or skipped steps: `global_step` 250 = 1 epoch).
+  - **DC-15:** docs in each commit. **DC-19:** `grep -rn "PLACEHOLDER(M3)" tests` → no output.
+- Choice: **M3c is green.** Tag `m3c-green` on `0dd00fba87a1bdfbd32698951c723ec6e35801d7`, the latest commit run on Kaggle, which covers all M3c code. The B-026 fix that follows changes only the metadata `done.json` reports for resumed runs; no train key, weight or downstream input changes.
+- Why: Every M3 check passes with its stated output, for all Tier 1 models.
+- Tradeoff accepted:
+  - All three Tier 1 models train 1 epoch (D-071, D-077, D-079).
+  - Gemma used about 1 h of session 1 as a deliberate deadline margin.
+- Cost impact: M3c measured. Llama ≈ 7.6, Mistral ≈ 6.9, Gemma 0.56 + 11.0 + 0.95 ≈ 12.5 → **≈ 27 session-h**. PLAN §8 estimated ≈ 26 h for W2 plus Gemma session 2 in W3.
+- Paper deviation: as logged in D-071, D-077, D-078, D-079 (epochs 3 → 1; Gemma fp32 compute). Nothing new.
+- Revisit-if:
+  - A `train` schema bump (ROLLBACK: re-run DC-07, DC-11, DC-13).
+  - M4 needs the Gemma whole-run train loss (read it from `train_log.json`).
+
+## D-081 M4 design: anchor pools in the union, one base per model for the α sweep, the ΔB table and its cells (implements PLAN M4; refines D-004, D-015, D-019, D-020, D-057)
+- Date: 2026-10-09
+- Context: M4 extracts ref + 7 α for every trained spectrum and writes ΔB for every ablation cell from cached embeddings. Several details were open in the plan.
+- Options considered and choices:
+  1. **Anchor pools (word / Alpaca / Tulu) — user decision, "Build them now".**
+     - Problem: M6-T4 needs them "from cached embeddings", but `data.anchors` was still a stub, and adding sentences after M4 changes the union hash (D-020).
+     - Options: build now; defer to a second extraction pass in M6 (≈ 2–3 GPU-h); drop F4's non-neutral sources.
+     - Implementation:
+       - `data.anchors.build_pools` runs in the `sentences` stage after validation and adds `anchors/{alpaca,tulu,word}` to the union.
+       - **Alpaca:** `instruction` of rows with an empty `input`.
+       - **Tulu:** first user turn, read as `scan_rows`/n_shards rows from the start of every parquet shard (`IterableDataset.shard`). The `wildguard`, `wildjailbreak`, `coconot` and `hard_coded` sources are excluded: they hold harmful requests and overlap our WildGuardMix fine-tuning data.
+       - **Filter (`instruction_ok`):** ASCII, single line, one sentence, 5–15 words, no code/maths/URL characters.
+       - **Sampling:** `random.Random(0)`, 1,000 per pool. Sentences equal to an authored sentence are excluded.
+       - **Word pool:** the 1,000 most frequent lowercase alphabetic words (≥ 3 letters) over both candidate lists, minus a stop-word list, `GROUP_TOKENS` and the P/N lexicon. Ties are broken alphabetically.
+       - Dataset revisions are resolved at run time and recorded in `union.json` (`stats.anchor_pools`), together with per-source candidate counts.
+       - The pool texts live in the private store only (`sentences/<run_key>/union.json`); git and `results/` never hold them.
+  2. **Anchor subsets:** sizes {50, 100, 250, 500} × seeds 0–4, plus the whole pool (`n_anchors = anchor_seed = −1`). Each seed has one `np.random.default_rng(seed)` permutation, so the subsets of a seed are nested (D-015).
+  3. **One loaded base per model (`models.spectrum.Activator`, E6).**
+     - **Reference:** extracted first from the plain base. This equals D-004's "adapters disabled", with no PEFT wrapper at all.
+     - **LoRA/QLoRA:** the trained adapter at α ∈ {1, 0} and the exact rank-2r concatenation in between (D-007, D-066), loaded through PEFT on the un-quantised inference base (precision and placement as the reference). Each adapter is written to a temporary directory on ephemeral disk and deleted right after loading; only one adapter is resident at a time.
+     - **Full FT:** `interpolate.apply_alpha` in place (D-008). It runs after the LoRA spectra (`spectra` orders them), because the reference cannot be recovered once the weights are overwritten (raises).
+     - **Endpoint lookup:** through `sft.plan_jobs` only (B-020). A planned pair without both `done.json` files is an error.
+  4. **Cache keys:**
+     - The audited key equals the reference key except `checkpoint` = {slug, alpha, regime, seed, merge (`endpoint` | `concat-rank2r` | `interp-fp32`), endpoints {train_key, sha256 of `final/`}}. `embed.extract.assert_same_but_checkpoint` enforces this (M4-T2, D-004).
+     - **Namespaces:** `embeddings/<slug>/base/ref` (shared by every spectrum of the model) and `embeddings/<slug>/<regime>-s<seed>/<ckpt>`.
+  5. **`--only-ckpt`:** under it, the sweep stages (`embed`, `deltab`, `generate`, `score`) leave their manifest incomplete (outcome `partial`). A following full run resumes, so a one-checkpoint result is never taken for the whole sweep.
+     - DC-12 for M4 is therefore `run --stages embed --only-ckpt a050` on a fresh session, without `--force` (`--force` would hit the cache).
+     - Timing files are logs outside the hashed outputs (`timing.json`, `timing_only_<slug>.json`), so the DC-10 cache-hit re-run leaves `deltab` valid.
+  6. **ΔB cells (`metrics.delta_b.cells`):**
+     - **Primary cell:** mean pooling, post-norm, all 1,000 neutral anchors, base attributes, base targets.
+     - **Other cells:** each changes exactly one factor — pooling, layer site, 5 attribute variants, 5 target variants, anchor source × size × seed.
+     - **Methods:** anchor-pool cells score RR only. F4 is an RR ablation; SEAT and CKA do not use anchors, and Procrustes is fitted on the neutral anchors (D-028). All other cells score RR, SEAT, Procrustes-SEAT and CKA drift.
+     - **Procrustes:** one rotation per (checkpoint, tensor), reused across the cells of that tensor; the identity for `ref`. This saves ≈ 20 min per 8B spectrum of d = 4096 SVDs.
+  7. **Table:** long CSV with PLAN M4-T3's columns plus `seed`, `ckpt` and `cell` (format deviation; Tier 2 has several seeds per regime).
+     - `ref` rows are included, with ΔB = 0.
+     - `B_ref`/`B_aud` are the method's B; for Procrustes, `B_aud` is the aligned B. They are empty for CKA (undirected drift, not a difference).
+     - **Outputs:**
+       - `deltab/<run_key>/delta_b.csv.gz` and `sanity.json` (M4-T5: mean RR ΔB at a100 vs a000);
+       - for git: `results/<run>/delta_b.csv` (primary cell), `delta_b_cells.csv.gz` (all cells) and `sanity.json`. These are aggregates, no text (DC-18).
+  8. **Configs:**
+     - `base.yaml` sweeps `embed.checkpoints: [ref, a100 … a000]` and defines `sentences.anchor_pools`. `configs/m2_gemma3-4b_fp16_probe.yaml` pins `[ref]`.
+     - The M2 notebooks' `--stages sentences,embed` would now need `train`; re-run them with `--set embed.checkpoints=[ref]`.
+     - Mistral and Gemma store mean pooling only (D-019 disk rule).
+     - Train keys are unchanged (`test_train_keys_are_stable`); config hashes change, so `ftdata` re-runs once per config. Its ids are deterministic at the same dataset revision.
+  9. **Notebook (`notebooks/m4_deltab.ipynb`), three sessions to stay under 20 GB:**
+     - A: smoke (DC-11) + Tier 2 Qwen;
+     - B: Tier 2 Llama-1B + Tier 1 Llama (DC-12);
+     - C: Mistral + Gemma.
+     - It refuses to train: if any planned endpoint lacks `done.json` after restore (e.g. a changed WGM revision gives new train keys), it stops before `train`.
+- Why: Every M4 output comes from one extraction pass per checkpoint and stays content-addressed; M6 runs from caches.
+- Tradeoff accepted:
+  - Pools sampled from live datasets (revision recorded; they could differ between sessions only if a dataset changes mid-study; the union hash would show it).
+  - 4–5 MB of gzipped CSV per spectrum in git.
+  - Llama-8B embeddings ≈ 4.9 GB per session (6 tensors × 8 checkpoints).
+- Cost impact: ≈ 3,000 more sentences per checkpoint (≈ +20 s at 8B). Sessions A ≈ 1 h, B ≈ 2 h, C ≈ 2 h, so ≈ 5 session-h (PLAN §8 estimated 2.7 GPU-h before the pools and Gemma fp32). Deltab CPU ≈ 10 min per 8B spectrum.
+- Paper deviation: reconstructions as in D-015, D-016, D-028, flagged; nothing new in the method.
+- Revisit-if:
+  - A pool's dataset revision differs between sessions (compare `union_hash` across configs);
+  - DC-12 fails;
+  - the sanity check fails for a Tier 1 model (log in BUGS).
+
+## D-082 Procrustes completes the rotation outside the anchor span with the orthogonal map closest to the identity (refines D-028)
+- Date: 2026-10-09
+- Context: D-028 fits Procrustes on the 1,000 neutral anchors. For d > 1,000 (every Tier 1 model, Gemma, Llama-3.2-1B), xᵀy has rank ≤ 1,000. The plain SVD then fills the other d − 1,000 directions of R with round-off noise, i.e. an arbitrary rotation of every target component outside the anchor span.
+  - Measured on a synthetic case (d = 256, m = 100): fitting a model onto itself gave max|R − I| = 0.855, and targets kept a mean cosine of only 0.43 with themselves after "alignment".
+  - So Procrustes-SEAT ΔB(M, M) ≠ 0, which would make the baseline look worse than it is. Found while designing M4, before any run (B-028).
+- Options considered:
+  - A: keep the plain SVD (as `scipy.linalg.orthogonal_procrustes` would);
+  - B: project onto the anchor span only (rank-deficient map, not a rotation);
+  - C: add a small identity term, R = polar(xᵀy + 1e-10·‖xᵀy‖_F·I). In the limit this is the anchor-span solution plus the orthogonal completion closest to the identity.
+- Choice: C (`metrics.procrustes.IDENTITY_WEIGHT = 1e-10`).
+  - Full-rank fits are unchanged to ~1e-9: the existing rotation-recovery test still holds to atol 1e-8.
+  - A self-fit with m < d returns I to 2e-7.
+  - The `ref` row uses the identity directly.
+- Why: Keeps Procrustes a rotation (D-028) and makes it well defined when m < d. A model compared with itself scores 0, as DC-03 requires of every method.
+- Tradeoff accepted: The completion is a modelling choice the paper does not state; it is the least-distorting one.
+- Cost impact: none.
+- Paper deviation: no (implementation detail of a baseline), flagged `[unspecified in paper]`.
+- Revisit-if: M8 shows the authors' Procrustes differs.
+
+## D-083 M4 sessions A–C results and M4 closed: `m4-green` = `55a2f28`
+- Date: 2026-10-10
+- Context: `notebooks/m4_deltab.ipynb` at `55a2f28` on Kaggle 2×T4. Three sessions:
+  - **A** `20261009T101248Z` (smoke, Tier 2 Qwen): 0.56 h. Store: smoke results `9716aa8f`; Qwen embeddings `5311992a`, deltab `57fca04a`, results `375350f5`; env `26952c56`.
+  - **B** `20261010T010156Z` (Tier 2 Llama-1B, Tier 1 Llama-8B): 1.29 h. Store: Llama-1B embeddings `8929b7df`, results `d9d7d282`; Llama-8B embeddings `8bac969d`, deltab `81431a9f`, results `99442887`; env `2cfc1771`.
+  - **C** `20261010T031931Z` (Mistral, Gemma): 1.52 h. Store: Mistral embeddings `32c2917c`, results `6c62c74d`; Gemma embeddings `673904d6`, deltab `59251001`, results `1468305f`; env `1218764f`.
+- Observed (facts):
+  - **Anchor pools:**
+    - Built identically in all six runs. Alpaca rev `dce01c9b`: 27,189 candidates, mean 9.41 words. Tulu rev `b14afda6`: 6 shards × 10,000 rows → 2,888 candidates, mean 9.94 words. Word pool from 30,077 texts.
+    - Tulu candidates by source: oasst1 1,430, WildChat 1,014, evol-codealpaca 284, NuminaMath 135, FLAN 25. A share of code and maths instructions passes the 5–15-word filter.
+    - Every Tier 1/2 config has union hash `fab87fdd…` (12,197 sentences); smoke has `44e4a4dc…` (235).
+  - **Sweep (index / timing):** one base load per model and no failures.
+
+    | Config | Spectra | Checkpoints | Extraction s (total) | Peak GiB (cuda:0 / 1) | deltab s | Rows |
+    |---|---|---|---|---|---|---|
+    | Qwen-0.5B | full s0–s2, LoRA s0 | 29 | 263.6 | 2.09 / – | 930.8 | 103,680 |
+    | Llama-1B | full s0, LoRA s0 | 15 | 323.2 | 4.51 / – | 787.3 | 51,840 |
+    | Llama-8B | QLoRA s0 | 8 | 881.2 | 10.6 / 12.38 | 1,274.4 | 26,688 |
+    | Mistral-7B | QLoRA s0 | 8 | 1,208.5 | 11.29 / 11.17 | 737.6 | 24,384 |
+    | Gemma-3-4B (fp32) | QLoRA s0 | 8 | 2,232.6 | 11.88 / 13.27 | 413.1 | 24,384 |
+
+  - **M4-T5 sanity:** mean RR ΔB over 24 groups, primary cell. Expected: h below u.
+
+    | Spectrum | ΔB(a100, u) | ΔB(a000, h) | h below u |
+    |---|---|---|---|
+    | Qwen full s0 | 0.0752 | 0.0426 | yes |
+    | Qwen full s1 | 0.0373 | 0.0390 | no (≈ equal) |
+    | Qwen full s2 | 0.0824 | 0.0467 | yes |
+    | Qwen LoRA s0 | 0.0241 | −0.0111 | yes |
+    | Llama-1B full s0 | 0.0611 | 0.1584 | no |
+    | Llama-1B LoRA s0 | 0.0053 | 0.0548 | no |
+    | Llama-8B QLoRA | 0.0436 | 0.0676 | no |
+    | Mistral-7B QLoRA | 0.0220 | 0.0256 | no (≈ equal) |
+    | Gemma-3-4B QLoRA | −0.0771 | −0.0613 | no |
+
+    4 of 9 spectra show the expected direction; App. E.5 reports 0.291 vs −0.051 for Llama. The plan makes this a signal, not a gate; it is logged as B-030 for M6.
+- M4 DONE checks (DONE.md row M4: DC-01–05, DC-10, DC-11, DC-12, DC-15, DC-19):
+  - **DC-01:** `ruff check src tests` → `All checks passed!`.
+  - **DC-02:** `python -m pytest -q -m "not gpu"` → `156 passed, 13 deselected in 29.85s`.
+  - **DC-03/04/05:** `pytest -q tests/test_metrics_rr.py::{test_identity_delta_b_zero, test_rotation_scale_invariance, test_anchor_permutation_invariance}` pass. On Kaggle, every `ref` row has ΔB = 0 for all methods (asserted on CPU by `test_one_row_per_checkpoint_group`).
+  - **DC-10:** for all 6 configs, the forced `embed` re-run found every checkpoint in the cache (8, 29, 15, 8, 8, 8), loaded no model, and `deltab` stayed a cache hit. CPU: `test_second_run_logs_cache_hit_and_no_forward` passes.
+  - **DC-11:** smoke `sentences,ftdata,train,embed,deltab` in **120.8 s** (< 15 min). `results/smoke/delta_b.csv` has 96 rows = 8 checkpoints × 3 groups × 4 methods, i.e. one row per (checkpoint, group) per method.
+  - **DC-12:**
+    - Llama-3.1-8B `--only-ckpt a050` on a fresh session: load 82.2 s + extraction 126.2 s = **208.4 s ≤ 900 s** (download 63.8 s excluded).
+    - ΔB for that spectrum adds 1,274.4 s over 7 audited checkpoints, i.e. ≈ 182 s per checkpoint, so ≈ 390 s per checkpoint in total.
+  - **DC-15:** docs in each commit. **DC-19:** `grep -rn "PLACEHOLDER(M4)" tests` → no output.
+- Choice:
+  - **M4 is green.** Tag `m4-green` on `55a2f28dde918ea1b54e25506b38f6dfc703e18a`, the commit run in all three sessions.
+  - The ΔB tables are in the private store (`deltab/`, `results/<run>/`). Bringing `results/<run>/` into git is a follow-up that needs the files from Kaggle's output or the store.
+- Why: Every M4 check passes with its stated output. M4-T5 is pre-registered as a signal, not a gate.
+- Tradeoff accepted: The sanity signal disagrees with App. E.5 for 5 of 9 spectra; whether ΔB still tracks benchmark harm is M6's question (B-030).
+- Cost impact: M4 = 3.37 session-h (PLAN §8 estimated 2.7 GPU-h; D-081 projected ≈ 5). Disk peak 13 GB in session B.
+- Paper deviation: none new.
+- Revisit-if:
+  - B-030's investigation finds a defect (then bump `schema_version.metrics` and re-run `deltab` from the caches; no GPU needed);
+  - an `embed` schema bump (ROLLBACK: re-run DC-10, DC-11, DC-12).
+
+## D-084 B-030 diagnostics: a CPU-only report from the M4 caches, with a group-free control (no pipeline change)
+- Date: 2026-10-10
+- Context: The user asked to investigate B-030 (the harmful endpoint is not below the unharmful one in 5 of 9 spectra) before M5. The ΔB tables and embeddings live in the private store; diagnosing needs per-sentence quantities that the long CSV does not hold.
+- Options considered:
+  - read only the stored CSVs (cannot separate generic drift from group bias);
+  - re-extract on GPU;
+  - a CPU report over the cached embeddings.
+- Choice: `rbbd.analysis.diagnose.diagnose_spectrum` (primary cell), run by `cli diagnose-deltab --config C` and `notebooks/b030_diagnose.ipynb` (Kaggle, CPU, restores `manifests`, `sentences`, `embed`, `embeddings/<slug>`). It writes `results/<run>/b030_diagnostics.json` (aggregates). It reports:
+  1. **Method agreement:** mean ΔB per checkpoint under RR, SEAT and Procrustes (no shared scoring code).
+  2. **α trend:** Spearman ρ(α, mean ΔB).
+  3. **h − u contrast:** per target sentence, b(a000) − b(a100), with a 95% CI from a bootstrap over the 50 templates (a template's sentences for all groups resampled together), and the count of groups with h below u.
+  4. **S⁺/S⁻ decomposition** of the RR shift at a100 and a000.
+  5. **Group-free control:** the 1,000 Alpaca anchor-pool sentences scored as pseudo-targets against the same neutral anchors and attributes. `group_specific` = target ΔB − control ΔB. This separates generic fine-tuning drift (which moves RR ΔB, as the CPU tests show) from group-directed movement.
+  6. **Geometry:** P/N centroid cosine and mean pairwise cosine (anisotropy) at ref, a100 and a000.
+  7. **ΔB per group.**
+- Why: Each hypothesis in B-030 maps to one output (2 → items 4–6, 3 → items 1 and 6, 4 → items 3 and 7). Nothing in the pipeline, the configs or any cache key changes, so M4 results stay valid.
+- Tradeoff accepted: The control set (Alpaca instructions) is not matched to target sentences in style; it measures a generic shift, not a perfect null.
+- Cost impact: one CPU Kaggle session (≈ 10 GB restored, minutes of compute); no GPU.
+- Paper deviation: no (diagnostic only).
+- Revisit-if: the diagnostics point to a defect (then a D entry for the fix and a `schema_version.metrics` bump).

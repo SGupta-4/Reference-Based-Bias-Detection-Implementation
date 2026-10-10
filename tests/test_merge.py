@@ -5,30 +5,16 @@ import torch
 
 from rbbd.models import adapters as ad
 from rbbd.models import interpolate as ip
-from tests.conftest import make_tiny_model
+from tests.conftest import make_tiny_model, random_adapter
 
 ALPHAS = (1.0, 0.9, 0.7, 0.5, 0.3, 0.1, 0.0)
 TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 
 
-def _random_adapter(tmp_path, name, seed):
-    """A real PEFT LoRA (r=4, alpha=8, random A and B) on the tiny model, saved to disk."""
-    from peft import LoraConfig, get_peft_model
-
-    torch.manual_seed(seed)
-    cfg = LoraConfig(
-        r=4, lora_alpha=8, target_modules=TARGETS, init_lora_weights=False, task_type="CAUSAL_LM"
-    )
-    model = get_peft_model(make_tiny_model(), cfg)
-    out = tmp_path / name
-    model.save_pretrained(str(out))
-    return out
-
-
 @pytest.fixture
 def endpoints(tmp_path):
-    u = ad.read_adapter(_random_adapter(tmp_path, "u", 1))
-    h = ad.read_adapter(_random_adapter(tmp_path, "h", 2))
+    u = ad.read_adapter(random_adapter(tmp_path, "u", 1))
+    h = ad.read_adapter(random_adapter(tmp_path, "h", 2))
     return u, h
 
 

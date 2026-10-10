@@ -14,10 +14,23 @@ import numpy as np
 
 from rbbd.metrics.seat import bias_seat_by_group
 
+# Weight of the identity added to xᵀy before the SVD (relative to its Frobenius norm).
+# With fewer anchors than dimensions (m < d: every 7–8B model, Gemma, Llama-3.2-1B), xᵀy
+# has rank m and the plain SVD completes R on the remaining d − m directions with
+# round-off noise, i.e. an arbitrary rotation of the target components outside the anchor
+# span. The small identity term makes that completion the rotation closest to the
+# identity and leaves the anchor-span solution unchanged to ~1e-10 (D-082).
+IDENTITY_WEIGHT = 1e-10
+
 
 def fit_orthogonal(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """Orthogonal R [d, d] minimising ||x R - y||_F (Schönemann 1966). x, y [m, d] row-paired."""
+    """Orthogonal R [d, d] minimising ||x R - y||_F (Schönemann 1966). x, y [m, d] row-paired.
+
+    Outside the anchor span (m < d) R is the orthogonal completion closest to the
+    identity, so fitting a model onto itself returns the identity (D-082).
+    """
     m = np.asarray(x, dtype=np.float64).T @ np.asarray(y, dtype=np.float64)
+    m = m + IDENTITY_WEIGHT * np.linalg.norm(m) * np.eye(m.shape[0])
     u, _, vt = np.linalg.svd(m, full_matrices=False)
     return u @ vt
 

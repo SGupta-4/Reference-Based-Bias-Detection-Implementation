@@ -605,11 +605,20 @@ def train_one(
     history = trainer.state.log_history
     (out_dir / "train_log.json").write_text(json.dumps(history, indent=2))
     epochs_done = float(trainer.state.epoch or 0)
+    # HF's `training_loss` sums only this process's steps but divides by the global step, so a
+    # resumed run reports a fraction of its loss (B-026). With logging_steps=1 the restored
+    # log_history holds every step's loss, so the whole-run mean is taken from it instead.
+    step_losses = [h["loss"] for h in history if "loss" in h]
+    train_loss = (
+        sum(step_losses) / len(step_losses)
+        if resume and step_losses
+        else float(result.training_loss)
+    )
     done = {
         "train_key": spec.train_key,
         "global_step": int(trainer.state.global_step),
         "epochs": epochs_done,
-        "train_loss": float(result.training_loss),
+        "train_loss": train_loss,
         "final_loss": next((h["loss"] for h in reversed(history) if "loss" in h), None),
         "resumed_from": Path(resume).name if resume else None,
         "seconds_this_process": round(seconds, 1),

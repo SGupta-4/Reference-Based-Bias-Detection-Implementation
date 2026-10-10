@@ -254,32 +254,65 @@ def _free(model: Any) -> None:
         pass
 
 
-def stage(ctx: Any) -> Any:
-    """`embed` stage (M2: reference checkpoint only; α-checkpoints arrive in M4).
+def assert_same_but_checkpoint(ref: Mapping[str, Any], aud: Mapping[str, Any]) -> None:
+    """D-004 / M4-T2: a reference and an audited cache key may differ only in `checkpoint`
+    (same model revision, precision, quantisation, placement, layer, extraction settings,
+    sentence union and schema). Raises ValueError naming the differing fields."""
+    diff = sorted(k for k in set(ref) | set(aud) if k != "checkpoint" and ref.get(k) != aud.get(k))
+    if diff:
+        raise ValueError(f"reference and audited embedding keys differ in {diff} (D-004)")
 
-    Reads the sentence union from the upstream `sentences` manifest, extracts every
-    configured model once, and writes `embed/<run_key>/timing.json`. Outputs are the
-    cache files, so a deleted or altered cache entry invalidates the manifest.
+
+def ftdata_outputs(cfg: Any, root: Path) -> list[str]:
+    """Output paths of the config's complete `ftdata` manifest (input to `plan_jobs`)."""
+    from rbbd import runner
+    from rbbd.utils import manifest as mf
+
+    m = mf.read(mf.manifest_path(root, "ftdata", runner.stage_run_keys(cfg)["ftdata"]))
+    if m is None or not m.complete:
+        raise FileNotFoundError("no complete ftdata manifest; run the ftdata stage first")
+    return list(m.output_hashes)
+
+
+def stage(ctx: Any) -> Any:
+    """`embed` stage: the reference and every α-checkpoint of every trained spectrum (M4).
+
+    Per model entry, one base is loaded lazily (`models.spectrum.Activator`, D-004) and
+    swept in this order: `ref` from the plain base, then each spectrum's checkpoints in
+    `embed.checkpoints` order (LoRA-type spectra before full FT, `spectrum.spectra`).
+    Every checkpoint is one cache entry; ref and audited key fields differ only in
+    `checkpoint` (asserted). `ctx.only_ckpt` restricts the sweep to one slug (DC-12); the
+    runner then leaves the manifest incomplete. Writes `embed/<run_key>/index.json` (one
+    row per entry, read by `deltab`) and, as a log outside the hashed outputs,
+    `timing.json` (`timing_only_<slug>.json` under `--only-ckpt`): DC-12 reads it.
     """
+    from rbbd.models import spectrum as spm
     from rbbd.models.loading import download, load_for_inference
     from rbbd.runner import StageResult
+    from rbbd.utils import manifest as mf
+    from rbbd.utils.env import ephemeral_dir
 
     root = Path(ctx.env.artifacts_root)
     union_rel = next(p for p in ctx.upstream["sentences"].output_hashes if p.endswith("union.json"))
     union = json.loads((root / union_rel).read_text())
     texts = union["texts"]
     emb_cfg = ctx.cfg.get("embed", {})
-    checkpoints = emb_cfg.get("checkpoints", ["ref"])
-    if list(checkpoints) != ["ref"]:
-        raise NotImplementedError("α-checkpoint extraction is implemented in M4 (PLAN §7)")
+    checkpoints = list(emb_cfg.get("checkpoints", [spm.REF]))
+    unknown = sorted(set(checkpoints) - set(spm.CHECKPOINTS))
+    if unknown:
+        raise ValueError(f"unknown checkpoints {unknown}; known: {list(spm.CHECKPOINTS)}")
+    if ctx.only_ckpt is not None and ctx.only_ckpt not in checkpoints:
+        raise ValueError(f"--only-ckpt {ctx.only_ckpt} is not in embed.checkpoints")
+    wanted = [c for c in checkpoints if ctx.only_ckpt in (None, c)]
+    sweep = [c for c in wanted if c != spm.REF]
+    all_spectra = spm.spectra(ctx.cfg, root, ftdata_outputs(ctx.cfg, root)) if sweep else []
     settings = ExtractSettings.from_config(emb_cfg)
     cache = TensorCache(root)
     outputs: dict[str, str] = {}
-    timing: dict[str, Any] = {
-        "n_texts": len(texts),
-        "union_hash": union["union_hash"],
-        "models": {},
-    }
+    index: list[dict[str, Any]] = []
+    done: list[str] = list(ctx.progress.get("done", []))
+    timing: dict[str, Any] = {"n_texts": len(texts), "union_hash": union["union_hash"],
+                              "only_ckpt": ctx.only_ckpt, "models": {}}  # fmt: skip
     for m in ctx.cfg["models"]:
         spec = LoadSpec(
             model_id=m["id"],
@@ -287,15 +320,14 @@ def stage(ctx: Any) -> Any:
             precision=m.get("precision", "fp16"),
             placement=m.get("placement", "balanced"),
         )
-        key_fields = {
+        shared = {
             "model": spec.key_fields(),
-            "checkpoint": {"slug": "ref"},
             "layer": int(m["layer"]),
             "extract": settings.key_fields(),
             "union_hash": union["union_hash"],
             "schema_version": int(ctx.cfg.get("schema_version.embed", 1)),
         }
-        namespace = f"embeddings/{m['slug']}/base/ref"
+        ref_fields = {**shared, "checkpoint": {"slug": spm.REF}}
         loaded: dict[str, Any] = {}
 
         def load(
@@ -311,29 +343,68 @@ def stage(ctx: Any) -> Any:
                 raise ValueError(
                     f"{m['id']}: config layer {m['layer']} != {num_layers(model)} decoder layers"
                 )
-            loaded["model"] = model
             return model, tok
 
-        stats = ExtractStats()
-        _, sidecar, hit = extract_cached(
-            cache, namespace, key_fields, texts, settings, load,
-            context={"model": m["slug"], "ckpt": "ref"}, stats=stats,
-        )  # fmt: skip
-        key = make_key(key_fields)
-        path = cache.path_for(namespace, key)
-        outputs[f"{m['slug']}/ref"] = str(path.relative_to(root))
+        activator = spm.Activator(load, scratch=ephemeral_dir())
+        # (spectrum or None for ref, slug, endpoint hashes); hashes are computed once per
+        # spectrum because they enter every audited key of it (D-019).
+        plan: list[tuple[Any, str, dict[str, str]]] = (
+            [(None, spm.REF, {})] if spm.REF in wanted else []
+        )
+        for sp in (s for s in all_spectra if s.model["slug"] == m["slug"]):
+            hashes = {split: mf.hash_path(path) for split, path in sp.finals.items()}
+            plan += [(sp, slug, hashes) for slug in sweep]
+        per_ckpt: dict[str, Any] = {}
+        for sp, slug, hashes in plan:
+            if sp is None:
+                fields, namespace = ref_fields, f"embeddings/{m['slug']}/base/{spm.REF}"
+                fetch = activator.plain
+            else:
+                fields = {**shared, "checkpoint": spm.checkpoint_fields(sp, slug, hashes)}
+                namespace = f"embeddings/{m['slug']}/{sp.name}/{slug}"
+
+                def fetch(
+                    sp: Any = sp, slug: str = slug, activator: Any = activator
+                ) -> tuple[Any, Any]:
+                    return activator.get(sp, slug)
+
+            assert_same_but_checkpoint(ref_fields, fields)
+            stats = ExtractStats()
+            _, sidecar, hit = extract_cached(
+                cache, namespace, fields, texts, settings, fetch,
+                context={"model": m["slug"], "ckpt": slug,
+                         "spectrum": sp.name if sp is not None else "base"}, stats=stats,
+            )  # fmt: skip
+            key = make_key(fields)
+            rel = str(cache.path_for(namespace, key).relative_to(root))
+            label = f"{m['slug']}/{sp.name if sp is not None else 'base'}/{slug}"
+            outputs[label] = rel
+            index.append({
+                "model": m["slug"], "regime": sp.regime if sp is not None else "base",
+                "seed": sp.seed if sp is not None else None, "ckpt": slug,
+                "alpha": spm.alpha_of(slug), "key": key, "path": rel,
+            })  # fmt: skip
+            per_ckpt[label] = {"cache_hit": hit, "key": key,
+                               **(sidecar["stats"] if not hit else {})}  # fmt: skip
+            if label not in done:
+                done.append(label)
+                ctx.checkpoint({"done": done})
         timing["models"][m["slug"]] = {
-            "cache_hit": hit,
-            "key": key,
             "download_seconds": loaded.get("download_seconds"),
             "load_seconds": loaded.get("load_seconds"),
-            **(sidecar["stats"] if not hit else {"stats": sidecar.get("stats")}),
+            "checkpoints": per_ckpt,
         }
-        if "model" in loaded:
-            _free(loaded.pop("model"))
-    path = ctx.stage_dir / "timing.json"
-    path.write_text(json.dumps(timing, indent=2))
-    outputs["timing"] = str(path.relative_to(root))
+        if activator.model is not None:
+            model = activator.model
+            activator.close()
+            _free(model)
+    path = ctx.stage_dir / "index.json"
+    path.write_text(json.dumps(index, indent=1))
+    outputs["index"] = str(path.relative_to(root))
+    # Timing is a log of this invocation, not an output: a cache-hit re-run (DC-10) must
+    # leave the manifest's output hashes, and so the deltab manifest, unchanged.
+    name = "timing.json" if ctx.only_ckpt is None else f"timing_only_{ctx.only_ckpt}.json"
+    (ctx.stage_dir / name).write_text(json.dumps(timing, indent=2))
     return StageResult(outputs=outputs)
 
 

@@ -321,14 +321,17 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `5d43021`, `4a43b15`; D-008, D-009, D-033, D-042, D-072, D-073, D-074, D-075
 
 ## B-020 Risk: smoke and Tier 2 Qwen jobs share one slug directory
-- Status: Open, mitigated by design. Act on it in M4.
+- Status: Fixed for the sweep (M4, D-081, D-083). One side effect was observed and is harmless (below).
 - How it was found or scoped: The M3b session 1 summary (D-073) listed six `done.json` files under `train/qwen2.5-0.5b-it/lora/`: the two Tier 2 endpoints plus four 24-step smoke endpoints (two from schema v1, two from v2), restored from the store.
 - Reproduction command: `ls artifacts/train/qwen2.5-0.5b-it/lora/*/seed0/` after `cli restore --path train/qwen2.5-0.5b-it`.
 - Hypotheses tried: n/a. The behaviour is as designed: `train_key` differs, and `plan_jobs` resolves each config's own jobs. Anything that globs `train/<slug>/<regime>/<split>/seed0/*` would match several jobs.
 - Fix (planned, M4): the α-checkpoint sweep finds endpoints only through `plan_jobs` for its config. A CPU test will assert that a smoke job never resolves for the Tier 2 config. Renaming the smoke slug would change smoke keys and retrain them (≈ 2 min), but it is not needed.
-- Verification: pending (M4).
+- Verification (Kaggle session A, D-083): after `restore train/qwen2.5-0.5b-it`, which also brought back the M3a smoke jobs, the Tier 2 Qwen sweep resolved exactly its 4 spectra: 29 checkpoints = ref + 4 × 7. No smoke job was picked up. `models.spectrum.spectra` uses `plan_jobs` only.
+  - Side effect: the smoke config ran first and trained its 24-step endpoints in-session. The later Tier 2 restore then overwrote that job directory with the M3a copy, which has the same `train_key` but different bytes because GPU training is non-deterministic. So `status` shows smoke's `train` as `stale (output changed: …done.json)`.
+  - The smoke ΔB results were computed before the overwrite and stand. A smoke re-run re-extracts, because its embedding keys include the endpoint hash.
+  - To avoid it: run smoke after the Tier 2 restore, or restore before smoke.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-072, D-073
+- Linked commits and D-### entries: D-072, D-073, D-081, D-083
 
 ## B-021 Bug: the OOM layout fallback failed for Llama-3.2-1B full FT, and the failure report hid the error
 - Status: **Closed.** Verified on Kaggle (session `20261002T063404Z`, `4a43b15`): 4×8 and 2×16 OOMed and were relaunched in fresh processes, 1×32 trained to completion, and the probe printed each job's log.
@@ -361,7 +364,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `3644675`; D-036, D-072; B-021
 
 ## B-023 Feature: M3c Tier 1 training preparation (Llama, Mistral, Gemma)
-- Status: In progress. Llama and Mistral are trained and DC-07 passes (D-077). Gemma: fp16 failed and fp32 projects 11.66 h for 1 epoch (D-078); the user chose 1 epoch over two sessions (D-079, B-024). The two Gemma sessions are pending.
+- Status: Done. All three Tier 1 models are trained and DC-07 passes for each (D-077, D-080); M3c is green (`m3c-green` = `0dd00fb`).
 - How it was found or scoped: PLAN §7 M3c-T9–T11; the user said "prepare M3c" (2026-10-02).
 - Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m3c_train.ipynb` with `MODEL` per session.
 - Hypotheses tried (design risks found while preparing):
@@ -384,10 +387,10 @@ IDs are sequential and never reused.
   The GPU test skips without `RBBD_M3C_CONFIG`, and all notebook cells parse.
   - Kaggle (`8ab97fb`): Llama session `20261007T133950Z` and Mistral session `20261008T020912Z` trained, with DC-07 `1 passed` each (D-077). In the Gemma session `20261008T101651Z`, fp16 failed at the first forward and the fp32 projection triggered the ask (D-078).
 - GPU-hours lost: 0
-- Linked commits and D-### entries: `8ab97fb`, `a6eac37`; D-005, D-062, D-070, D-071, D-076, D-077, D-078, D-079; B-024
+- Linked commits and D-### entries: `8ab97fb`, `a6eac37`, `35dda0d`, `0dd00fb`; D-005, D-062, D-070, D-071, D-076, D-077, D-078, D-079, D-080; B-024, B-025, B-026
 
 ## B-024 Decision: Gemma-3-4B Tier 1 training does not fit the 9 h rule in fp32
-- Status: Decided (option 1, D-079): implemented and CPU-verified; the Kaggle sessions are tracked under B-023.
+- Status: Closed. Option 1 (D-079) ran on Kaggle: harmful paused at step 228 in session 1 and resumed to 250 in session 2 (D-080).
 - How it was found or scoped: M3c Gemma session (`20261008T101651Z`).
   - fp16 compute is impossible: the residual stream reaches |h| ≈ 1.7e5, which exceeds the fp16 maximum, and the first forward is all-NaN.
   - fp32 QLoRA runs at ≈ 116 tok/s: 11.66 h for 1 harmful epoch, 7.55 h unharmful. With setup that exceeds one 12 h Kaggle session.
@@ -410,7 +413,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-005, D-030, D-042, D-062, D-070, D-076, D-078, D-079
 
 ## B-025 Bug: the Kaggle clone cell fails when an attached GITHUB_TOKEN is rejected, although the repo is public
-- Status: Fixed in the notebooks (CPU-verified); the Kaggle re-run is pending.
+- Status: Closed. The clone succeeded at `0dd00fb` in both Gemma sessions (D-080). The fallback path did not trigger there (no `rejected` line, so the token was valid or detached); it is verified on CPU only.
 - How it was found or scoped:
   - The first Gemma session (M3c, `REF = 35dda0d…`) stopped at the clone cell after 9 s: `git fetch failed: fatal: could not read Username for 'https://github.com': No such device or address`.
   - No GPU time was used.
@@ -428,3 +431,95 @@ IDs are sequential and never reused.
   - Ran the patched cell with no stub: `commit 35dda0d9…`.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-046
+
+## B-026 Bug: `done.json` under-reports `train_loss` for a resumed run
+- Status: Fixed (CPU-verified). The one affected artifact (Gemma harmful, D-080) is left as stored, and its correct value is documented.
+- How it was found or scoped: Gemma session 2 (`20261009T072830Z`). The resumed harmful job reported `train_loss: 0.136` against `final_loss: 1.605`.
+- Reproduction command: `python -m pytest -q tests/test_sft.py -k deadline_pause` without the fix → `assert 3.6431472301483154 == 4.851379871368408 ± 0.001`. That is 3 of 4 step losses summed over 4 steps.
+- Hypotheses tried:
+  - **A training anomaly.** Ruled out. `final_loss` and the 22-step mean (0.136 × 250 / 22 = 1.55) both match the unresumed harmful runs.
+  - **HF's `TrainOutput.training_loss` sums only this process's steps but divides by the global step count** (transformers 4.57). Confirmed by the CPU test.
+- Fix:
+  - `sft.train_one`: for a resumed run, `train_loss` is now the mean of the per-step `loss` entries in the restored `log_history` (`logging_steps=1`, so it covers every step of the run).
+  - Unresumed runs keep HF's value, so existing `done.json` files keep their meaning.
+  - `train_loss` is metadata: no key or downstream stage reads it.
+- Verification:
+  - The test above now passes (the resumed whole-run mean equals the uninterrupted run's within 1e-3).
+  - `python -m pytest -q -m "not gpu"` → `129 passed, 13 deselected`; `ruff check src tests` → `All checks passed!`.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-079, D-080
+
+## B-027 Feature: M4 ΔB across the merge spectra (α sweep, anchor pools, deltab stage)
+- Status: Done. Sessions A–C ran on Kaggle at `55a2f28`; every M4 DONE check passes (D-083). M4 is green; the sanity signal is tracked as B-030.
+- How it was found or scoped: PLAN §7 M4; the user said "prepare M4" (2026-10-09) and chose to build the anchor pools now.
+- Reproduction command: CPU: `python -m pytest -q -m "not gpu"`; Kaggle: `notebooks/m4_deltab.ipynb` with `CONFIGS` per session.
+- Hypotheses tried (design risks found while preparing):
+  - A `--only-ckpt` run would have written a complete manifest covering one checkpoint, and a later full run would have skipped the rest. Fixed with the runner's `partial` outcome.
+  - The DC-10 re-run would have changed `timing.json`, a hashed output, and so invalidated `deltab`. Timing is now a log.
+  - A changed WildGuardMix revision would give new train keys, and the `train` stage would silently start training. The notebook now checks every endpoint before `train`.
+  - Procrustes with m < d (B-028).
+  - The CPU merge tests used identical endpoints (B-029).
+- Fix:
+  - Code:
+    - `data.anchors` (pools, subsets) and `data.sentences.add_anchor_pools`;
+    - `models.spectrum` (slugs, `spectra`, `checkpoint_fields`, `Activator`);
+    - `embed.extract.stage` (sweep, `assert_same_but_checkpoint`, `index.json`);
+    - `metrics.delta_b` (`Cell`, `cells`, `spectrum_rows`, `sanity`, `stage`);
+    - `runner.SWEEP_STAGES` / `partial`.
+  - Configs: `base.yaml`, the Mistral and Gemma pooling settings, the M2 probe config.
+  - Notebook: `notebooks/m4_deltab.ipynb`.
+- Verification (CPU, this container): `ruff check src tests` → `All checks passed!`; `python -m pytest -q -m "not gpu"` → `156 passed, 13 deselected in 22.83s`; `grep -rn "PLACEHOLDER(M4)" tests` → no output. New tests: `tests/test_anchors.py`, `tests/test_spectrum.py`, `tests/test_delta_b_table.py` (the `PLACEHOLDER(M4)` skeleton is replaced).
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-004, D-015, D-019, D-020, D-028, D-057, D-081, D-082; B-020, B-028, B-029
+
+## B-028 Bug: Procrustes alignment rotated target components outside the anchor span arbitrarily when anchors < dimensions
+- Status: Fixed (CPU-verified) before any M4 run.
+- How it was found or scoped: Designing the per-(checkpoint, tensor) rotation cache for M4. For the `ref` row a self-fit should be the identity, but `np.linalg.svd(xᵀx)` with rank m < d is not.
+- Reproduction command: `python -c "import numpy as np; r=np.random.default_rng(0); x=r.normal(size=(100,256))+r.normal(size=256); u,_,vt=np.linalg.svd(x.T@x); print(abs(u@vt-np.eye(256)).max())"` → `0.855…`
+- Hypotheses tried: n/a (a mathematical property: R is defined only on the anchor span; LAPACK fills the null space with noise).
+- Fix: `procrustes.fit_orthogonal` adds 1e-10·‖xᵀy‖_F·I before the SVD (D-082). The deltab stage also uses the identity for `ref`.
+- Verification:
+  - `pytest -q tests/test_delta_b_table.py::test_procrustes_self_fit_is_identity_with_fewer_anchors_than_dims` passes (|R − I| ≤ 1e-6 at d = 64, m = 20).
+  - `tests/test_baselines.py` (full-rank rotation recovery, atol 1e-8) and DC-03/DC-04 still pass.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-028, D-082
+
+## B-029 Bug: the CPU merge tests compared two identical "endpoint" adapters
+- Status: Fixed (CPU-verified).
+- How it was found or scoped: The new spectrum sweep test found a100 and a000 embeddings identical. `_random_adapter(seed)` seeded torch and then built the tiny model, which reseeds the global RNG (`make_tiny_model` calls `torch.manual_seed(0)`), so u and h were the same random adapter.
+- Reproduction command: before the fix, `ad.read_adapter(u).tensors == ad.read_adapter(h).tensors` for the `endpoints` fixture.
+- Hypotheses tried: a PEFT adapter-switching bug, ruled out (a100 → a050 matched the merged weights); the fixture was the cause.
+- Fix: the helper (now `tests.conftest.random_adapter`) seeds after building the base model. The CPU DC-07 linearity tests now run on distinct endpoints. The Kaggle GPU DC-07 tests always used the real trained endpoints, so no recorded result changes.
+- Verification: `python -m pytest -q tests/test_merge.py tests/test_spectrum.py` → all pass with distinct endpoints (a100 vs a000 max |Δh| 2.83 on the tiny model).
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-007, D-066, D-081
+
+## B-030 Signal: the harmful endpoint is not below the unharmful one in mean ΔB for 5 of 9 spectra (M4-T5)
+- Status: In progress (user: "investigate B-030 first", 2026-10-10). Hypothesis 1 is ruled out on CPU; the diagnostics for hypotheses 2–4 are built and await a CPU Kaggle run (`notebooks/b030_diagnose.ipynb`, D-084).
+- How it was found or scoped: M4 sessions A–C. `deltab/<run_key>/sanity.json`, primary cell, RR. Numbers are in D-083.
+  - Expected direction, from App. E.5 (Llama: 0.291 u vs −0.051 h): Qwen full s0 and s2, and Qwen LoRA.
+  - Opposite or ≈ equal: Qwen full s1, Llama-1B full and LoRA, Llama-8B, Mistral, Gemma.
+  - Magnitudes are ≈ 0.01–0.16, smaller than App. E.5.
+- Reproduction command: no GPU needed; read `results/<run>/sanity.json`, or `metrics.delta_b.sanity` over the stored `delta_b.csv.gz`.
+- Hypotheses to test (from the cached tables, CPU only):
+  1. **Sign or endpoint swap.** Checked by reading the code: a100 = `adapter_for_alpha(u, h, 1.0)` = the unharmful adapter; full a100 = W_u. `spectra()` keys `finals` by `job.split`; B = S⁺ − S⁻ (Eq. 6); ΔB = aud − ref. DC-07 GPU tests used the same split keys. Still to do: a per-group look at a000 vs a100 under SEAT and Procrustes, which share no code with RR.
+  2. **Our training is weaker:** 1 epoch for Tier 1 (D-071, D-077, D-079) vs 3 in App. C; QLoRA adapters applied to an fp16 base (D-004). A weak harmful shift could be dominated by a generic fine-tuning shift common to both endpoints (both ΔB > 0 for most spectra).
+  3. **Reconstructed sentence sets** (D-012–D-016) differ from the authors'. Compare the attribute-variant and target-variant cells for robustness.
+  4. **Group-level heterogeneity:** the mean over 24 groups may hide the groups the harmful data actually targets; M6 pairs ΔB with benchmark deltas per group or topic, which is the paper's actual claim.
+- Progress (2026-10-10):
+  - **Hypothesis 1 (sign or endpoint swap): ruled out.**
+    - Synthetic run through the real union index and `spectrum_rows`: moving Women's targets halfway toward the positive centroid gives ΔB = +0.068 (RR), +0.484 (SEAT), +0.484 (Procrustes); toward the negative centroid gives −0.062, −0.487, −0.487. Unmoved groups and `ref` give 0.
+    - Now a regression test: `tests/test_diagnose.py::test_delta_b_direction_through_stage_code`.
+  - **A clue for hypothesis 2, found while building that check.** When P and N have the same centroid, moving targets toward *either* centroid gives RR ΔB ≈ −0.03 for both, i.e. RR also responds to targets collapsing toward a shared point, not only to valence. In LLM spaces, where P and N are highly similar (anisotropy), a generic fine-tuning drift can therefore dominate ΔB. Likewise, a translation applied to every sentence moves RR ΔB (`test_control_absorbs_a_generic_shift`).
+  - **Diagnostics built (D-084):** `rbbd.analysis.diagnose` + `cli diagnose-deltab` + `notebooks/b030_diagnose.ipynb`, CPU only, from the stored caches. They report:
+    - method agreement;
+    - the α trend;
+    - the h − u contrast with a template-bootstrap CI;
+    - the S⁺/S⁻ decomposition;
+    - a group-free control (Alpaca pool) → group-specific ΔB;
+    - P/N geometry and anisotropy;
+    - ΔB per group.
+- Fix: pending the diagnostics' results.
+- Verification: CPU: `python -m pytest -q tests/test_diagnose.py` → `5 passed`.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-071, D-077, D-079, D-081, D-083, D-084

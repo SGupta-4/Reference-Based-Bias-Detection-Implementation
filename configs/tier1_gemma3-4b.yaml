@@ -16,3 +16,5 @@ train:
   batch_layouts: {qlora: [[4, 8], [2, 16], [1, 32]]}
   activation_monitor: true
   sync_each_pair: true
+embed:
+  poolings: [mean]         # D-019: max/last only for Tier 1 Llama and Tier 2 (disk)

@@ -395,6 +395,10 @@ Units: **Kaggle session-hours on the 2×T4 accelerator** (Kaggle bills session t
 
 **Re-baseline after the M1 census (D-055, 2026-10-01).** Measured examples average ≈ 545 tokens (harmful ≈ 650–730), not 400, so harmful runs train 1.5–1.65× the planned tokens. At the assumed 350 tok/s per T4: M3 Tier 1 training ≈ 32–40 session-h at 3 epochs (≈ 11.5–14 h at 1 epoch); M3 Tier 2 ≈ 12.3 h. Projected core total ≈ 96 session-h at 3 epochs, or ≈ 70 h if Tier 1 drops to 1 epoch (D-042). The 512-token fallback is excluded (29–68% of examples exceed 512). Final numbers are set after the M3c-T8 throughput probe.
 
+**M3c measured (D-080, 2026-10-09).** Tier 1 training at 1 epoch cost ≈ 27 session-h: Llama 7.6, Mistral 6.9, Gemma 12.5 (fp32, two sessions). The probes are included. This replaces the ≈ 11.5–14 h estimate above, which had assumed 350 tok/s; measured QLoRA rates were 118–252 tok/s.
+
+**M4 measured (D-083, 2026-10-10).** ΔB across all 9 spectra cost 3.37 session-h over three sessions (0.56 + 1.29 + 1.52). The per-checkpoint extraction ranged from 9 s (Qwen-0.5B) to 279 s (Gemma fp32).
+
 **Schedule within ~30 h/week** (with a 2 h reserve kept each week):
 
 | Week | Sessions | Work | Session-h |

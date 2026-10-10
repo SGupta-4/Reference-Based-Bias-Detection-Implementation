@@ -11,3 +11,5 @@ train:
   epochs: 1                # D-077: probe projected 20.4 h at 3 epochs -> D-070 rule chose 1 (6.8 h)
   batch_layouts: {qlora: [[4, 8], [2, 16], [1, 32]]}
   sync_each_pair: true
+embed:
+  poolings: [mean]         # D-019: max/last only for Tier 1 Llama and Tier 2 (disk)

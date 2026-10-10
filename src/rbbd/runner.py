@@ -116,7 +116,13 @@ STAGE_IMPLS: dict[str, str] = {
     "ftdata": "rbbd.data.ft_data:stage",
     "train": "rbbd.finetune.sft:stage",
     "embed": "rbbd.embed.extract:stage",
+    "deltab": "rbbd.metrics.delta_b:stage",
 }
+
+# Stages that sweep checkpoints. Under `--only-ckpt` they cover one checkpoint, so their
+# manifest is left incomplete (D-081): a later full run resumes it instead of mistaking
+# a one-checkpoint result for the whole sweep.
+SWEEP_STAGES = frozenset({"embed", "deltab", "generate", "score"})
 
 
 def _lazy(stage: str) -> StageFn:
@@ -217,7 +223,7 @@ def run(
     only_ckpt: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, str]:
-    """Run stages; returns {stage: "cache hit" | "ran" | "resumed" | "planned"}."""
+    """Run stages; returns {stage: "cache hit" | "ran" | "resumed" | "partial" | "planned"}."""
     fns = {**DEFAULT_STAGE_FNS, **(stage_fns or {})}
     order = topo_order(stages if stages is not None else STAGES)
     forced = set(topo_order(force))
@@ -304,9 +310,15 @@ def run(
         current.output_hashes = {rel: mf.hash_path(root / rel) for rel in result.outputs.values()}
         current.finished = datetime.now(timezone.utc).isoformat()
         current.seconds = round(time.time() - t0, 3)
-        current.complete = True
+        partial = only_ckpt is not None and stage in SWEEP_STAGES
+        current.complete = not partial
         current.error = None
         mf.write(path, current)
+        if partial:
+            log.info("stage %s covered only %s in %.1f s; manifest left incomplete",
+                     stage, only_ckpt, current.seconds)  # fmt: skip
+            outcome[stage] = "partial"
+            continue
         log.info("stage %s done in %.1f s", stage, current.seconds)
         outcome[stage] = "resumed" if resume else "ran"
     return outcome
