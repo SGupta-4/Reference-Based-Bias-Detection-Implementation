@@ -263,8 +263,11 @@ def materialize(
     )
     tok = load_tokenizer(load_spec.model_id, load_spec.revision)
     if spectrum.regime == "full":
-        w_u = ip.load_endpoint(spectrum.finals["unharmful"])
-        w_h = ip.load_endpoint(spectrum.finals["harmful"])
+        # One tensor at a time (B-033): two parallel processes each holding both fp32
+        # endpoints of Llama-1B exceeded Kaggle's 31 GiB.
+        w_u = ip.LazyEndpoint(spectrum.finals["unharmful"])
+        w_h = ip.LazyEndpoint(spectrum.finals["harmful"])
+        ip.check_endpoints(w_h, w_u)
         ip.materialize(model, tok, w_h, w_u, alpha, out, artifacts_root)
     else:
         from rbbd.models import adapters as ad
@@ -521,7 +524,11 @@ def run_checkpoint(
         ephemeral_dir() / "rbbd_merged" / f"{entry['slug']}-{pending[0].spectrum}-{pending[0].ckpt}"
     )
     path, temporary = materialize(spec, spectrum, pending[0].ckpt, tmp_dir, root)
-    timing: dict[str, Any] = {"materialize_seconds": round(time.time() - t0, 1), "benches": {}}
+    timing: dict[str, Any] = {
+        "materialize_seconds": round(time.time() - t0, 1),
+        "materialize_peak_rss_gib": _peak_rss_gib(),
+        "benches": {},
+    }
     try:
         t1 = time.time()
         if engine_factory is None:
@@ -562,7 +569,15 @@ def run_checkpoint(
         if temporary:
             shutil.rmtree(path, ignore_errors=True)
             timing["merged_removed"] = not Path(path).exists()
+        timing["peak_rss_gib"] = _peak_rss_gib()
     return timing
+
+
+def _peak_rss_gib() -> float:
+    """This process's peak resident memory (Linux ru_maxrss is in KiB); B-033."""
+    import resource
+
+    return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
 
 
 def _append_timing(out_dir: Path, row: Mapping[str, Any]) -> None:

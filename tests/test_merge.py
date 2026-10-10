@@ -178,3 +178,35 @@ def test_apply_alpha_with_tied_embeddings(tmp_path):
     w_h.pop("model.norm.weight")
     with pytest.raises(ip.EndpointMismatch, match="model.norm.weight"):
         ip.apply_alpha(model, w_h, w_u, 0.5)
+
+
+def test_lazy_endpoint_matches_eager_load(tmp_path):
+    """B-033: the one-tensor-at-a-time reader returns exactly what `load_endpoint` does,
+    across shards, and `apply_alpha` gives bit-identical weights with either."""
+    from safetensors.torch import save_file
+
+    torch.manual_seed(0)
+    a = {"model.norm.weight": torch.randn(8).half(), "lm_head.weight": torch.randn(4, 8).half()}
+    b = {"model.embed.weight": torch.randn(16, 8).half()}
+    for d, scale in (("h", 1.0), ("u", 2.0)):
+        (tmp_path / d).mkdir()
+        save_file({k: v * scale for k, v in a.items()}, str(tmp_path / d / "m-1.safetensors"))
+        save_file({k: v * scale for k, v in b.items()}, str(tmp_path / d / "m-2.safetensors"))
+    eager, lazy = ip.load_endpoint(tmp_path / "h"), ip.LazyEndpoint(tmp_path / "h")
+    assert set(lazy) == set(eager) and len(lazy) == 3
+    assert all(torch.equal(lazy[k], eager[k]) and lazy[k].dtype == torch.float32 for k in eager)
+    assert lazy.shape("lm_head.weight") == (4, 8)
+    ip.check_endpoints(lazy, ip.LazyEndpoint(tmp_path / "u"))
+
+    class Weights:  # apply_alpha only needs state_dict()
+        def __init__(self):
+            self.sd = {k: torch.zeros(v.shape).half() for k, v in eager.items()}
+
+        def state_dict(self):
+            return self.sd
+
+    m1, m2 = Weights(), Weights()
+    ip.apply_alpha(m1, ip.load_endpoint(tmp_path / "h"), ip.load_endpoint(tmp_path / "u"), 0.3)
+    ip.apply_alpha(m2, ip.LazyEndpoint(tmp_path / "h"), ip.LazyEndpoint(tmp_path / "u"), 0.3)
+    assert all(torch.equal(m1.sd[k], m2.sd[k]) for k in eager)
+    assert not torch.equal(m1.sd["lm_head.weight"], torch.zeros(4, 8).half())

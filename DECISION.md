@@ -1746,3 +1746,43 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Revisit-if:
   - agreement < 80%;
   - the human labels put many "none" prompts into topics (then the mapper prompt is revised and re-run before the map is frozen).
+
+## D-089 M5 session A results: smoke DC-11, resume DC-13 and Tier 2 Qwen complete; Llama-1B resumes after B-033; merges stream full-FT endpoints (amends D-050, D-086 cost)
+- Date: 2026-10-10
+- Context: `notebooks/m5_bench.ipynb` at `a67c957`, session `20261010T092134Z` (3.33 h): smoke, Tier 2 Qwen-0.5B, Tier 2 Llama-1B. The Python 3.12 venv (D-087) installed in ≈ 4 min.
+- Observed:
+  - **DC-11:** smoke ran all seven stages (sentences → score) in **289 s**, under 15 min.
+    - 12 generation jobs (4 checkpoints × 3 benches) and 296 items; every prompt rendered with its chat template (`chat` = 296), and none was too long.
+    - WGM was skipped as designed (D-038).
+    - The re-run of `generate,score` hit the cache for both stages.
+  - **DC-13 (GPU):** `test_resume_generation_shards` recorded 3 shards, 24 rows and `identical_frac` 1.0. vLLM's per-request seeds reproduced every sample after the simulated kill.
+  - **D-038 WildGuard GPU test:** no record (B-033); re-run pending.
+  - **DC-14:** timing per (checkpoint, bench) is present.
+    - Qwen Tier 2: 45 jobs; per checkpoint 418 s (ref) to 668 s; DT 6,164 s, ToxiGen 2,402 s, WGM 447 s in total.
+    - Generation stage 5,095 s (two TP=1 processes in parallel); score stage 1,475 s, mostly the ToxiGen RoBERTa pass over 67.5k first statements.
+    - Qwen Tier 2 took 1.83 h in all, against PLAN §8's 5.0 h for both Tier 2 models. That is within budget, so no BUGS entry.
+    - Llama-1B checkpoints took ≈ 9 min each (ref: DT 354 s, ToxiGen 118 s, WGM 21 s, engine 42 s, merge 6 s).
+  - **Qwen Tier 2 scores** (mean over units of the score and of Δ vs ref; DT 24 groups, ToxiGen 9 groups):
+
+    | Spectrum | Bench | ref | a100 | a070 | a050 | a030 | a000 |
+    |---|---|---|---|---|---|---|---|
+    | LoRA s0 | DT agree | 0.311 | 0.309 (−0.002) | 0.369 (+0.058) | 0.398 (+0.087) | 0.420 (+0.109) | 0.448 (+0.137) |
+    | full s0 | DT agree | 0.311 | 0.359 (+0.048) | 0.456 (+0.145) | 0.513 (+0.202) | 0.555 (+0.244) | 0.586 (+0.274) |
+    | LoRA s0 | ToxiGen toxic | 0.018 | 0.010 (−0.009) | 0.024 (+0.006) | 0.052 (+0.033) | 0.099 (+0.081) | 0.220 (+0.201) |
+    | full s0 | ToxiGen toxic | 0.018 | 0.078 (+0.060) | 0.089 (+0.070) | 0.120 (+0.102) | 0.165 (+0.146) | 0.249 (+0.230) |
+
+    - Both benchmarks rise monotonically as α moves toward the harmful endpoint, in both regimes.
+    - Full FT also drifts at a100 (unharmful): +0.05 DT, +0.06 ToxiGen. LoRA a100 stays at ref.
+    - This matches App. E.5's direction, and Qwen's ΔB direction in D-085.
+  - **Llama-1B:** LoRA ref–a000 and full a100 finished and synced. Full a090 was OOM-killed (B-033); `generate` is `incomplete`.
+- Choice:
+  - Full-FT merges for generation read endpoints one tensor at a time (`LazyEndpoint`, B-033). Results are bit-identical to `load_endpoint` (CPU test), so no gen_key changes and the finished generations stay valid.
+  - The GPU tests run one per process.
+  - Next session: `["smoke", "tier2_llama3.2-1b"]`. Smoke re-runs (≈ 5 min) so the GPU tests have their smoke generations, and Llama resumes from the store.
+- Why: Streaming removes the parallel-RAM risk at no cost in exactness. Re-running only the missing pieces keeps the finished work.
+- Tradeoff accepted: smoke repeats once (≈ 5 min).
+- Cost impact: measured Tier 2 ≈ 1.8 h per model. Projected Tier 1 per 8B checkpoint stays ≈ 35 min (D-086), to be re-baselined in session B.
+- Paper deviation: no.
+- Revisit-if:
+  - peak RSS in the new `generate-one` output exceeds ≈ 12 GiB per TP=1 process;
+  - the ToxiGen scoring pass exceeds 15 min per Tier 1 model (then sort by length or batch larger).

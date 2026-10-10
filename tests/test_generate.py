@@ -145,6 +145,30 @@ def test_merged_lora_checkpoint_equals_the_adapter(tmp_path, monkeypatch, lora_s
     assert ad.read_adapter(lora_spectrum.finals["unharmful"])  # endpoints untouched
 
 
+def test_merged_full_checkpoint_equals_the_in_memory_alpha(tmp_path, monkeypatch, full_spectrum):
+    """D-008/B-033: the full-FT α written for vLLM (streamed endpoints) equals the
+    in-memory `apply_alpha` model the embedding sweep uses."""
+    from transformers import LlamaForCausalLM
+
+    from rbbd.models import spectrum as spm
+
+    monkeypatch.setattr("rbbd.models.loading.download", lambda spec: "/nonexistent")
+    monkeypatch.setattr(
+        "transformers.AutoModelForCausalLM.from_pretrained", lambda *a, **k: make_tiny_model()
+    )
+    monkeypatch.setattr("rbbd.models.loading.load_tokenizer", lambda *a, **k: make_chat_tokenizer())
+    spec = LoadSpec("tiny/llama", "sha", "fp32", "cpu")
+    path, temporary = gen.materialize(
+        spec, full_spectrum, "a030", tmp_path / "eph" / "a030", tmp_path / "artifacts"
+    )
+    merged = LlamaForCausalLM.from_pretrained(path).eval()
+    in_memory, _ = spm.Activator(lambda: (make_tiny_model(), None)).get(full_spectrum, "a030")
+    for (name, a), (_, b) in zip(
+        sorted(merged.state_dict().items()), sorted(in_memory.state_dict().items()), strict=True
+    ):
+        assert torch.equal(a, b), name
+
+
 BENCH_BASE = (
     "run_name: base\nseed: 0\nschema_version: {embed: 1, gen: 1, score: 1}\n"
     "embed: {checkpoints: [ref, a100, a050, a000]}\n"

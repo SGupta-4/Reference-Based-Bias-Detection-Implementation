@@ -153,9 +153,16 @@ def test_wildguard_on_fixed_generations():
     from rbbd.bench.score import SCORERS
 
     assert torch.cuda.device_count() >= 2, "needs the 2x T4 accelerator"
-    wg.verify_template()
-    llm = LLM(model=wg.CLASSIFIER, tensor_parallel_size=2, dtype="float16",
-              max_model_len=4096, enforce_eager=True)  # fmt: skip
+    # Run in its own pytest process (B-033): another test's vLLM engine would still hold
+    # GPU memory. Any failure is recorded (type and message, no text) before it is raised.
+    try:
+        wg.verify_template()
+        _record("wildguard", {"card_check": "ok"})
+        llm = LLM(model=wg.CLASSIFIER, tensor_parallel_size=2, dtype="float16",
+                  max_model_len=4096, enforce_eager=True, gpu_memory_utilization=0.85)  # fmt: skip
+    except Exception as exc:
+        _record("wildguard", {"error": f"{type(exc).__name__}: {str(exc)[:300]}"})
+        raise
     sp = SamplingParams(temperature=0.0, max_tokens=SCORERS["wgm"]["max_tokens"])
 
     def classify(pairs):
@@ -163,7 +170,7 @@ def test_wildguard_on_fixed_generations():
         return [wg.parse(o.outputs[0].text) for o in outs]
 
     labels = classify(BENIGN_PAIRS)
-    report = {"benign_n": len(labels), "benign_unparsed": labels.count(None),
+    report = {"card_check": "ok", "benign_n": len(labels), "benign_unparsed": labels.count(None),
               "benign_harmful": labels.count(True)}  # fmt: skip
     env = env_mod.detect()
     done = sorted(

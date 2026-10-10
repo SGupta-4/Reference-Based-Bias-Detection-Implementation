@@ -582,3 +582,28 @@ IDs are sequential and never reused.
     - vLLM then served Qwen2.5-7B at TP 2 on the V0 engine with the XFormers backend, as in M0 (D-049).
 - GPU-hours lost: ≈ 0.09 (a 1-min and a 4-min session)
 - Linked commits and D-### entries: `89efd77`, `1993178`; D-031, D-049, D-087, D-088
+
+## B-033 Bug: a Tier 2 Llama-1B full-FT merge was OOM-killed; the WildGuard GPU test left no record
+- Status: Fix pushed; awaiting the session A re-run (`tier2_llama3.2-1b` resumes; GPU tests re-run).
+- How it was found or scoped: M5 session A, `a67c957`, session `20261010T092134Z`, 3.33 h.
+  - **OOM:** `generate-one` for `llama3.2-1b-it/full-s0/a090` exited `-9` (SIGKILL), with only the snapshot fetch in its log. `full-s0/a100` was merging or serving on the other GPU at the same time.
+    - Each full-FT merge loaded both endpoints fully in fp32 (`load_endpoint`, ≈ 5 GB each for 1.24B parameters), on top of the fp16 base, interpolation temporaries and vLLM's 4 GiB CPU swap per engine.
+    - Two such processes exceed the 31 GiB of RAM (D-048).
+    - Qwen-0.5B full FT (half the size) passed.
+  - **WildGuard test:** `m5_generate_gpu.json` has only `resume`. The two GPU tests ran in one pytest process, so the resume test's vLLM engine (0.5 of GPU 0) was still alive when WildGuard asked for 0.9 of both GPUs. The pytest summary line was cut off by `tail -15` (vLLM shutdown noise).
+- Reproduction command: `notebooks/m5_bench.ipynb` at `a67c957` with `tier2_llama3.2-1b` (the full-FT spectrum, two TP=1 processes in parallel).
+- Hypotheses tried:
+  - **OOM vs GPU memory:** a vLLM GPU OOM raises a Python error, not SIGKILL, and the log stops before the engine starts. So it is host RAM during `materialize`.
+  - **Store sync or disk:** ruled out. Every uploaded directory before the kill succeeded, and `/kaggle/working` had 7.8 GB free.
+- Fix:
+  - `models.interpolate.LazyEndpoint`: a read-only mapping that reads one tensor at a time from the endpoint's safetensors (`safe_open`). `generate.materialize` uses it for full FT, so peak RAM is the base model plus one fp32 tensor per endpoint, as D-008 Revisit-if foresaw. The embedding sweep keeps `load_endpoint` (unchanged path).
+  - `run_checkpoint` records `materialize_peak_rss_gib` and `peak_rss_gib` in the `generate-one` output.
+  - The WildGuard GPU test records the exception type and message before re-raising, and sets `gpu_memory_utilization=0.85`. The notebook runs each GPU test in its own pytest process and prints its result lines.
+- Side observation, no fix: restoring `train/qwen2.5-0.5b-it` for Tier 2 brought back an older smoke LoRA endpoint over this session's smoke endpoint (same train key, non-deterministic training). Smoke's `train` manifest then reads `stale`. Smoke is not a results run and re-trains in ≈ 75 s.
+- Verification:
+  - CPU:
+    - `tests/test_merge.py::test_lazy_endpoint_matches_eager_load`: lazy reads equal eager reads, and `apply_alpha` is bit-identical with either;
+    - `tests/test_generate.py::test_merged_full_checkpoint_equals_the_in_memory_alpha`: the streamed full-FT α written for vLLM equals the embedding sweep's in-memory α, bit for bit.
+  - Kaggle: pending.
+- GPU-hours lost: ≈ 0.25 (the killed process plus the a100 checkpoint that ran beside it; finished checkpoints were synced and are reused)
+- Linked commits and D-### entries: D-008, D-048, D-050, D-086, D-089
