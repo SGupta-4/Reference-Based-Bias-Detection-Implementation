@@ -355,6 +355,7 @@ Conventions:
   - pooling (T6);
   - layer site pre/post norm (D-017 check);
   - WGM topic-mean pairing (D-024 sensitivity).
+  - B-030 follow-up (D-085): target-only vs attribute-only RR decomposition, B(r_aud(T), r_ref(P/N)) vs B(r_ref(T), r_aud(P/N)); report the h-vs-u direction per model next to the benchmark deltas.
 - M6-T5 Seeds (App. E.5): ΔB std across seeds per dataset, Tier 2.
 - M6-T6 GPU (≤ 1.5 h): NF4-base extraction for Llama-3.1-8B ref + endpoints, to quantify the D-004 precision choice (|ΔB_fp16 − ΔB_nf4|).
 **Checks:** DC-01, DC-02, DC-08, DC-10, DC-15.

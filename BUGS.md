@@ -495,7 +495,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-007, D-066, D-081
 
 ## B-030 Signal: the harmful endpoint is not below the unharmful one in mean ΔB for 5 of 9 spectra (M4-T5)
-- Status: In progress (user: "investigate B-030 first", 2026-10-10). Hypothesis 1 is ruled out on CPU; the diagnostics for hypotheses 2–4 are built and await a CPU Kaggle run (`notebooks/b030_diagnose.ipynb`, D-084).
+- Status: Closed: no defect (D-085). The direction is a consistent, model-dependent property of our endpoints (Qwen as in App. E.5; Llama-1B, Llama-8B, Gemma reversed; Mistral ≈ 0), confirmed by RR and SEAT with CIs. It is carried to M5/M6 as a finding.
 - How it was found or scoped: M4 sessions A–C. `deltab/<run_key>/sanity.json`, primary cell, RR. Numbers are in D-083.
   - Expected direction, from App. E.5 (Llama: 0.291 u vs −0.051 h): Qwen full s0 and s2, and Qwen LoRA.
   - Opposite or ≈ equal: Qwen full s1, Llama-1B full and LoRA, Llama-8B, Mistral, Gemma.
@@ -519,7 +519,11 @@ IDs are sequential and never reused.
     - a group-free control (Alpaca pool) → group-specific ΔB;
     - P/N geometry and anisotropy;
     - ΔB per group.
-- Fix: pending the diagnostics' results.
-- Verification: CPU: `python -m pytest -q tests/test_diagnose.py` → `5 passed`.
+- Diagnostics run (Kaggle CPU, `7839bec`, session `20261010T051412Z`; full table in D-085):
+  - **Hypothesis 1:** rejected. RR and SEAT agree in sign with 95% CIs excluding 0 in 7 of 9 spectra; the α trend is monotone in 7 of 9.
+  - **Hypothesis 2:** drift is large (the Alpaca control moves as much as the targets), but subtracting it never flips the h-vs-u ordering.
+  - **Hypothesis 3** (sentence sets) and **hypothesis 4** (group heterogeneity): the contrast holds in 0–2 of 24 groups for the reversed models, so it is not a few outlier groups. Sentence-set effects remain for M6's variant cells.
+- Fix: none needed. M6 adds a target-only vs attribute-only RR decomposition and reports the direction next to the benchmark deltas (D-085).
+- Verification: CPU: `python -m pytest -q tests/test_diagnose.py` → `5 passed`; Kaggle diagnostics as above.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-071, D-077, D-079, D-081, D-083, D-084
+- Linked commits and D-### entries: `7839bec`; D-010, D-071, D-077, D-079, D-081, D-083, D-084, D-085

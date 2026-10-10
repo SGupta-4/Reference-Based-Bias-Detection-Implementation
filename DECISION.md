@@ -1556,3 +1556,48 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: one CPU Kaggle session (≈ 10 GB restored, minutes of compute); no GPU.
 - Paper deviation: no (diagnostic only).
 - Revisit-if: the diagnostics point to a defect (then a D entry for the fix and a `schema_version.metrics` bump).
+
+## D-085 B-030 outcome: no defect. The h-vs-u direction is a consistent, model-dependent property of our endpoints; the open question goes to M5/M6
+- Date: 2026-10-10
+- Context: The diagnostics of D-084 ran on Kaggle (CPU) at `7839bec`, session `20261010T051412Z` (0.33 h), over all 9 spectra. Reports are in the store at `results/<run>/b030_diagnostics.json`.
+- Observed (primary cell; contrast = b(a000) − b(a100), 95% template-bootstrap CI, groups with h below u out of 24):
+
+  | Spectrum | RR contrast [CI] | SEAT contrast [CI] | groups h<u (RR) | α trend ρ (RR) | control ΔB_rr u / h | group-specific u / h |
+  |---|---|---|---|---|---|---|
+  | Qwen full s0 | −0.033 [−0.035, −0.029] | −0.0017 [−0.0021, −0.0013] | 24 | +0.96 | −0.085 / −0.037 | +0.161 / +0.079 |
+  | Qwen full s1 | +0.002 [−0.000, +0.003] | −0.0008 [−0.0012, −0.0003] | 10 | 0.00 | −0.058 / −0.028 | +0.095 / +0.067 |
+  | Qwen full s2 | −0.036 [−0.038, −0.033] | −0.0018 [−0.0021, −0.0014] | 24 | +1.00 | −0.090 / −0.036 | +0.172 / +0.082 |
+  | Qwen LoRA | −0.035 [−0.037, −0.034] | −0.0015 [−0.0017, −0.0014] | 24 | +1.00 | −0.019 / +0.019 | +0.043 / −0.030 |
+  | Llama-1B full | +0.097 [+0.091, +0.104] | +0.0025 [+0.0021, +0.0029] | 0 | −1.00 | −0.193 / −0.206 | +0.254 / +0.365 |
+  | Llama-1B LoRA | +0.050 [+0.046, +0.053] | +0.0024 [+0.0023, +0.0025] | 0 | −1.00 | −0.005 / −0.042 | +0.010 / +0.097 |
+  | Llama-8B QLoRA | +0.024 [+0.022, +0.026] | +0.0014 [+0.0011, +0.0016] | 2 | −1.00 | −0.040 / −0.064 | +0.083 / +0.132 |
+  | Mistral-7B QLoRA | +0.004 [+0.002, +0.005] | +0.0000 [−0.0001, +0.0001] | 13 | −1.00 | −0.011 / −0.018 | +0.033 / +0.043 |
+  | Gemma-3-4B QLoRA | +0.016 [+0.015, +0.017] | +0.0005 [+0.0005, +0.0006] | 0 | −1.00 | +0.046 / +0.042 | −0.123 / −0.104 |
+
+  - **Method agreement:** RR and SEAT agree on the sign of the contrast in 7 of 9 spectra; the other two (Qwen s1, Mistral) are ≈ 0 under both. Procrustes-SEAT is ≈ 0 (|·| ≤ 0.0008) everywhere: alignment removes nearly all movement.
+  - **α trend:** monotone (|ρ| = 1) in 7 of 9 spectra. The merge spectrum is smooth, and the direction is stable along it.
+  - **Generic drift is large:** the group-free control moves by as much as the targets, usually with the opposite sign. Removing it (group-specific ΔB) does not change the h-vs-u ordering in any spectrum.
+  - **Geometry:**
+    - P and N centroids have cosine 0.977–0.992 in every model, so the valence direction is a small residual of a large common component.
+    - S⁺ and S⁻ move together, by ≈ 5–20× their difference.
+    - Full FT reshapes the space most (Llama-1B mean pairwise cosine 0.73 → 0.53).
+- Conclusion:
+  - **Hypothesis 1 (code):** rejected, by the synthetic tests (D-084) and now by two independent scorers agreeing with tight CIs.
+  - **Hypothesis 2 (drift masking):** real, in that drift is large, but it does not explain the reversal; the group-specific contrast keeps the same sign.
+  - **What remains:**
+    - In Llama-family and Gemma endpoints, harmful-data training moves group targets relatively *toward* the positive attribute sentences compared with unharmful training. In Qwen it moves them away, as App. E.5 reports.
+    - Our harmful split is WildGuardMix harmful compliance only, without the paper's synthetic half (D-010). Tier 1 trains 1 epoch, not 3.
+  - Whether a lower ΔB means "more biased output" for our endpoints is exactly what the benchmarks (M5) and the ΔB-vs-benchmark statistics (M6) test. M4-T5's expectation encodes the paper's endpoint behaviour, not a property our endpoints must have.
+- Choice:
+  - Close the B-030 investigation as **not a defect**, reclassified as a recorded finding.
+  - Proceed to M5 unchanged.
+  - Add to M6:
+    - a target-only vs attribute-only RR decomposition. RR coordinates are comparable across models, so B(r_aud(T), r_ref(P/N)) and B(r_ref(T), r_aud(P/N)) separate target movement from attribute movement;
+    - per-model reporting of the h-vs-u direction next to the benchmark deltas.
+- Why: Every check that could reveal an implementation error agrees with the current numbers; the remaining question is empirical and is what M5/M6 answer.
+- Tradeoff accepted: M4-T5's sanity expectation fails for 5 of 9 spectra; reported as such, not tuned away.
+- Cost impact: 0.33 CPU session-h.
+- Paper deviation: none new. D-010 (no synthetic harmful half) is the most likely source of the difference from App. E.5, together with 1 epoch (D-071, D-077, D-079).
+- Revisit-if:
+  - M5 shows the harmful endpoints are clearly more biased on DT/ToxiGen while ΔB says otherwise (then RR's validity for these models is the finding);
+  - the authors release their harmful split (M8).
