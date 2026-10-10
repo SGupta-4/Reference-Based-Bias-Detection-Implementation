@@ -78,9 +78,10 @@ Training sits upstream of the spectrum:
 | `rbbd.metrics.cka` | Linear CKA and drift. |
 | `rbbd.metrics.delta_b` | ΔB per (checkpoint, group, method, ablation cell) (Eq. 7). |
 | `rbbd.finetune.sft` | TRL SFT for LoRA, QLoRA and full FT, resumable. |
-| `rbbd.bench.generate` | vLLM sampling on merged α-checkpoints from ephemeral disk, with resumable shards (D-050). |
-| `rbbd.bench.wildguard` | WGM subcategory prompts; WildGuard scoring; per-topic rates. |
-| `rbbd.bench.topic_map` | One-off, frozen WGM prompt → topic mapping (D-024). |
+| `rbbd.bench.generate` | `generate` stage: prompt sets once per run, one `generate-one` process per checkpoint (merge to ephemeral disk, one vLLM engine for all benchmarks), paired per-item seeds, resumable shards (D-050, D-086). |
+| `rbbd.bench.score` | `score` stage: per-sample labels, per-unit scores, Δ vs ref with paired-bootstrap CIs (D-026, D-086). |
+| `rbbd.bench.wildguard` | WGM subcategory prompts; WildGuard input format, card check, parse; per-topic rates. |
+| `rbbd.bench.topic_map` | One-off, frozen WGM prompt → topic mapping and its blind human check (D-043). |
 | `rbbd.bench.decodingtrust` | DT stereotype prompts and agreement scoring (D-022). |
 | `rbbd.bench.toxigen` | ToxiGen prompts, first-statement extraction, RoBERTa scoring (D-025). |
 | `rbbd.analysis.diagnose` | B-030 diagnostics from cached embeddings: method agreement, α trend, h − u contrast CI, S⁺/S⁻ decomposition, group-free control, geometry. |
@@ -106,15 +107,19 @@ artifacts/
 ├── embeddings/<model_slug>/base/ref/<embed_key>.{safetensors,json}
 ├── embeddings/<model_slug>/<regime>-s<seed>/<ckpt_slug>/<embed_key>.{safetensors,json}
 ├── deltab/<run_key>/{delta_b.csv.gz, sanity.json, timing.json}
-├── generations/<bench>/<model_slug>/<regime>/<ckpt_slug>/<gen_key>/{part-XXXX.jsonl, done.json}
-├── scores/<bench>/<model_slug>/<regime>/<ckpt_slug>/<score_key>.csv
+├── generate/<run_key>/{index.json, tags.json, timing.json, logs/}   # no text
+├── generations/<bench>/<model_slug>/<base|regime-s<seed>>/<ckpt_slug>/<gen_key>/{part-XXXX.jsonl, done.json, timing.jsonl}   # private
+├── scores/<bench>/<model_slug>/<base|regime-s<seed>>/<ckpt_slug>/<score_key>.jsonl   # per-sample labels, no text; private
+├── score/<run_key>/{bench_scores.csv, skipped.json, wgm_jobs.json}
+├── topic_map/{topic_map.csv, labelling_sheet.csv (prompt text), map_summary.json, human_labels.csv, agreement.json}   # private
 └── analysis/<run_key>/{joined.csv, stats.csv, tables/, figures/}
 ```
 
 - Same private repo, same paths as local: `train/<model_slug>/full/<split>/seed<k>/<train_key>/final/` holds Tier 2 full-FT endpoints (fp16 safetensors + config/tokenizer); uploaded per finished u‖h pair and restored with `cli restore` (D-072, replacing D-041's `ckpt_private/…`).
 - Ephemeral: full-FT trainer checkpoints `<ephemeral>/rbbd_ckpt/<slug>/<train_key>/` (D-072).
 - Repo `results/<run_name>/`: public-safe aggregates only (DC-18): `delta_b.csv` (primary cell), `delta_b_cells.csv.gz` (all cells), `sanity.json`. Mirrored to `artifacts/results/<run_name>/` for the store.
-- Ephemeral (`utils.env.ephemeral_dir()`, D-045): HF cache and materialised Tier 2 α-weights.
+- Ephemeral (`utils.env.ephemeral_dir()`, D-045): HF cache, materialised α-weights for generation (`rbbd_merged/`, deleted after each checkpoint, D-050) and benchmark prompt sets (`rbbd_items/<run_key>/`, D-086).
+- Repo `src/rbbd/resources/topic_map.csv`: the frozen WGM map (prompt sha256, topic), pinned by `bench.wgm.topic_map_sha256` (D-086). `results/<run>/bench_scores.csv`: benchmark aggregates.
 
 Slugs:
 - `model_slug` = e.g. `llama3.1-8b-it`.
@@ -131,8 +136,8 @@ Slugs:
 | `data_key` | Dataset id + revision, filters, sample size, seed |
 | `train_key` | model id + revision, regime, hyperparameters, data_key, seed, precision/quant, schema_version |
 | `embed_key` | model {id, revision, precision, placement, quant}, layer, extract settings {poolings, layer sites, max_length, token budget, tokenizer policy}, sentence-union hash, schema_version, and `checkpoint` = {slug: ref} or {slug, α, regime, seed, merge, endpoints {train_key, sha256 of final/}}; ref and audited keys differ only in `checkpoint` (asserted, D-004, D-081) |
-| `gen_key` | model id + revision, checkpoint spec, bench, prompt-subset hash, sampling params {n, T, top_p, max_new_tokens, seed}, engine + version, dtype, schema_version |
-| `score_key` | gen_key, scorer id + revision, scorer params, schema_version |
+| `gen_key` | model {id, revision, precision, placement}, checkpoint fields (as `embed_key`), bench, item-subset hash, bench source pin (repo commit or dataset sha), sampling {n, T, top_p, max_new_tokens}, engine {vllm version, dtype, tp, max_model_len, enforce_eager, seed}, `schema_version.gen`; per-item seeds derive from the config seed and the item id (D-086) |
+| `score_key` | gen_key, scorer {id + commit, threshold or decoding}, `schema_version.score` |
 | `run_key` | config_hash + upstream keys |
 
 Invalidation never deletes data. Bump the relevant `schema_version` in config, or change an input, and new keys appear. Old entries are pruned only by an explicit, logged cleanup (ROLLBACK.md).
@@ -148,3 +153,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 - 2026-10-08 — Training can pause at a session deadline (`$RBBD_TRAIN_DEADLINE_UNIX`, `train-one` exit 76): the paused job and its checkpoint sync to the store and the next session resumes it — D-079.
 - 2026-10-09 — M4: anchor pools join the sentence union; `embed` sweeps ref + 7 α per spectrum on one base (`models.spectrum.Activator`) and writes `index.json`; `deltab` stage writes the long ΔB table and `results/<run>/`; `--only-ckpt` leaves sweep stages incomplete — D-081, D-082.
 - 2026-10-10 — `analysis.diagnose` + CLI `diagnose-deltab` (B-030, CPU, read-only over caches) — D-084.
+- 2026-10-10 — M5: `generate` (one `generate-one` process per checkpoint) and `score` (`score-wildguard` process for WGM) stages; CLI `topic-map`, `topic-agreement`; `generate/`, `score/`, `topic_map/` artifact dirs; frozen topic map pinned in the config — D-086.

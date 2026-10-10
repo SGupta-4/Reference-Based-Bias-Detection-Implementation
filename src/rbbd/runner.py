@@ -117,6 +117,8 @@ STAGE_IMPLS: dict[str, str] = {
     "train": "rbbd.finetune.sft:stage",
     "embed": "rbbd.embed.extract:stage",
     "deltab": "rbbd.metrics.delta_b:stage",
+    "generate": "rbbd.bench.generate:stage",
+    "score": "rbbd.bench.score:stage",
 }
 
 # Stages that sweep checkpoints. Under `--only-ckpt` they cover one checkpoint, so their

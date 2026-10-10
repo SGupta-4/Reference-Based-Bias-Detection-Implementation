@@ -83,13 +83,13 @@ def test_missing_upstream_raises(cfg, artifacts):
 
 def test_stub_names_its_milestone(cfg, artifacts):
     """Unimplemented stages fail loudly with their milestone and leave an incomplete manifest."""
-    fns = {"ftdata": _writer([]), "train": _writer([]),
-           "generate": runner.DEFAULT_STAGE_FNS["generate"]}  # fmt: skip
-    with pytest.raises(NotImplementedError, match="implemented in M5"):
-        runner.run(cfg, env_mod.detect(), ["ftdata", "train", "generate"], stage_fns=fns)
+    done = [s for s in runner.STAGES if s not in ("analyze", "report")]
+    fns = {s: _writer([]) for s in done} | {"analyze": runner.DEFAULT_STAGE_FNS["analyze"]}
+    with pytest.raises(NotImplementedError, match="implemented in M6"):
+        runner.run(cfg, env_mod.detect(), [*done, "analyze"], stage_fns=fns)
     rows = {r["stage"]: r["status"] for r in runner.stage_status(cfg, env_mod.detect())}
-    assert rows["train"] == "valid" and rows["generate"] == "incomplete"
-    assert rows["embed"] == "missing"
+    assert rows["score"] == "valid" and rows["analyze"] == "incomplete"
+    assert rows["report"] == "missing"
 
 
 def test_sentences_stage_runs_and_caches(cfg, artifacts, caplog):

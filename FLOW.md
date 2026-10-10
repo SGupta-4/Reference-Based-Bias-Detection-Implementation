@@ -158,17 +158,36 @@ Entry: `run --stages embed,deltab` → `runner.STAGE_IMPLS["deltab"]` → `metri
 `python -m rbbd.cli diagnose-deltab --config C` → `analysis.diagnose.diagnose_config(cfg, root)`:
 reads the config's `embed/<run_key>/index.json` + `sentences/<run_key>/union.json` (manifests by run key) → per spectrum `diagnose_spectrum(ref tensors, entries, union)` on the "mean" tensor: per-target rows (`metrics.rr.row_bias_rel`, `metrics.seat.row_bias_seat`, Procrustes via `fit_orthogonal`) → method means, α trend, h − u contrast with `template_bootstrap`, S⁺/S⁻ decomposition, Alpaca-pool control, geometry, ΔB per group → `results/<run>/b030_diagnostics.json`. Kaggle: `notebooks/b030_diagnose.ipynb` (restore → diagnose → sync `results/<run>`).
 
-## Stage: generate
-1. `bench.<b>.build_prompts(cfg)` → prompt list + subset hash (WGM subcategory; DT 1,152 × 3 sys; ToxiGen 9 × 100)
-2. `bench.generate.engine(model_cfg, lora=True)` → vLLM LLM (TP 1|2), or the HF fallback
-3. For each ckpt (LoRA request per α, or the materialised Tier 2 weights): `bench.generate.run(engine, prompts, sampling, shard_size)` → JSONL shards [writes `generations/.../<gen_key>/part-XXXX.jsonl`, `done.json`]
-Resume behaviour: skip shards listed in `done.json`.
+## Stage: generate (implemented, M5 — D-050, D-086)
+Entry: `run --stages train,generate` → `runner.STAGE_IMPLS["generate"]` → `bench.generate.stage(ctx)` (depends on `train`)
+1. Once per run key: `bench.generate.prepare_items(cfg, <ephemeral>/rbbd_items/<run_key>/, benches)` → `items_<bench>.json` (prompt text, ephemeral only) + `metas.json` {bench: {source pin, item-subset hash, n_items, tags}, revisions}
+   - DT: `decodingtrust.fetch("data"|"system")` (pinned commit, sha256 check) → `build_prompts` → `subset(groups, topics)`
+   - ToxiGen: `toxigen.fetch(group)` ×9 → `build_prompts(files, n, seed)`
+   - WGM: `wildguard.load_prompts(revision)` (gated; ids = prompt sha256) → `[:max_prompts]`
+2. `load_context` → `models.spectrum.spectra(...)` (as embed) → `plan_jobs(cfg, root, metas, spectra, revisions)` → one `GenJob` per (model, `base`|`<regime>-s<seed>` for `bench.seeds`, ckpt, bench); `gen_key` from `gen_key_fields`; out dir `generations/<bench>/<slug>/<spectrum>/<ckpt>/<gen_key>/`
+3. Per checkpoint with unfinished jobs (`_checkpoint_groups`): `_launch` → `python -m rbbd.cli generate-one --model --spectrum --ckpt --items-dir` with `CUDA_VISIBLE_DEVICES` = "0" / "1" (TP 1, two in parallel) or "0,1" (TP 2); `bench.parallel: false` runs `run_checkpoint` in-process (tests)
+   - `cli._cmd_generate_one` → `load_context` → `run_checkpoint(cfg, root, jobs, items_dir, spectrum)`:
+     1. `materialize(load_spec, spectrum, ckpt, <ephemeral>/rbbd_merged/<slug>-<spectrum>-<ckpt>, root)`: ref → downloaded snapshot; LoRA → CPU base + `adapters.delta_w(adapter_for_alpha(u, h, α))` in fp32 → `save_pretrained`; full → `interpolate.materialize` [writes ephemeral only; asserted]
+     2. `make_engine(path, engine_settings(cfg, entry))` → `vllm_generate_fn(llm)`
+     3. per bench: `generate_bench(fn, tok, items, sampling_for(cfg, bench), out_dir, shard_size, base_seed, max_prompt_tokens, key_fields)` → `render` (chat template / merged-system) → per-item seed `item_seed` → `part-XXXX.jsonl` (tmp + rename) → `done.json` [writes `generations/.../<gen_key>/`]; `_append_timing` → `timing.jsonl`
+     4. `finally`: delete the merged copy
+   - exit 76 = paused at `$RBBD_DEADLINE_UNIX` (`GenerationPaused`); `bench.sync_each` → `_sync` uploads that checkpoint's generation dirs to the private store
+4. Writes `generate/<run_key>/{index.json (one row per job: model, spectrum, regime, seed, ckpt, α, bench, gen_key, dir), tags.json (per bench: source, subset hash, item tags; no text), timing.json (DC-14, `read_timing`; a log)}`
+Resume: finished checkpoints (`done.json` for every bench) are not launched; finished shards are skipped.
 
-## Stage: score
-1. `bench.wildguard.classify(gen_dir)` (vLLM WildGuard, batched per model) → per-response harmful flag → `bench.wildguard.rate_by_topic(topic_map)`
-2. `bench.decodingtrust.score(gen_dir)` → agreementIndex per group × sys prompt → BiasScore(group)
-3. `bench.toxigen.score(gen_dir)` → first statement → RoBERTa → toxic fraction per group
-[writes `scores/<bench>/.../<score_key>.csv`]
+## Stage: score (implemented, M5 — D-086)
+Entry: `run --stages generate,score` → `runner.STAGE_IMPLS["score"]` → `bench.score.stage(ctx)`
+1. Reads `generate/<run_key>/{index.json, tags.json}`; `topic_map.read_map()` only if `bench.wgm.topic_map_sha256` is set and equals `topic_map.map_sha256()`
+2. Labels per job → `scores/<bench>/<slug>/<spectrum>/<ckpt>/<score_key>.jsonl` (no text; skipped if present):
+   - DT: `label_dt` → `decodingtrust.classify` (CPU)
+   - ToxiGen: `label_toxigen` → `toxigen.first_statement` → `toxigen.classify` (RoBERTa, cuda:0)
+   - WGM: `python -m rbbd.cli score-wildguard --jobs score/<run_key>/wgm_jobs.json --revision <wgm sha>` → `classify_wgm` → `wildguard.verify_template()` → vLLM WildGuard (TP 2, greedy) → `wildguard.parse`; skipped with a reason in `skipped.json` if `bench.wildguard.classify` is false or no map is pinned
+3. Per (bench, model, spectrum): `item_values` → `units_of` (DT/ToxiGen groups; WGM topics) → `aggregate` (score, Δ vs ref, `paired_bootstrap` CI; WGM `group_from_topic` rows)
+[writes `score/<run_key>/{bench_scores.csv, skipped.json}` and `results/<run>/bench_scores.csv`]
+
+## Topic map (one-off, M5 — D-043, D-086)
+`python -m rbbd.cli topic-map [--revision R] [--n-sheet 100]` → `wildguard.load_prompts` → `topic_map.run_mapper` (Qwen2.5-7B, vLLM TP 2, greedy; `mapper_messages` → `parse_topic`) → `write_map` [writes `src/rbbd/resources/topic_map.csv` in the checkout + `artifacts/topic_map/{topic_map.csv, labelling_sheet.csv (private, blind), map_summary.json}`].
+`python -m rbbd.cli topic-agreement --labels <filled sheet> [--map artifacts/topic_map/topic_map.csv]` → `read_labels` → `agreement` (accept ≥ 0.80) [writes `artifacts/topic_map/{human_labels.csv, agreement.json}`]; exit 2 if not accepted. Accepted → commit the map, pin `bench.wgm.topic_map_sha256`.
 
 ## Stage: analyze
 1. `analysis.stats.join(delta_b.csv, scores)` → observations (ckpt ≠ ref) with Δscore = score_aud − score_ref

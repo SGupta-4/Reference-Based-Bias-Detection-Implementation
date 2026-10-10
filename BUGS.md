@@ -527,3 +527,36 @@ IDs are sequential and never reused.
 - Verification: CPU: `python -m pytest -q tests/test_diagnose.py` → `5 passed`; Kaggle diagnostics as above.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: `7839bec`; D-010, D-071, D-077, D-079, D-081, D-083, D-084, D-085
+
+## B-031 Feature: M5 output benchmarks (DT, ToxiGen, WGM generation and scoring)
+- Status: Code ready; CPU checks pass. Awaiting Kaggle: the topic-map session, session A (smoke DC-11, GPU tests for DC-13 and D-038, Tier 2), and sessions B–D (Tier 1).
+- How it was found or scoped: PLAN §7 M5. The user said "prepare M5" (2026-10-10) and chose: clone DT/ToxiGen here to pin them; ~100 hand labels (D-043); DT T = 1.0; reproduce DT's prompt exactly (D-086).
+- Reproduction command:
+  - CPU: `python -m pytest -q -m "not gpu"`.
+  - Kaggle: `notebooks/m5_topic_map.ipynb` (`STEP = "map"`, then `"agreement"`) and `notebooks/m5_bench.ipynb` with `CONFIGS` per session.
+- Hypotheses tried (design risks found while preparing):
+  - **ToxiGen ids:** 888 of 900 sampled lines were unique, because the files repeat lines, so ids collided. The id now includes the line number.
+  - **DT `None` label:** DT's `classify_response` has a `None` branch that cannot be reached. The planned test for it was replaced by overlap cases ("as an ai" with agree or disagree), which match the original.
+  - **DT prompt construction:** the record text already holds the instruction and DT prepends it again. Reproduced on the user's choice; 3,456 prompts verified identical to DT's MessageConstructor.
+  - **WildGuard template:** written offline. The literal `<s>` was dropped (BOS is added by the tokenizer), and a runtime card check now guards it.
+  - **Stub test:** the generic stub test still named `generate` and made a network call once `generate` existed. It now uses the M6 stub `analyze`.
+  - **Topic map and the cache:** the frozen map was not in any cache key, so committing it would not have re-run `score`. Its hash is now pinned in the config (`bench.wgm.topic_map_sha256`).
+  - **Seeds:** the Tier 2 seeds ablation would have tripled Qwen full-FT generation. Benchmarks now run on seed 0 only (PLAN M5-T8).
+  - **DC-14:** timing was only printed by `generate-one`. Every process now appends to `<gen dir>/timing.jsonl`, and the stage sums it into `generate/<run_key>/timing.json`.
+- Fix:
+  - Code:
+    - `bench.{decodingtrust, toxigen, wildguard, topic_map, generate, score}`;
+    - CLI `generate-one`, `score-wildguard`, `topic-map`, `topic-agreement`;
+    - `runner.STAGE_IMPLS` gains `generate` and `score`.
+  - Configs: the `bench:` block in `base.yaml` and the smoke subset.
+  - Notebooks: `notebooks/m5_topic_map.ipynb` and `notebooks/m5_bench.ipynb`.
+  - Tests:
+    - `tests/test_bench_scoring.py`, `tests/test_generate.py`, and the DT reference fixture `tests/fixtures/dt_agreement_reference.py`;
+    - `tests/test_leakage.py::test_no_generated_or_prompt_text_tracked` (DC-18);
+    - `tests/gpu/test_generate_gpu.py::{test_resume_generation_shards, test_wildguard_on_fixed_generations}`.
+- Verification (CPU, this container):
+  - `ruff check src tests` → `All checks passed!`;
+  - `python -m pytest -q -m "not gpu"` → `178 passed, 13 deselected in 23.72s`;
+  - `grep -rn "PLACEHOLDER(M5)" tests` → no output.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-022, D-023, D-025, D-026, D-033, D-037, D-038, D-043, D-050, D-086

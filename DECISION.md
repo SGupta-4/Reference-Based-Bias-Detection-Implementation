@@ -1601,3 +1601,81 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Revisit-if:
   - M5 shows the harmful endpoints are clearly more biased on DT/ToxiGen while ΔB says otherwise (then RR's validity for these models is the finding);
   - the authors release their harmful split (M8).
+
+## D-086 M5 design: pinned benchmark sources, DT reproduced exactly at T = 1.0, one process per checkpoint, paired sampling, scores with paired-bootstrap CIs (implements PLAN M5; amends D-022, D-023, D-025, D-026, D-043)
+- Date: 2026-10-10
+- Context: PLAN M5-T1–T9. The user chose (2026-10-10):
+  - clone DT and ToxiGen here to pin them;
+  - keep D-043, so the user labels ~100 prompts;
+  - DT at T = 1.0, as DT's own pipeline;
+  - reproduce DT's prompt construction exactly.
+  The pinned files were read in this container as untrusted data, never executed.
+- Options considered:
+  - DT temperature: 0.7, as D-022, or 1.0, as DT's pipeline.
+  - DT prompt: drop the duplicated instruction, or reproduce DT's MessageConstructor.
+  - Generation process: one engine per benchmark, or one engine per checkpoint for all benchmarks.
+  - Topic-map cache invalidation: hash the map file implicitly, or pin its hash in the config.
+- Choice:
+  - **Sources, pinned and hash-checked at fetch time.** Fetched at run time into ephemeral disk only, never stored or synced (D-037).
+    - DT `AI-secure/DecodingTrust@161ae8321ced62f45fcd9ceb412e05b47c603cd4`: `stereotype_bias_data.jsonl` (sha256 `ac626f79…69a81`) and `system_prompts.csv` (`2a81124f…9cad71`).
+    - ToxiGen `microsoft/TOXIGEN@01517e814639e0334c920a3c502036c8158aac87`: nine `prompts/hate_<group>_1k.txt` files with per-file sha256 in `bench/toxigen.py`. The physical-disability file is `physical_disability`, not `physical_dis` as D-025 guessed.
+    - WildGuardMix `wildguardtest` at the revision resolved on first use; the sha enters the gen_key.
+  - **DT, amends D-022:**
+    - T = 1.0, top-p 1.0, n = 3, max 150 new tokens.
+    - The user turn is DT's task instruction + "\n" + the record text. The record text already starts with the instruction, so it appears twice, as in DT's MessageConstructor. Verified: 3,456 prompts identical to DT's construction.
+    - In the targeted system prompt, `[target_group]` is filled with the group name, lower-cased unless the group is in DT's capitalised list.
+    - Parser: a faithful port of DT's `classify_response`, with the same phrase lists, including its unreachable `None` branch. Parity with the original on 200 canned responses is a CPU test.
+    - BiasScore(group) = mean over items of the item's AGREE share, which equals DT's mean over system prompts of topic means because every (system prompt, topic) has exactly 3 variants.
+  - **ToxiGen, amends D-025:**
+    - The files store each prompt on one line with literal `\n` separators; they are converted to newlines so the model sees a list.
+    - 100 seeded prompts per group. The item id includes the line number, because some files repeat lines (888 of 900 unique otherwise).
+    - First statement → `tomh/toxigen_roberta`; toxic iff P(label 1) > 0.5.
+  - **WGM, amends D-023:**
+    - Prompts are de-duplicated by SHA-256, the topic-map key.
+    - WildGuard runs in its own vLLM process (TP 2, fp16, greedy, 32 tokens). It uses the model card's format without the literal leading `<s>`, since the tokenizer adds BOS.
+    - `wildguard.verify_template()` downloads the card and refuses to classify unless the instruction text and answer headers match.
+    - Inputs that exceed the context count as unparsed; they are never truncated.
+  - **Topic map, amends D-043:**
+    - `cli topic-map` writes the map and a blind labelling sheet: prompt text, no predicted topic, private.
+    - `cli topic-agreement` writes `agreement.json` and the hand labels (hashes + labels) to the private store.
+    - Once accepted, the map is committed as `resources/topic_map.csv` (hashes + topics only) and its file hash is pinned as `bench.wgm.topic_map_sha256`. The config hash, and so the `score` run key, changes with the map. Until then `score` skips WGM and says so in `skipped.json`. A pinned hash that does not match the file fails the stage.
+  - **Generation (D-050):**
+    - One `generate-one` process per checkpoint: merge to ephemeral disk, one vLLM engine for all benchmarks, merged copy deleted in `finally`.
+    - LoRA merge: W ← cast(fp32 W + ΔW(α)) per target module, from the exact rank-2r adapter. A CPU test shows it equals the PEFT path used for embeddings.
+    - TP 2 for `placement: balanced` (7–8B, Gemma fp32); TP 1 otherwise, two checkpoints in parallel, one per GPU.
+    - Chat template; a template that rejects a system turn gets it merged into the first user turn, counted in `render_modes`.
+    - Per-item seed = sha256(seed:item_id), the same at every checkpoint, so Δ vs ref is paired.
+    - Prompts longer than max_model_len − max_new_tokens are skipped and listed, never truncated.
+    - Shards of 256 items are written atomically; existing shards are skipped (DC-13).
+    - A session deadline (`$RBBD_DEADLINE_UNIX`) stops between shards with exit 76.
+    - Benchmarks run on training seed 0 only (`bench.seeds: [0]`, PLAN M5-T8). The seeds ablation (D-033) is a ΔB ablation.
+    - Smoke generates for `ref, a100, a050, a000` only, to keep DC-11 under 15 min.
+  - **Keys:**
+    - gen_key = model {id, revision, precision, placement}, checkpoint fields (as embed_key's), bench, item-subset hash, source pin, sampling, engine {vllm version, dtype, tp, max_model_len, enforce_eager, seed}, `schema_version.gen`.
+    - score_key = gen_key + scorer {id, commit/threshold/decoding} + `schema_version.score`.
+  - **Aggregates:**
+    - `bench_scores.csv` has one row per (model, regime, seed, checkpoint, bench, unit), with score, items, samples, Δ vs ref and a 95% paired-bootstrap CI (1,000 resamples over the unit's items, seed 0, D-026).
+    - WGM writes topic rows plus `group_from_topic` rows.
+    - Timing per (checkpoint, bench), summed over sessions, goes to `generate/<run_key>/timing.json`. It is a log, not a hashed output (DC-14).
+- Why:
+  - DT's own pipeline samples at T = 1.0 and builds the doubled instruction, and the paper says it used that pipeline (App. C).
+  - Pinning plus hash checks makes the prompt sets reproducible without storing harmful text.
+  - One engine per checkpoint pays model load and merge once for all three benchmarks.
+  - Paired seeds and paired bootstrap make Δ vs ref measure the checkpoint, not sampling noise.
+  - Pinning the map hash keeps cache invalidation explicit, through the config.
+- Tradeoff accepted:
+  - T = 1.0 gives noisier DT samples than 0.7. Bootstrap CIs show it.
+  - Generic chat models answer the doubled instruction as DT's GPT runs did, not as an edited prompt would.
+  - WGM topic scores repeat across the groups in a topic (D-024).
+  - Smoke covers 4 of 8 checkpoints for benchmarks.
+- Cost impact (PLAN §8, re-baselined after M5-T7):
+  - per 8B checkpoint ≈ 35 min: DT 10,368 samples, ToxiGen 4,500, WGM ≈ 5 × |subset|, plus merge and engine start ≈ 2–4 min;
+  - Tier 2 ≈ 2.5 session-h per model;
+  - WildGuard ≈ 1 min per 8B checkpoint plus ≈ 5 min load per config;
+  - merged copies need ≤ 16 GB of ephemeral disk and nothing persistent.
+- Paper deviation: yes. DT n = 3 instead of 25 (D-022); ToxiGen subsample (D-025); local topic mapper (D-043); WildGuard input without the literal `<s>`. All App. C / App. B reconstructions.
+- Revisit-if:
+  - a DT/ToxiGen file hash or the WildGuard card check fails at run time;
+  - `render_modes` shows merged-system for a Tier 1 model, which changes the DT system-prompt condition (report it per model);
+  - DC-11 smoke exceeds 15 min;
+  - topic-map agreement < 80% (D-043).

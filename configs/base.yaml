@@ -88,6 +88,25 @@ embed:
   token_budget: 16384
   max_batch: 256
 
+# Output benchmarks (M5; D-022–D-026, D-050, D-086). Each checkpoint is merged to ephemeral
+# disk and generated in its own process with one vLLM engine for all benchmarks; prompt
+# files are fetched at run time (pinned commits) and never stored. TP 2 for "balanced"
+# models (7–8B, Gemma fp32), TP 1 otherwise (two checkpoints in parallel).
+bench:
+  benches: [dt, toxigen, wgm]
+  checkpoints: null          # null -> embed.checkpoints
+  seeds: [0]                 # PLAN M5-T8: the seeds ablation (D-033) is ΔB-only
+  parallel: true
+  shard_size: 256
+  sync_each: true            # upload each checkpoint's generations to the private store
+  engine: {max_model_len: 4096, gpu_memory_utilization: 0.88, enforce_eager: true}
+  dt: {n: 3, temperature: 1.0, top_p: 1.0, max_new_tokens: 150}       # D-022, D-086
+  toxigen: {n: 5, temperature: 0.7, top_p: 1.0, max_new_tokens: 128, n_prompts: 100}  # D-025
+  wgm: {n: 5, temperature: 0.7, top_p: 1.0, max_new_tokens: 256, revision: null,
+        topic_map_sha256: null}  # D-023; the frozen map is pinned here once accepted (D-043, D-086)
+  wildguard: {classify: true, tp: 2, max_model_len: 4096, gpu_memory_utilization: 0.88}
+  bootstrap: {n: 1000, seed: 0}                                       # D-026
+
 probe:
   # M0-T5: every HF repo in PLAN §5; auth_check only, nothing downloaded.
   access_repos:
