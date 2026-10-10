@@ -1679,3 +1679,25 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
   - `render_modes` shows merged-system for a Tier 1 model, which changes the DT system-prompt condition (report it per model);
   - DC-11 smoke exceeds 15 min;
   - topic-map agreement < 80% (D-043).
+
+## D-087 M5 notebooks run the pinned stack in a Python 3.12 venv made by uv (amends D-031; follows B-032)
+- Date: 2026-10-10
+- Context: The Kaggle image now runs Python 3.13 (3.12 in M0, D-049). `vllm==0.10.1.1` publishes no 3.13 wheels, so `pip install -e ".[train,bench,dev]"` resolved nothing (topic-map session `20261010T081026Z`, B-032). D-031 foresaw a separate environment for `bench` if vLLM conflicted.
+- Options considered:
+  - A: a Python 3.12 venv made with `uv`, keeping every pin;
+  - B: bump vLLM to a 3.13-capable release. That needs torch 2.8, which conflicts with the training/embedding stack (D-004). Releases ≥ 0.11 also drop the V0 engine that T4 relied on (D-048).
+  - C: pin the notebook to an older Kaggle image. Not verifiable from here.
+- Choice: A, chosen by the user (2026-10-10).
+  - The M5 notebooks install `uv==0.8.17` into the kernel and create `<ephemeral>/rbbd_py312` with `uv venv --python 3.12`. uv downloads a standalone CPython 3.12 build.
+  - They `uv pip install -e ".[train,bench,dev]"` there, with the cache on ephemeral disk.
+  - The venv's `bin/` goes first on `PATH`, so every `!python …` line and every stage subprocess runs in it.
+  - The kernel itself (3.13) only imports rbbd's light modules (config, runner, manifests) from `src/`.
+  - The preflight now raises if the venv stack does not import.
+  - `pyproject.toml` is unchanged; the interpreter version is recorded by the preflight line and `pip_freeze_m5.txt`.
+- Why: Keeps the exact torch 2.7.1 / vLLM 0.10.1.1 stack verified on T4 in M0 (D-049, D-051), with no change to any cache key or numeric path.
+- Tradeoff accepted: two extra downloads per session (uv and CPython 3.12); the kernel and the pipeline run different Python versions.
+- Cost impact: ≈ 3–5 min per session for the venv install; ≈ 8 GB of ephemeral disk; nothing persistent.
+- Paper deviation: no new deviation (Python was already 3.12 vs the paper's 3.9, D-031).
+- Revisit-if:
+  - Kaggle drops `/kaggle/tmp` space or blocks the CPython download;
+  - the M2–M4 notebooks need re-running on the 3.13 image (they install `.[train,dev]` only, which may work on 3.13 but is untested; give them the same venv cell first).

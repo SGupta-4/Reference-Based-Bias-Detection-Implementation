@@ -560,3 +560,16 @@ IDs are sequential and never reused.
   - `grep -rn "PLACEHOLDER(M5)" tests` → no output.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-022, D-023, D-025, D-026, D-033, D-037, D-038, D-043, D-050, D-086
+
+## B-032 Bug: M5 notebooks could not install the pinned stack on Kaggle's new Python 3.13 image
+- Status: Fix pushed; awaiting the re-run of `notebooks/m5_topic_map.ipynb`.
+- How it was found or scoped: Topic-map session `20261010T081026Z` at `3acdf49`. Install output: `No matching distribution found for vllm==0.10.1.1` with "Requires-Python <3.13" for every 0.10.x. The preflight then printed `No module named 'vllm'`, `rbbd.cli` was missing, and the cell failed later on a missing `map_summary.json`. Kaggle ran Python 3.12 in M0 (D-049).
+- Reproduction command: the topic-map notebook at `3acdf49` on the current Kaggle image.
+- Hypotheses tried: none needed; the pip message is explicit. Options are weighed in D-087.
+- Fix:
+  - The install cell of both M5 notebooks builds a Python 3.12 venv with uv, installs the unchanged pins into it, and puts it first on `PATH` (D-087).
+  - The preflight now raises instead of letting the notebook continue.
+  - `m5_bench` calls the CLI as `python`, not the kernel's `sys.executable`.
+- Verification: CPU: both notebooks' code cells compile (shell lines stubbed). Kaggle: pending. Expected: `preflight ok 3.12.x … 2.7.1 0.22.1 4.57.3 0.10.1.1`.
+- GPU-hours lost: ≈ 0.02 (one 1-min session)
+- Linked commits and D-### entries: D-031, D-049, D-087
