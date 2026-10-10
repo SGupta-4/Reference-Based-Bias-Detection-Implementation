@@ -154,6 +154,10 @@ Entry: `run --stages embed,deltab` → `runner.STAGE_IMPLS["deltab"]` → `metri
 4. `sanity(rows)` (M4-T5: mean RR ΔB at a100 vs a000, primary cell)
 5. Writes `deltab/<run_key>/{delta_b.csv.gz, sanity.json}` (hashed) + `timing.json` (log); copies to `results/<run>/{delta_b.csv (primary cell), delta_b_cells.csv.gz, sanity.json}` (`results_dir`: `paths.results`, else `<repo>/results`)
 
+## Diagnostics (B-030, D-084; CPU)
+`python -m rbbd.cli diagnose-deltab --config C` → `analysis.diagnose.diagnose_config(cfg, root)`:
+reads the config's `embed/<run_key>/index.json` + `sentences/<run_key>/union.json` (manifests by run key) → per spectrum `diagnose_spectrum(ref tensors, entries, union)` on the "mean" tensor: per-target rows (`metrics.rr.row_bias_rel`, `metrics.seat.row_bias_seat`, Procrustes via `fit_orthogonal`) → method means, α trend, h − u contrast with `template_bootstrap`, S⁺/S⁻ decomposition, Alpaca-pool control, geometry, ΔB per group → `results/<run>/b030_diagnostics.json`. Kaggle: `notebooks/b030_diagnose.ipynb` (restore → diagnose → sync `results/<run>`).
+
 ## Stage: generate
 1. `bench.<b>.build_prompts(cfg)` → prompt list + subset hash (WGM subcategory; DT 1,152 × 3 sys; ToxiGen 9 × 100)
 2. `bench.generate.engine(model_cfg, lora=True)` → vLLM LLM (TP 1|2), or the HF fallback

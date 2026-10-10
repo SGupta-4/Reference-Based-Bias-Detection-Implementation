@@ -495,7 +495,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-007, D-066, D-081
 
 ## B-030 Signal: the harmful endpoint is not below the unharmful one in mean ΔB for 5 of 9 spectra (M4-T5)
-- Status: Open. To investigate in M6 (signal, not a gate; PLAN M4-T5).
+- Status: In progress (user: "investigate B-030 first", 2026-10-10). Hypothesis 1 is ruled out on CPU; the diagnostics for hypotheses 2–4 are built and await a CPU Kaggle run (`notebooks/b030_diagnose.ipynb`, D-084).
 - How it was found or scoped: M4 sessions A–C. `deltab/<run_key>/sanity.json`, primary cell, RR. Numbers are in D-083.
   - Expected direction, from App. E.5 (Llama: 0.291 u vs −0.051 h): Qwen full s0 and s2, and Qwen LoRA.
   - Opposite or ≈ equal: Qwen full s1, Llama-1B full and LoRA, Llama-8B, Mistral, Gemma.
@@ -506,7 +506,20 @@ IDs are sequential and never reused.
   2. **Our training is weaker:** 1 epoch for Tier 1 (D-071, D-077, D-079) vs 3 in App. C; QLoRA adapters applied to an fp16 base (D-004). A weak harmful shift could be dominated by a generic fine-tuning shift common to both endpoints (both ΔB > 0 for most spectra).
   3. **Reconstructed sentence sets** (D-012–D-016) differ from the authors'. Compare the attribute-variant and target-variant cells for robustness.
   4. **Group-level heterogeneity:** the mean over 24 groups may hide the groups the harmful data actually targets; M6 pairs ΔB with benchmark deltas per group or topic, which is the paper's actual claim.
-- Fix: none yet.
-- Verification: n/a.
+- Progress (2026-10-10):
+  - **Hypothesis 1 (sign or endpoint swap): ruled out.**
+    - Synthetic run through the real union index and `spectrum_rows`: moving Women's targets halfway toward the positive centroid gives ΔB = +0.068 (RR), +0.484 (SEAT), +0.484 (Procrustes); toward the negative centroid gives −0.062, −0.487, −0.487. Unmoved groups and `ref` give 0.
+    - Now a regression test: `tests/test_diagnose.py::test_delta_b_direction_through_stage_code`.
+  - **A clue for hypothesis 2, found while building that check.** When P and N have the same centroid, moving targets toward *either* centroid gives RR ΔB ≈ −0.03 for both, i.e. RR also responds to targets collapsing toward a shared point, not only to valence. In LLM spaces, where P and N are highly similar (anisotropy), a generic fine-tuning drift can therefore dominate ΔB. Likewise, a translation applied to every sentence moves RR ΔB (`test_control_absorbs_a_generic_shift`).
+  - **Diagnostics built (D-084):** `rbbd.analysis.diagnose` + `cli diagnose-deltab` + `notebooks/b030_diagnose.ipynb`, CPU only, from the stored caches. They report:
+    - method agreement;
+    - the α trend;
+    - the h − u contrast with a template-bootstrap CI;
+    - the S⁺/S⁻ decomposition;
+    - a group-free control (Alpaca pool) → group-specific ΔB;
+    - P/N geometry and anisotropy;
+    - ΔB per group.
+- Fix: pending the diagnostics' results.
+- Verification: CPU: `python -m pytest -q tests/test_diagnose.py` → `5 passed`.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-071, D-077, D-079, D-081, D-083
+- Linked commits and D-### entries: D-071, D-077, D-079, D-081, D-083, D-084

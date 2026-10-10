@@ -83,6 +83,7 @@ Training sits upstream of the spectrum:
 | `rbbd.bench.topic_map` | One-off, frozen WGM prompt → topic mapping (D-024). |
 | `rbbd.bench.decodingtrust` | DT stereotype prompts and agreement scoring (D-022). |
 | `rbbd.bench.toxigen` | ToxiGen prompts, first-statement extraction, RoBERTa scoring (D-025). |
+| `rbbd.analysis.diagnose` | B-030 diagnostics from cached embeddings: method agreement, α trend, h − u contrast CI, S⁺/S⁻ decomposition, group-free control, geometry. |
 | `rbbd.analysis.stats` | Join ΔB with benchmark deltas; Pearson, ROC AUC, bootstrap MAE and CIs. |
 | `rbbd.analysis.tables` | Build the R1–R7 tables. |
 | `rbbd.analysis.plots` | Build the F-R1–F-R5 figures. |
@@ -146,3 +147,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 - 2026-10-02 — Config overrides (`--set`, hashed) forwarded to training subprocesses; `rbbd.finetune.session` holds the pre-registered M3c probe rules; activation monitor for fp16 probes — D-076.
 - 2026-10-08 — Training can pause at a session deadline (`$RBBD_TRAIN_DEADLINE_UNIX`, `train-one` exit 76): the paused job and its checkpoint sync to the store and the next session resumes it — D-079.
 - 2026-10-09 — M4: anchor pools join the sentence union; `embed` sweeps ref + 7 α per spectrum on one base (`models.spectrum.Activator`) and writes `index.json`; `deltab` stage writes the long ΔB table and `results/<run>/`; `--only-ckpt` leaves sweep stages incomplete — D-081, D-082.
+- 2026-10-10 — `analysis.diagnose` + CLI `diagnose-deltab` (B-030, CPU, read-only over caches) — D-084.

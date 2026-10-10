@@ -1,4 +1,4 @@
-"""Single CLI entrypoint: `python -m rbbd.cli {probe,run,status,sync,vllm-case}`.
+"""Single CLI entrypoint: `python -m rbbd.cli {probe,run,status,sync,restore,diagnose-deltab,…}`.
 
 Call path: FLOW.md › Entrypoint.
 
@@ -79,6 +79,11 @@ def _build_parser() -> argparse.ArgumentParser:
     rs.add_argument(
         "--path", required=True, help="path relative to the artifact root, e.g. train/<slug>"
     )
+
+    dg = sub.add_parser(
+        "diagnose-deltab", help="B-030 diagnostics from cached embeddings (CPU, aggregates only)"
+    )
+    dg.add_argument("--config", type=Path, required=True)
 
     c = sub.add_parser("compare-embeddings", help="compare two configs' cached ref embeddings")
     c.add_argument("--a", type=Path, required=True, help="config whose embeddings are tested")
@@ -185,6 +190,22 @@ def _cmd_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_diagnose(args: argparse.Namespace) -> int:
+    # B-030: reads the config's embed index + union (restore manifests, sentences, embed and
+    # embeddings/<slug> first) and writes results/<run>/b030_diagnostics.json.
+    from rbbd.analysis.diagnose import diagnose_config
+    from rbbd.metrics.delta_b import results_dir
+
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    report = diagnose_config(cfg, env.artifacts_root)
+    out = results_dir(cfg, env.artifacts_root) / "b030_diagnostics.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, indent=2))
+    print(json.dumps(report, indent=1))
+    return 0
+
+
 def _cmd_compare(args: argparse.Namespace) -> int:
     from rbbd.embed.extract import cached_ref_entry, compare_entries
 
@@ -252,6 +273,7 @@ def main(argv: list[str] | None = None) -> int:
         "status": _cmd_status,
         "sync": _cmd_sync,
         "compare-embeddings": _cmd_compare,
+        "diagnose-deltab": _cmd_diagnose,
         "train-one": _cmd_train_one,
         "restore": _cmd_restore,
         "vllm-case": _cmd_vllm_case,

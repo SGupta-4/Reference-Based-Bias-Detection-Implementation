@@ -1535,3 +1535,24 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Revisit-if:
   - B-030's investigation finds a defect (then bump `schema_version.metrics` and re-run `deltab` from the caches; no GPU needed);
   - an `embed` schema bump (ROLLBACK: re-run DC-10, DC-11, DC-12).
+
+## D-084 B-030 diagnostics: a CPU-only report from the M4 caches, with a group-free control (no pipeline change)
+- Date: 2026-10-10
+- Context: The user asked to investigate B-030 (the harmful endpoint is not below the unharmful one in 5 of 9 spectra) before M5. The ΔB tables and embeddings live in the private store; diagnosing needs per-sentence quantities that the long CSV does not hold.
+- Options considered:
+  - read only the stored CSVs (cannot separate generic drift from group bias);
+  - re-extract on GPU;
+  - a CPU report over the cached embeddings.
+- Choice: `rbbd.analysis.diagnose.diagnose_spectrum` (primary cell), run by `cli diagnose-deltab --config C` and `notebooks/b030_diagnose.ipynb` (Kaggle, CPU, restores `manifests`, `sentences`, `embed`, `embeddings/<slug>`). It writes `results/<run>/b030_diagnostics.json` (aggregates). It reports:
+  1. **Method agreement:** mean ΔB per checkpoint under RR, SEAT and Procrustes (no shared scoring code).
+  2. **α trend:** Spearman ρ(α, mean ΔB).
+  3. **h − u contrast:** per target sentence, b(a000) − b(a100), with a 95% CI from a bootstrap over the 50 templates (a template's sentences for all groups resampled together), and the count of groups with h below u.
+  4. **S⁺/S⁻ decomposition** of the RR shift at a100 and a000.
+  5. **Group-free control:** the 1,000 Alpaca anchor-pool sentences scored as pseudo-targets against the same neutral anchors and attributes. `group_specific` = target ΔB − control ΔB. This separates generic fine-tuning drift (which moves RR ΔB, as the CPU tests show) from group-directed movement.
+  6. **Geometry:** P/N centroid cosine and mean pairwise cosine (anisotropy) at ref, a100 and a000.
+  7. **ΔB per group.**
+- Why: Each hypothesis in B-030 maps to one output (2 → items 4–6, 3 → items 1 and 6, 4 → items 3 and 7). Nothing in the pipeline, the configs or any cache key changes, so M4 results stay valid.
+- Tradeoff accepted: The control set (Alpaca instructions) is not matched to target sentences in style; it measures a generic shift, not a perfect null.
+- Cost impact: one CPU Kaggle session (≈ 10 GB restored, minutes of compute); no GPU.
+- Paper deviation: no (diagnostic only).
+- Revisit-if: the diagnostics point to a defect (then a D entry for the fix and a `schema_version.metrics` bump).
