@@ -210,3 +210,15 @@ def test_lazy_endpoint_matches_eager_load(tmp_path):
     ip.apply_alpha(m2, ip.LazyEndpoint(tmp_path / "h"), ip.LazyEndpoint(tmp_path / "u"), 0.3)
     assert all(torch.equal(m1.sd[k], m2.sd[k]) for k in eager)
     assert not torch.equal(m1.sd["lm_head.weight"], torch.zeros(4, 8).half())
+
+
+def test_iter_delta_w_streams_the_same_matrices(endpoints):
+    """B-034: the merge for generation takes ΔW one module at a time; same values."""
+    import types
+
+    u, h = endpoints
+    combined = ad.combine(u, h, 0.3)
+    stream = ad.iter_delta_w(combined)
+    assert isinstance(stream, types.GeneratorType)
+    eager = ad.delta_w(combined)
+    assert all(torch.equal(dw, eager[p]) for p, dw in stream) and len(eager) == len(u.prefixes())

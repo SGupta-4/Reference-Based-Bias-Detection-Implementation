@@ -610,3 +610,26 @@ IDs are sequential and never reused.
     - `test_wildguard_on_fixed_generations`: `1 passed in 139.97s`, with record `card_check: ok`, benign 20/20 parsed and 0 harmful, Tier 0 20/20 parsed and 5 harmful.
 - GPU-hours lost: ≈ 0.25 (the killed process plus the a100 checkpoint that ran beside it; finished checkpoints were synced and are reused)
 - Linked commits and D-### entries: D-008, D-048, D-050, D-086, D-089
+
+## B-034 Bug: the Llama-8B QLoRA merge for generation was OOM-killed (all ΔW built at once)
+- Status: Fix pushed; awaiting the session B re-run (`tier1_llama3.1-8b` resumes after `ref`).
+- How it was found or scoped: Session B, `ef80d84`, session `20261010T172227Z`, 0.77 h.
+  - `ref` finished: DT 1,670 s, ToxiGen 414 s, WGM 62 s, engine start 81 s, snapshot 77 s; peak RSS 6.3 GiB; ≈ 38 min in all, synced.
+  - `generate-one` for `qlora-s0/a100` then exited `-9` right after `Loading checkpoint shards: 4/4`, i.e. inside the LoRA merge.
+  - Host: RAM 31 GiB (29 GiB available); `/` overlay 1.1 TB free, so `/tmp` is not a constraint; `/kaggle/working` 1.4 / 20 GB used.
+- Reproduction command: `notebooks/m5_bench.ipynb` at `ef80d84` with `tier1_llama3.1-8b`.
+- Hypotheses tried:
+  - **Full ΔW dict:** `adapters.delta_w` returns every module's ΔW = s·B@A as a dense fp32 matrix in one dict. With LoRA on all linear layers of Llama-3.1-8B (≈ 6.9B parameters), that is ≈ 28 GB, on top of the 16 GB fp16 base, so the OOM killer fires. It was invisible on Tier 2: 0.5B/1B give ≈ 2–5 GB.
+  - **GPU OOM:** ruled out, because the engine had not started yet and a CUDA OOM raises rather than SIGKILLs.
+- Fix:
+  - `adapters.iter_delta_w` yields one (prefix, ΔW) at a time. `delta_w` = `dict(iter_delta_w(...))` for small models and tests.
+  - `generate.materialize` merges module by module, so peak RAM ≈ base + one ΔW (≤ 0.25 GB fp32 for an 8B MLP matrix).
+  - The values are identical: the same matmul per module, applied in the same order.
+- Verification:
+  - CPU:
+    - `tests/test_merge.py::test_iter_delta_w_streams_the_same_matrices`;
+    - `tests/test_generate.py::test_merged_lora_checkpoint_equals_the_adapter`, which now runs through the streamed path;
+    - `python -m pytest -q -m "not gpu"` → `181 passed`.
+  - Kaggle: pending.
+- GPU-hours lost: ≈ 0.05 (the killed merge; `ref` was synced and is reused)
+- Linked commits and D-### entries: D-007, D-050, D-066, D-086, B-033

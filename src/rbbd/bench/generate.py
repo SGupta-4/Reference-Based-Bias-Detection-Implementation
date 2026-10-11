@@ -239,8 +239,9 @@ def materialize(
 
     `ref` is the downloaded base snapshot. LoRA/QLoRA: the base is loaded on CPU in the
     inference dtype; for every adapter module W ← cast(fp32(W) + ΔW(α)) with ΔW from
-    `adapters.delta_w(adapter_for_alpha(u, h, α))` (exact; endpoints are the trained
-    adapters). Full FT: `interpolate.materialize` (D-008). Gemma stays fp32 (D-005).
+    `adapters.iter_delta_w(adapter_for_alpha(u, h, α))`, one module at a time (exact;
+    endpoints are the trained adapters; B-034). Full FT: `interpolate.materialize` with
+    `LazyEndpoint`s, one fp32 tensor at a time (D-008, B-033). Gemma stays fp32 (D-005).
     """
     from rbbd.models import interpolate as ip
     from rbbd.models.loading import download, load_tokenizer, torch_dtype
@@ -276,7 +277,8 @@ def materialize(
         h = ad.read_adapter(spectrum.finals["harmful"])
         modules = dict(model.named_modules())
         with torch.no_grad():
-            for prefix, dw in ad.delta_w(ad.adapter_for_alpha(u, h, alpha)).items():
+            # One ΔW at a time (B-034): all of an 8B model's ΔW at once are ≈ 28 GB fp32.
+            for prefix, dw in ad.iter_delta_w(ad.adapter_for_alpha(u, h, alpha)):
                 layer = modules[prefix.removeprefix("base_model.model.")]
                 w = layer.weight
                 w.copy_((w.float() + dw.to(w.device)).to(w.dtype))
