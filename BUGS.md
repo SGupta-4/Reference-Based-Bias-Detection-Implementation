@@ -612,7 +612,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-008, D-048, D-050, D-086, D-089
 
 ## B-034 Bug: the Llama-8B QLoRA merge for generation was OOM-killed (all ΔW built at once)
-- Status: Fix pushed; awaiting the session B re-run (`tier1_llama3.1-8b` resumes after `ref`).
+- Status: Fixed and verified on Kaggle (session `20261011T063615Z` at `c892378`, D-091).
 - How it was found or scoped: Session B, `ef80d84`, session `20261010T172227Z`, 0.77 h.
   - `ref` finished: DT 1,670 s, ToxiGen 414 s, WGM 62 s, engine start 81 s, snapshot 77 s; peak RSS 6.3 GiB; ≈ 38 min in all, synced.
   - `generate-one` for `qlora-s0/a100` then exited `-9` right after `Loading checkpoint shards: 4/4`, i.e. inside the LoRA merge.
@@ -630,6 +630,24 @@ IDs are sequential and never reused.
     - `tests/test_merge.py::test_iter_delta_w_streams_the_same_matrices`;
     - `tests/test_generate.py::test_merged_lora_checkpoint_equals_the_adapter`, which now runs through the streamed path;
     - `python -m pytest -q -m "not gpu"` → `181 passed`.
-  - Kaggle: pending.
+  - Kaggle (`c892378`): all 7 QLoRA checkpoints of Llama-3.1-8B merged and generated; `max_peak_rss_gib` 20.78 (of 31).
 - GPU-hours lost: ≈ 0.05 (the killed merge; `ref` was synced and is reused)
 - Linked commits and D-### entries: D-007, D-050, D-066, D-086, B-033
+
+## B-035 Budget: Tier 1 8B checkpoints take ≈ 46 min, not 35 (DC-14 > 1.2×)
+- Status: Open (monitoring). Projections re-baselined; no code change needed.
+- How it was found or scoped: DC-14 for `tier1_llama3.1-8b` (sessions `20261010T172227Z` + `20261011T063615Z`).
+  - Per checkpoint ≈ 46 min: DT 32.6 min, ToxiGen 10.9 min, WGM 2.8 min, merge + engine ≈ 2.5 min. PLAN §8 assumed 35 min (DT 20, ToxiGen 8, WGM 5, overhead 2).
+  - The time rises from 38 min (ref) to 52 min (a000), because harmful checkpoints write longer answers.
+  - Llama-8B in total: 6.65 session-h (0.77 + 5.88) against 5.5 planned, i.e. 1.21×. Per checkpoint the ratio is 1.31×.
+- Reproduction command: `generate/<run_key>/timing.json` of the Llama-8B config.
+- Hypotheses tried:
+  - **Engine throughput:** DT's 150-token cap is reached often at T = 1.0 (D-086). PLAN assumed ≈ 800 output tok/s at TP=2, and the measured DT rate implies ≈ 530 tok/s at n = 3. No change is planned: the sampling settings are part of the gen_key, and the time cost is acceptable.
+- Fix: re-baselined projections (PLAN §8 measured note).
+  - Mistral-7B ≈ 6.5 h, one session.
+  - Gemma-3-4B in fp32 (D-005): probably ≈ 1.5–2× an fp16 4B. Planned as two sessions with the deadline resume (D-086).
+  - WildGuard scoring of WGM for all configs ≈ 1.5 h once the map is pinned.
+  - Kaggle's 28 h weekly quota (D-042) covers Mistral + Gemma + WildGuard ≈ 20–22 h over the next week.
+- Verification: the next sessions' DC-14 figures are compared with these projections.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-042, D-086, D-091

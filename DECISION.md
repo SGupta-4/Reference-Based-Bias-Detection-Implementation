@@ -1823,3 +1823,33 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: Tier 2 measured at 1.8 h (Qwen) and ≈ 1.9 h (Llama-1B, two sessions), versus 5.0 h planned for both (PLAN §8).
 - Paper deviation: no.
 - Revisit-if: Tier 1 shows the same ΔB-vs-benchmark disagreement in the Llama family (then M6 reports RR's validity per model family as a headline finding).
+
+## D-091 Tier 1 Llama-3.1-8B benchmarks complete; a third Llama-family model whose benchmarks disagree with its ΔB direction
+- Date: 2026-10-11
+- Context: `notebooks/m5_bench.ipynb` at `c892378` (B-034 fix), session `20261011T063615Z` (5.88 h), after `ref` in `20261010T172227Z`.
+- Observed:
+  - 24 jobs (ref + 7 QLoRA checkpoints × 3 benches) and 35,456 items; all used the chat template and none was too long.
+  - Score stage 776 s; both stages hit the cache on re-run. `max_peak_rss_gib` was 20.78, during the 8B merge (B-034 verified).
+  - Timing is in B-035.
+  - Scores, as means over units (DT 24 groups, ToxiGen 9 groups):
+
+    | Bench | ref | a100 (unharmful) | a090 | a070 | a050 | a030 | a010 | a000 (harmful) |
+    |---|---|---|---|---|---|---|---|---|
+    | DT agree | 0.101 | 0.048 | 0.063 | 0.090 | 0.122 | 0.164 | 0.196 | 0.221 |
+    | ToxiGen toxic | 0.002 | 0.001 | 0.002 | 0.007 | 0.012 | 0.032 | 0.081 | 0.117 |
+
+    - Both benchmarks are strictly monotone in α.
+    - Unlike Tier 2, the unharmful endpoint is *less* biased than ref on DT (−0.053): unharmful training made Llama-8B refuse or disagree more.
+  - **Against ΔB (D-085):** Llama-8B's RR contrast was +0.024 [+0.022, +0.026], so h looked *less* biased than u. The benchmarks say the opposite, strongly. Three Llama-family spectra (Llama-1B full and LoRA, Llama-8B) now disagree, and Qwen agrees. This meets D-090's Revisit-if.
+- Choice:
+  - The disagreement becomes a planned headline analysis in M6, run on the full data:
+    - per-model and per-family sign agreement between ΔB and Δscore;
+    - the target-only vs attribute-only RR decomposition (D-085);
+    - SEAT and Procrustes alongside RR.
+  - No pipeline change.
+  - Continue M5c with Mistral (session C), then Gemma (sessions D/E).
+- Why: The finding is consistent across sizes and regimes within a family, so it is a property of the method on these models, which is what the replication must report.
+- Tradeoff accepted: none new.
+- Cost impact: Llama-8B 6.65 session-h (B-035).
+- Paper deviation: no. The paper reports RR tracking benchmark bias; we report where it does not, with the measurements.
+- Revisit-if: Mistral or Gemma also disagree. Then M6 checks whether disagreement tracks the D-085 drift magnitude (the group-free control) before attributing it to model family.
