@@ -649,5 +649,6 @@ IDs are sequential and never reused.
   - WildGuard scoring of WGM for all configs ≈ 1.5 h once the map is pinned.
   - Kaggle's 28 h weekly quota (D-042) covers Mistral + Gemma + WildGuard ≈ 20–22 h over the next week.
 - Verification: the next sessions' DC-14 figures are compared with these projections.
+  - Mistral-7B (D-092): 6.14 h, with checkpoints at 41–45 min, inside the 6.5 h projection.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-042, D-086, D-091
+- Linked commits and D-### entries: D-042, D-086, D-091, D-092

@@ -1853,3 +1853,27 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: Llama-8B 6.65 session-h (B-035).
 - Paper deviation: no. The paper reports RR tracking benchmark bias; we report where it does not, with the measurements.
 - Revisit-if: Mistral or Gemma also disagree. Then M6 checks whether disagreement tracks the D-085 drift magnitude (the group-free control) before attributing it to model family.
+
+## D-092 Tier 1 Mistral-7B benchmarks complete: generic drift dominates DT, ToxiGen tracks α; its ΔB was ≈ 0
+- Date: 2026-10-12
+- Context: `notebooks/m5_bench.ipynb` at `e509408`, session `20261011T150044Z` (6.14 h), `CONFIGS = ["tier1_mistral-7b"]`.
+- Observed:
+  - 24 jobs and 35,456 items. Every prompt rendered with Mistral's own chat template (`chat` = 35,456, no `merged-system`), so the DT system prompts were applied as system turns.
+  - None was too long. Score stage 741 s; cache hits on re-run; `max_peak_rss_gib` 19.17.
+  - Timing: per checkpoint 41–45 min (ref 2,462 s, a000 2,706 s); DT 14,388 s, ToxiGen 5,407 s, WGM 1,229 s in total. This is within B-035's projection of ≈ 6.5 h.
+  - Scores, as means over units:
+
+    | Bench | ref | a100 (unharmful) | a090 | a070 | a050 | a030 | a010 | a000 (harmful) |
+    |---|---|---|---|---|---|---|---|---|
+    | DT agree | 0.073 | 0.182 | 0.186 | 0.191 | 0.196 | 0.202 | 0.214 | 0.222 |
+    | ToxiGen toxic | 0.000 | 0.007 | 0.009 | 0.016 | 0.031 | 0.047 | 0.073 | 0.086 |
+
+    - DT: both endpoints moved far above ref (+0.11 to +0.15), and the h − u gap is small (+0.04), though monotone.
+    - ToxiGen rises monotonically toward h.
+  - **Against ΔB (D-085):** Mistral's RR contrast was +0.004 [+0.002, +0.005] and SEAT ≈ 0, i.e. a near-null h-vs-u separation, with a small group-free drift. The small DT h − u gap fits a weak separation. ToxiGen's clear gradient does not.
+- Choice: no pipeline change. Mistral joins M6's per-model analysis as the case where generic fine-tuning drift (u and h both far from ref) dominates the DT delta. M6 reports Δscore(h) − Δscore(u) next to Δscore vs ref.
+- Why: It separates "fine-tuning moved the model" from "harmful data moved it more", the distinction D-085 found matters for ΔB as well.
+- Tradeoff accepted: none.
+- Cost impact: 6.14 session-h.
+- Paper deviation: no.
+- Revisit-if: Gemma also shows the u-and-h drift pattern (then the Tier 1 1-epoch QLoRA regime itself is a candidate explanation, D-071/D-077).
