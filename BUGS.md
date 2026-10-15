@@ -650,5 +650,20 @@ IDs are sequential and never reused.
   - Kaggle's 28 h weekly quota (D-042) covers Mistral + Gemma + WildGuard ≈ 20–22 h over the next week.
 - Verification: the next sessions' DC-14 figures are compared with these projections.
   - Mistral-7B (D-092): 6.14 h, with checkpoints at 41–45 min, inside the 6.5 h projection.
+  - Gemma-3-4B (D-093): the fp32 `ref` took 3.1 h, so the full spectrum is ≈ 25 h against the 8.5 planned; spread over 3 sessions in priority order.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-042, D-086, D-091, D-092
+- Linked commits and D-### entries: D-042, D-086, D-091, D-092, D-093
+
+## B-036 Bug: vLLM could not load the merged Gemma-3 checkpoint (no processor config)
+- Status: Fix pushed; awaiting the session D re-run.
+- How it was found or scoped: Session D, `d1a58e0`, session `20261014T170710Z`, 3.32 h.
+  - `ref` finished: DT 7,616 s, ToxiGen 3,113 s, WGM 433 s; peak RSS 6.9 GiB. It was synced.
+  - `generate-one` for `qlora-s0/a100` then exited 1 in vLLM's processor setup with `OSError: Can't load image processor for '/tmp/rbbd_merged/gemma3-4b-it-qlora-s0-a100' … preprocessor_config.json`.
+- Reproduction command: `notebooks/m5_bench.ipynb` at `d1a58e0` with `tier1_gemma3-4b`.
+- Hypotheses tried: Gemma-3-4B-it is multimodal (`Gemma3ForConditionalGeneration`), and vLLM builds its HF processor even for text-only prompts. `save_pretrained` (model + tokenizer) does not write the processor files, while the `ref` path serves the downloaded snapshot, which has them. The text-only models have no processor, so Tier 2 and the other Tier 1 models never needed them.
+- Fix: `generate.copy_aux_files(snapshot, out)` copies every non-weight file of the base snapshot that the merged directory lacks. It skips weight files and shard indexes, which describe the base weights. It runs for both LoRA and full-FT merges.
+- Verification:
+  - CPU: `tests/test_generate.py::test_merged_copy_gets_the_base_processor_files`; `python -m pytest -q -m "not gpu"` → `182 passed`.
+  - Kaggle: pending.
+- GPU-hours lost: ≈ 0.06 (the failed engine start; `ref` was synced and is reused)
+- Linked commits and D-### entries: D-005, D-050, D-086, D-093

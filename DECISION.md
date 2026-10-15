@@ -1877,3 +1877,24 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: 6.14 session-h.
 - Paper deviation: no.
 - Revisit-if: Gemma also shows the u-and-h drift pattern (then the Tier 1 1-epoch QLoRA regime itself is a candidate explanation, D-071/D-077).
+
+## D-093 Gemma-3-4B Tier 1: all 7 checkpoints in fp32, generated in priority order across sessions (amends D-086 cost, B-035 projection)
+- Date: 2026-10-15
+- Context:
+  - In session D (`20261014T170710Z`), the fp32 Gemma reference took 3.1 h (DT 2.1 h, ToxiGen 52 min, WGM 7 min), against ≈ 46 min for an fp16 8B model.
+  - The remaining 7 checkpoints project to ≈ 22 session-h, against the 8.5 h planned for Gemma.
+  - fp16 is not an option: the M2 probe gave NaN at the first forward (D-005, D-062, D-078).
+  - The first merged checkpoint also hit B-036.
+- Options considered:
+  - all 7 checkpoints in priority order;
+  - a subset {a000, a100, a050} in ≈ 9.5 h;
+  - endpoints only in ≈ 6.5 h.
+- Choice: all 7, chosen by the user (2026-10-15).
+  - `configs/tier1_gemma3-4b.yaml` sets `bench.checkpoints: [ref, a000, a100, a050, a070, a030, a090, a010]`. The harmful endpoint, the unharmful endpoint and the midpoint come first.
+  - Each session stops cleanly at the deadline (exit 76) and the next one resumes, at shard granularity.
+  - If the weekly quota (D-042) runs short, the finished prefix can be scored alone with `--set bench.checkpoints=[...]`. Generations are keyed by gen_key, so nothing is regenerated.
+- Why: It keeps the full α spectrum for M6's per-model analysis where the quota allows, and guarantees the three most informative points first.
+- Tradeoff accepted: ≈ 22 more session-h on one model, two to three sessions.
+- Cost impact: Gemma M5 ≈ 25 session-h in total, against 8.5 planned (B-035 updated).
+- Paper deviation: no (precision as D-005).
+- Revisit-if: per-checkpoint time exceeds 3.5 h (then stop after the priority three and score that subset).

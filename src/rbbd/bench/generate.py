@@ -254,7 +254,7 @@ def materialize(
 
     out = ip.assert_ephemeral(out_dir, artifacts_root)
     alpha = alpha_of(slug)
-    download(load_spec)
+    snapshot = download(load_spec)
     model = AutoModelForCausalLM.from_pretrained(
         load_spec.model_id,
         revision=load_spec.revision,
@@ -286,7 +286,34 @@ def materialize(
         model.save_pretrained(str(out), safe_serialization=True)
         tok.save_pretrained(str(out))
     del model
+    copy_aux_files(snapshot, out)
     return str(out), True
+
+
+# Weight files and shard indexes describe the base weights; the merged copy has its own.
+_WEIGHT_PATTERNS = ("*.safetensors", "*.bin", "*.pt", "*.pth", "*.index.json", "*.gguf")
+
+
+def copy_aux_files(snapshot: str | Path, out: Path) -> list[str]:
+    """Copy the base snapshot's non-weight files the merged copy lacks (B-036).
+
+    `save_pretrained` writes the config, weights and tokenizer only. Multimodal models
+    (Gemma-3) also need `preprocessor_config.json` / `processor_config.json` for vLLM to
+    build their processor, even for text-only prompts. Files already written by the merge
+    are kept. Returns the copied names.
+    """
+    src = Path(snapshot)
+    if not src.is_dir():
+        return []
+    copied = []
+    for f in sorted(src.iterdir()):
+        if not f.is_file() or (out / f.name).exists():
+            continue
+        if any(f.match(pattern) for pattern in _WEIGHT_PATTERNS):
+            continue
+        shutil.copyfile(f, out / f.name)
+        copied.append(f.name)
+    return copied
 
 
 def engine_settings(cfg: Any, entry: Mapping[str, Any]) -> dict[str, Any]:

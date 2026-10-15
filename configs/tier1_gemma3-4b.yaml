@@ -18,3 +18,7 @@ train:
   sync_each_pair: true
 embed:
   poolings: [mean]         # D-019: max/last only for Tier 1 Llama and Tier 2 (disk)
+# D-093: fp32 generation takes ≈ 3.1 h per checkpoint, so the most informative checkpoints
+# come first (harmful, unharmful, midpoint); later sessions resume the rest (deadline pause).
+bench:
+  checkpoints: [ref, a000, a100, a050, a070, a030, a090, a010]

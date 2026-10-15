@@ -5,6 +5,7 @@ the tiny model with a stub engine. No vLLM, no network."""
 import csv
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 import torch
@@ -167,6 +168,30 @@ def test_merged_full_checkpoint_equals_the_in_memory_alpha(tmp_path, monkeypatch
         sorted(merged.state_dict().items()), sorted(in_memory.state_dict().items()), strict=True
     ):
         assert torch.equal(a, b), name
+
+
+def test_merged_copy_gets_the_base_processor_files(tmp_path, monkeypatch, lora_spectrum):
+    """B-036: processor configs of a multimodal base (Gemma-3) are copied next to the
+    merged weights; base weight files and shard indexes are not."""
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    for name in ("preprocessor_config.json", "processor_config.json", "config.json",
+                 "model.safetensors.index.json", "model-00001-of-00002.safetensors"):  # fmt: skip
+        (snapshot / name).write_text("{}")
+    monkeypatch.setattr("rbbd.models.loading.download", lambda spec: str(snapshot))
+    monkeypatch.setattr(
+        "transformers.AutoModelForCausalLM.from_pretrained", lambda *a, **k: make_tiny_model()
+    )
+    monkeypatch.setattr("rbbd.models.loading.load_tokenizer", lambda *a, **k: make_chat_tokenizer())
+    spec = LoadSpec("tiny/llama", "sha", "fp32", "cpu")
+    path, _ = gen.materialize(
+        spec, lora_spectrum, "a050", tmp_path / "eph" / "a050", tmp_path / "artifacts"
+    )
+    names = {p.name for p in Path(path).iterdir()}
+    assert {"preprocessor_config.json", "processor_config.json"} <= names
+    assert "model-00001-of-00002.safetensors" not in names
+    assert "model.safetensors.index.json" not in names  # the tiny merge is one file
+    assert json.loads((Path(path) / "config.json").read_text())  # the merge's own config
 
 
 BENCH_BASE = (
