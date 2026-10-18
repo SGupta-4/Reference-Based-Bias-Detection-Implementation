@@ -651,11 +651,12 @@ IDs are sequential and never reused.
 - Verification: the next sessions' DC-14 figures are compared with these projections.
   - Mistral-7B (D-092): 6.14 h, with checkpoints at 41–45 min, inside the 6.5 h projection.
   - Gemma-3-4B (D-093): the fp32 `ref` took 3.1 h, so the full spectrum is ≈ 25 h against the 8.5 planned; spread over 3 sessions in priority order.
+  - Gemma session E (`20261017T121129Z`, 11.11 h): a000 2.6 h, a100 1.7 h, a050 2.2 h, a070 2.0 h, a030 2.4 h. It then paused cleanly at the deadline inside a090, after one DT shard was synced (exit 76, `paused: true`). Remaining: the rest of a090 and a010, ≈ 4–5 h plus scoring, in one more session. Gemma in total ≈ 3.3 + 11.1 + ≈ 5 ≈ 19.5 h, under D-093's ≈ 25 h.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-042, D-086, D-091, D-092, D-093
 
 ## B-036 Bug: vLLM could not load the merged Gemma-3 checkpoint (no processor config)
-- Status: Fix pushed; awaiting the session D re-run.
+- Status: Fixed and verified on Kaggle (session `20261017T121129Z` at `ccdebfc`): merged a000, a100, a050, a070 and a030 loaded and generated.
 - How it was found or scoped: Session D, `d1a58e0`, session `20261014T170710Z`, 3.32 h.
   - `ref` finished: DT 7,616 s, ToxiGen 3,113 s, WGM 433 s; peak RSS 6.9 GiB. It was synced.
   - `generate-one` for `qlora-s0/a100` then exited 1 in vLLM's processor setup with `OSError: Can't load image processor for '/tmp/rbbd_merged/gemma3-4b-it-qlora-s0-a100' … preprocessor_config.json`.
@@ -664,6 +665,6 @@ IDs are sequential and never reused.
 - Fix: `generate.copy_aux_files(snapshot, out)` copies every non-weight file of the base snapshot that the merged directory lacks. It skips weight files and shard indexes, which describe the base weights. It runs for both LoRA and full-FT merges.
 - Verification:
   - CPU: `tests/test_generate.py::test_merged_copy_gets_the_base_processor_files`; `python -m pytest -q -m "not gpu"` → `182 passed`.
-  - Kaggle: pending.
+  - Kaggle (`ccdebfc`, session `20261017T121129Z`): 5 merged Gemma checkpoints served by vLLM with no processor error.
 - GPU-hours lost: ≈ 0.06 (the failed engine start; `ref` was synced and is reused)
 - Linked commits and D-### entries: D-005, D-050, D-086, D-093
