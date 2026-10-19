@@ -1898,3 +1898,45 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: Gemma M5 ≈ 25 session-h in total, against 8.5 planned (B-035 updated).
 - Paper deviation: no (precision as D-005).
 - Revisit-if: per-checkpoint time exceeds 3.5 h (then stop after the priority three and score that subset).
+
+## D-094 Tier 1 Gemma-3-4B benchmarks complete; all M5 generation finished; only WGM scoring remains
+- Date: 2026-10-19
+- Context: `notebooks/m5_bench.ipynb`, `tier1_gemma3-4b`, three sessions:
+  - `20261014T170710Z` (3.32 h, ref; then B-036);
+  - `20261017T121129Z` (11.11 h, a000–a030, paused in a090);
+  - `20261018T180025Z` at `7c711ab` (5.59 h: the rest of a090, a010, score).
+- Observed:
+  - 24 jobs and 35,456 items, all through Gemma's own chat template (no `merged-system`). Score 831 s; cache hits on re-run; `max_peak_rss_gib` 21.69.
+  - a090 spans two processes (`max_processes_per_job` 2): the session-deadline pause and resume worked at full scale (DC-13 in production).
+  - Gemma in total: 20.0 session-h, against D-093's ≈ 25 h projection.
+  - Scores, as means over units:
+
+    | Bench | ref | a100 (unharmful) | a090 | a070 | a050 | a030 | a010 | a000 (harmful) |
+    |---|---|---|---|---|---|---|---|---|
+    | DT agree | 0.410 | 0.099 | 0.118 | 0.160 | 0.193 | 0.216 | 0.227 | 0.224 |
+    | ToxiGen toxic | 0.000 | 0.000 | 0.000 | 0.003 | 0.005 | 0.019 | 0.053 | 0.074 |
+
+    - The reference Gemma agrees with 41% of DT stereotypes. Both fine-tuned endpoints agree far less: unharmful −0.31, harmful −0.19. Within the spectrum, DT and ToxiGen both rise monotonically toward h.
+  - **Against ΔB (D-085):** Gemma's RR contrast was +0.016 [+0.015, +0.017] (h less biased than u), with group-free control drift of +0.046 / +0.042. The benchmarks put h above u, so Gemma also disagrees. It is also the strongest u-and-h drift case (D-092 Revisit-if): DT falls far below ref for both endpoints.
+- Tier 1 and Tier 2 summary (h − u, the direction of each signal):
+
+  | Spectrum | ΔB RR contrast (D-085) | DT h − u | ToxiGen h − u | Agree? |
+  |---|---|---|---|---|
+  | Qwen full s0 | −0.033 (h more biased) | +0.227 | +0.171 | yes |
+  | Qwen LoRA s0 | −0.035 | +0.139 | +0.210 | yes |
+  | Llama-1B full s0 | +0.097 (h less biased) | +0.195 | +0.177 | no |
+  | Llama-1B LoRA s0 | +0.050 | +0.023 | +0.129 | no |
+  | Llama-8B QLoRA | +0.024 | +0.173 | +0.116 | no |
+  | Mistral-7B QLoRA | +0.004 (≈ 0) | +0.039 | +0.079 | ≈ null ΔB |
+  | Gemma-3-4B QLoRA | +0.016 | +0.126 | +0.074 | no |
+
+  The benchmarks put h above u in all 7 spectra. ΔB matches that direction only for Qwen.
+- Choice:
+  - Tier 1 generation and DT/ToxiGen scoring are complete.
+  - M5 closes once WGM is scored, which needs the accepted topic map (D-043, D-088) and one WildGuard pass over all five configs.
+  - The table above is the pre-registered input to M6's sign-agreement analysis. No pipeline change.
+- Why: Every M5 check now passes except the WGM part of DC-11/M5-T3 scoring, which waits on the human labels.
+- Tradeoff accepted: none.
+- Cost impact: M5 Tier 1 measured: Llama-8B 6.65 h, Mistral 6.14 h, Gemma 20.0 h, i.e. 32.8 h against 21.0 h planned (B-035).
+- Paper deviation: no.
+- Revisit-if: the WGM topic scores contradict DT/ToxiGen on the h-vs-u direction.

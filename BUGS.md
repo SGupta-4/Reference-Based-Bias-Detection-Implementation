@@ -635,7 +635,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-007, D-050, D-066, D-086, B-033
 
 ## B-035 Budget: Tier 1 8B checkpoints take ≈ 46 min, not 35 (DC-14 > 1.2×)
-- Status: Open (monitoring). Projections re-baselined; no code change needed.
+- Status: Closed. Tier 1 is complete: 32.8 session-h against 21.0 planned (Llama-8B 6.65, Mistral 6.14, Gemma 20.0; D-094). The overrun was absorbed by the D-093 plan.
 - How it was found or scoped: DC-14 for `tier1_llama3.1-8b` (sessions `20261010T172227Z` + `20261011T063615Z`).
   - Per checkpoint ≈ 46 min: DT 32.6 min, ToxiGen 10.9 min, WGM 2.8 min, merge + engine ≈ 2.5 min. PLAN §8 assumed 35 min (DT 20, ToxiGen 8, WGM 5, overhead 2).
   - The time rises from 38 min (ref) to 52 min (a000), because harmful checkpoints write longer answers.
