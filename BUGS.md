@@ -668,3 +668,13 @@ IDs are sequential and never reused.
   - Kaggle (`ccdebfc`, session `20261017T121129Z`): 5 merged Gemma checkpoints served by vLLM with no processor error.
 - GPU-hours lost: ≈ 0.06 (the failed engine start; `ref` was synced and is reused)
 - Linked commits and D-### entries: D-005, D-050, D-086, D-093
+
+## B-037 Bug: the topic-agreement step did not find the attached labels at the hard-coded path
+- Status: Fix pushed; awaiting the re-run.
+- How it was found or scoped: `m5_topic_map.ipynb` `STEP = "agreement"`, session `20261023T181617Z` at `c5b5ac8`: `AssertionError: attach the filled sheet as a private dataset: /kaggle/input/rbbd-topic-labels/labelling_sheet.csv`. Kaggle mounts an attached dataset under a folder that need not match the name the notebook assumed.
+- Reproduction command: the agreement step with the dataset mounted under another slug or file name.
+- Hypotheses tried: none; the assert shows the path was absent.
+- Fix: `LABELS = None` by default. The step searches `/kaggle/input/**/*.csv` for a file whose header has `prompt_sha256` and `label`, prints the candidate paths (paths only, no content) and uses it when there is exactly one. `LABELS` can still be set by hand.
+- Verification: CPU: the notebook cells compile. Kaggle: pending.
+- GPU-hours lost: 0 (CPU-capable step; ≈ 7 min of setup)
+- Linked commits and D-### entries: D-043, D-088
