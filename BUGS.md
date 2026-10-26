@@ -495,7 +495,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-007, D-066, D-081
 
 ## B-030 Signal: the harmful endpoint is not below the unharmful one in mean ΔB for 5 of 9 spectra (M4-T5)
-- Status: In progress (user: "investigate B-030 first", 2026-10-10). Hypothesis 1 is ruled out on CPU; the diagnostics for hypotheses 2–4 are built and await a CPU Kaggle run (`notebooks/b030_diagnose.ipynb`, D-084).
+- Status: Closed: no defect (D-085). The direction is a consistent, model-dependent property of our endpoints (Qwen as in App. E.5; Llama-1B, Llama-8B, Gemma reversed; Mistral ≈ 0), confirmed by RR and SEAT with CIs. It is carried to M5/M6 as a finding.
 - How it was found or scoped: M4 sessions A–C. `deltab/<run_key>/sanity.json`, primary cell, RR. Numbers are in D-083.
   - Expected direction, from App. E.5 (Llama: 0.291 u vs −0.051 h): Qwen full s0 and s2, and Qwen LoRA.
   - Opposite or ≈ equal: Qwen full s1, Llama-1B full and LoRA, Llama-8B, Mistral, Gemma.
@@ -519,7 +519,185 @@ IDs are sequential and never reused.
     - a group-free control (Alpaca pool) → group-specific ΔB;
     - P/N geometry and anisotropy;
     - ΔB per group.
-- Fix: pending the diagnostics' results.
-- Verification: CPU: `python -m pytest -q tests/test_diagnose.py` → `5 passed`.
+- Diagnostics run (Kaggle CPU, `7839bec`, session `20261010T051412Z`; full table in D-085):
+  - **Hypothesis 1:** rejected. RR and SEAT agree in sign with 95% CIs excluding 0 in 7 of 9 spectra; the α trend is monotone in 7 of 9.
+  - **Hypothesis 2:** drift is large (the Alpaca control moves as much as the targets), but subtracting it never flips the h-vs-u ordering.
+  - **Hypothesis 3** (sentence sets) and **hypothesis 4** (group heterogeneity): the contrast holds in 0–2 of 24 groups for the reversed models, so it is not a few outlier groups. Sentence-set effects remain for M6's variant cells.
+- Fix: none needed. M6 adds a target-only vs attribute-only RR decomposition and reports the direction next to the benchmark deltas (D-085).
+- Verification: CPU: `python -m pytest -q tests/test_diagnose.py` → `5 passed`; Kaggle diagnostics as above.
 - GPU-hours lost: 0
-- Linked commits and D-### entries: D-071, D-077, D-079, D-081, D-083, D-084
+- Linked commits and D-### entries: `7839bec`; D-010, D-071, D-077, D-079, D-081, D-083, D-084, D-085
+
+## B-031 Feature: M5 output benchmarks (DT, ToxiGen, WGM generation and scoring)
+- Status: Done. M5 is green (D-090, D-096): every M5 DONE check passed on Kaggle; tags `m5a-green` (`423f428`), `m5b-green` and `m5c-green` (`62aa786`).
+- How it was found or scoped: PLAN §7 M5. The user said "prepare M5" (2026-10-10) and chose: clone DT/ToxiGen here to pin them; ~100 hand labels (D-043); DT T = 1.0; reproduce DT's prompt exactly (D-086).
+- Reproduction command:
+  - CPU: `python -m pytest -q -m "not gpu"`.
+  - Kaggle: `notebooks/m5_topic_map.ipynb` (`STEP = "map"`, then `"agreement"`) and `notebooks/m5_bench.ipynb` with `CONFIGS` per session.
+- Hypotheses tried (design risks found while preparing):
+  - **ToxiGen ids:** 888 of 900 sampled lines were unique, because the files repeat lines, so ids collided. The id now includes the line number.
+  - **DT `None` label:** DT's `classify_response` has a `None` branch that cannot be reached. The planned test for it was replaced by overlap cases ("as an ai" with agree or disagree), which match the original.
+  - **DT prompt construction:** the record text already holds the instruction and DT prepends it again. Reproduced on the user's choice; 3,456 prompts verified identical to DT's MessageConstructor.
+  - **WildGuard template:** written offline. The literal `<s>` was dropped (BOS is added by the tokenizer), and a runtime card check now guards it.
+  - **Stub test:** the generic stub test still named `generate` and made a network call once `generate` existed. It now uses the M6 stub `analyze`.
+  - **Topic map and the cache:** the frozen map was not in any cache key, so committing it would not have re-run `score`. Its hash is now pinned in the config (`bench.wgm.topic_map_sha256`).
+  - **Seeds:** the Tier 2 seeds ablation would have tripled Qwen full-FT generation. Benchmarks now run on seed 0 only (PLAN M5-T8).
+  - **DC-14:** timing was only printed by `generate-one`. Every process now appends to `<gen dir>/timing.jsonl`, and the stage sums it into `generate/<run_key>/timing.json`.
+- Fix:
+  - Code:
+    - `bench.{decodingtrust, toxigen, wildguard, topic_map, generate, score}`;
+    - CLI `generate-one`, `score-wildguard`, `topic-map`, `topic-agreement`;
+    - `runner.STAGE_IMPLS` gains `generate` and `score`.
+  - Configs: the `bench:` block in `base.yaml` and the smoke subset.
+  - Notebooks: `notebooks/m5_topic_map.ipynb` and `notebooks/m5_bench.ipynb`.
+  - Tests:
+    - `tests/test_bench_scoring.py`, `tests/test_generate.py`, and the DT reference fixture `tests/fixtures/dt_agreement_reference.py`;
+    - `tests/test_leakage.py::test_no_generated_or_prompt_text_tracked` (DC-18);
+    - `tests/gpu/test_generate_gpu.py::{test_resume_generation_shards, test_wildguard_on_fixed_generations}`.
+- Verification (CPU, this container):
+  - `ruff check src tests` → `All checks passed!`;
+  - `python -m pytest -q -m "not gpu"` → `178 passed, 13 deselected in 23.72s`;
+  - `grep -rn "PLACEHOLDER(M5)" tests` → no output.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-022, D-023, D-025, D-026, D-033, D-037, D-038, D-043, D-050, D-086
+
+## B-032 Bug: M5 notebooks could not install the pinned stack on Kaggle's new Python 3.13 image
+- Status: Fixed and verified on Kaggle (run 3, `1993178`, session `20261010T085623Z`).
+- How it was found or scoped: Topic-map session `20261010T081026Z` at `3acdf49`. Install output: `No matching distribution found for vllm==0.10.1.1` with "Requires-Python <3.13" for every 0.10.x. The preflight then printed `No module named 'vllm'`, `rbbd.cli` was missing, and the cell failed later on a missing `map_summary.json`. Kaggle ran Python 3.12 in M0 (D-049).
+- Reproduction command: the topic-map notebook at `3acdf49` on the current Kaggle image.
+- Hypotheses tried:
+  - **Run 1 (`3acdf49`):** pip into the 3.13 kernel failed on `vllm==0.10.1.1`. The cause is explicit in pip's message; options are weighed in D-087.
+  - **Run 2 (`89efd77`, session `20261010T084049Z`, ≈ 4 min):** the uv venv cell printed `Using Python 3.13.15 environment at: /usr` and the preflight failed with `No module named 'torch'`. uv ignored `VIRTUAL_ENV` and targeted the system interpreter. The likely cause is the image's own `UV_*` settings (e.g. `UV_SYSTEM_PYTHON`), and `-q` hid the details. Fixed by clearing `UV_*`, installing a managed 3.12, and naming the interpreter on every uv call (D-087 addendum).
+- Fix:
+  - The install cell of both M5 notebooks builds a Python 3.12 venv with uv, installs the unchanged pins into it, and puts it first on `PATH` (D-087).
+  - The preflight now raises instead of letting the notebook continue.
+  - `m5_bench` calls the CLI as `python`, not the kernel's `sys.executable`.
+- Verification:
+  - CPU: both notebooks' code cells compile (shell lines stubbed).
+  - Kaggle run 3 (`1993178`):
+    - the image set `UV_BREAK_SYSTEM_PACKAGES, UV_BUILD_CONSTRAINT, UV_CONSTRAINT, UV_INSTALL_DIR, UV_SYSTEM_PYTHON`, all cleared. `UV_CONSTRAINT` / `UV_SYSTEM_PYTHON` explain run 2;
+    - `uv python install 3.12` → CPython 3.12.11; the venv is at `/tmp/rbbd_py312` (no `/kaggle/tmp` on this image);
+    - install ≈ 230 s;
+    - preflight output: `preflight ok 3.12.11 2.7.1+cu126 0.22.1+cu126 4.57.3 0.10.1.1`;
+    - vLLM then served Qwen2.5-7B at TP 2 on the V0 engine with the XFormers backend, as in M0 (D-049).
+- GPU-hours lost: ≈ 0.09 (a 1-min and a 4-min session)
+- Linked commits and D-### entries: `89efd77`, `1993178`; D-031, D-049, D-087, D-088
+
+## B-033 Bug: a Tier 2 Llama-1B full-FT merge was OOM-killed; the WildGuard GPU test left no record
+- Status: Fixed and verified on Kaggle (session `20261010T141200Z` at `423f428`, D-090).
+- How it was found or scoped: M5 session A, `a67c957`, session `20261010T092134Z`, 3.33 h.
+  - **OOM:** `generate-one` for `llama3.2-1b-it/full-s0/a090` exited `-9` (SIGKILL), with only the snapshot fetch in its log. `full-s0/a100` was merging or serving on the other GPU at the same time.
+    - Each full-FT merge loaded both endpoints fully in fp32 (`load_endpoint`, ≈ 5 GB each for 1.24B parameters), on top of the fp16 base, interpolation temporaries and vLLM's 4 GiB CPU swap per engine.
+    - Two such processes exceed the 31 GiB of RAM (D-048).
+    - Qwen-0.5B full FT (half the size) passed.
+  - **WildGuard test:** `m5_generate_gpu.json` has only `resume`. The two GPU tests ran in one pytest process, so the resume test's vLLM engine (0.5 of GPU 0) was still alive when WildGuard asked for 0.9 of both GPUs. The pytest summary line was cut off by `tail -15` (vLLM shutdown noise).
+- Reproduction command: `notebooks/m5_bench.ipynb` at `a67c957` with `tier2_llama3.2-1b` (the full-FT spectrum, two TP=1 processes in parallel).
+- Hypotheses tried:
+  - **OOM vs GPU memory:** a vLLM GPU OOM raises a Python error, not SIGKILL, and the log stops before the engine starts. So it is host RAM during `materialize`.
+  - **Store sync or disk:** ruled out. Every uploaded directory before the kill succeeded, and `/kaggle/working` had 7.8 GB free.
+- Fix:
+  - `models.interpolate.LazyEndpoint`: a read-only mapping that reads one tensor at a time from the endpoint's safetensors (`safe_open`). `generate.materialize` uses it for full FT, so peak RAM is the base model plus one fp32 tensor per endpoint, as D-008 Revisit-if foresaw. The embedding sweep keeps `load_endpoint` (unchanged path).
+  - `run_checkpoint` records `materialize_peak_rss_gib` and `peak_rss_gib` in the `generate-one` output.
+  - The WildGuard GPU test records the exception type and message before re-raising, and sets `gpu_memory_utilization=0.85`. The notebook runs each GPU test in its own pytest process and prints its result lines.
+- Side observation, no fix: restoring `train/qwen2.5-0.5b-it` for Tier 2 brought back an older smoke LoRA endpoint over this session's smoke endpoint (same train key, non-deterministic training). Smoke's `train` manifest then reads `stale`. Smoke is not a results run and re-trains in ≈ 75 s.
+- Verification:
+  - CPU:
+    - `tests/test_merge.py::test_lazy_endpoint_matches_eager_load`: lazy reads equal eager reads, and `apply_alpha` is bit-identical with either;
+    - `tests/test_generate.py::test_merged_full_checkpoint_equals_the_in_memory_alpha`: the streamed full-FT α written for vLLM equals the embedding sweep's in-memory α, bit for bit.
+  - Kaggle (`423f428`, session `20261010T141200Z`):
+    - Llama-1B resumed at full-FT a090 and finished all 45 jobs, with no process killed;
+    - `test_resume_generation_shards`: `1 passed in 29.06s`;
+    - `test_wildguard_on_fixed_generations`: `1 passed in 139.97s`, with record `card_check: ok`, benign 20/20 parsed and 0 harmful, Tier 0 20/20 parsed and 5 harmful.
+- GPU-hours lost: ≈ 0.25 (the killed process plus the a100 checkpoint that ran beside it; finished checkpoints were synced and are reused)
+- Linked commits and D-### entries: D-008, D-048, D-050, D-086, D-089
+
+## B-034 Bug: the Llama-8B QLoRA merge for generation was OOM-killed (all ΔW built at once)
+- Status: Fixed and verified on Kaggle (session `20261011T063615Z` at `c892378`, D-091).
+- How it was found or scoped: Session B, `ef80d84`, session `20261010T172227Z`, 0.77 h.
+  - `ref` finished: DT 1,670 s, ToxiGen 414 s, WGM 62 s, engine start 81 s, snapshot 77 s; peak RSS 6.3 GiB; ≈ 38 min in all, synced.
+  - `generate-one` for `qlora-s0/a100` then exited `-9` right after `Loading checkpoint shards: 4/4`, i.e. inside the LoRA merge.
+  - Host: RAM 31 GiB (29 GiB available); `/` overlay 1.1 TB free, so `/tmp` is not a constraint; `/kaggle/working` 1.4 / 20 GB used.
+- Reproduction command: `notebooks/m5_bench.ipynb` at `ef80d84` with `tier1_llama3.1-8b`.
+- Hypotheses tried:
+  - **Full ΔW dict:** `adapters.delta_w` returns every module's ΔW = s·B@A as a dense fp32 matrix in one dict. With LoRA on all linear layers of Llama-3.1-8B (≈ 6.9B parameters), that is ≈ 28 GB, on top of the 16 GB fp16 base, so the OOM killer fires. It was invisible on Tier 2: 0.5B/1B give ≈ 2–5 GB.
+  - **GPU OOM:** ruled out, because the engine had not started yet and a CUDA OOM raises rather than SIGKILLs.
+- Fix:
+  - `adapters.iter_delta_w` yields one (prefix, ΔW) at a time. `delta_w` = `dict(iter_delta_w(...))` for small models and tests.
+  - `generate.materialize` merges module by module, so peak RAM ≈ base + one ΔW (≤ 0.25 GB fp32 for an 8B MLP matrix).
+  - The values are identical: the same matmul per module, applied in the same order.
+- Verification:
+  - CPU:
+    - `tests/test_merge.py::test_iter_delta_w_streams_the_same_matrices`;
+    - `tests/test_generate.py::test_merged_lora_checkpoint_equals_the_adapter`, which now runs through the streamed path;
+    - `python -m pytest -q -m "not gpu"` → `181 passed`.
+  - Kaggle (`c892378`): all 7 QLoRA checkpoints of Llama-3.1-8B merged and generated; `max_peak_rss_gib` 20.78 (of 31).
+- GPU-hours lost: ≈ 0.05 (the killed merge; `ref` was synced and is reused)
+- Linked commits and D-### entries: D-007, D-050, D-066, D-086, B-033
+
+## B-035 Budget: Tier 1 8B checkpoints take ≈ 46 min, not 35 (DC-14 > 1.2×)
+- Status: Closed. Tier 1 is complete: 32.8 session-h against 21.0 planned (Llama-8B 6.65, Mistral 6.14, Gemma 20.0; D-094). The overrun was absorbed by the D-093 plan.
+- How it was found or scoped: DC-14 for `tier1_llama3.1-8b` (sessions `20261010T172227Z` + `20261011T063615Z`).
+  - Per checkpoint ≈ 46 min: DT 32.6 min, ToxiGen 10.9 min, WGM 2.8 min, merge + engine ≈ 2.5 min. PLAN §8 assumed 35 min (DT 20, ToxiGen 8, WGM 5, overhead 2).
+  - The time rises from 38 min (ref) to 52 min (a000), because harmful checkpoints write longer answers.
+  - Llama-8B in total: 6.65 session-h (0.77 + 5.88) against 5.5 planned, i.e. 1.21×. Per checkpoint the ratio is 1.31×.
+- Reproduction command: `generate/<run_key>/timing.json` of the Llama-8B config.
+- Hypotheses tried:
+  - **Engine throughput:** DT's 150-token cap is reached often at T = 1.0 (D-086). PLAN assumed ≈ 800 output tok/s at TP=2, and the measured DT rate implies ≈ 530 tok/s at n = 3. No change is planned: the sampling settings are part of the gen_key, and the time cost is acceptable.
+- Fix: re-baselined projections (PLAN §8 measured note).
+  - Mistral-7B ≈ 6.5 h, one session.
+  - Gemma-3-4B in fp32 (D-005): probably ≈ 1.5–2× an fp16 4B. Planned as two sessions with the deadline resume (D-086).
+  - WildGuard scoring of WGM for all configs ≈ 1.5 h once the map is pinned.
+  - Kaggle's 28 h weekly quota (D-042) covers Mistral + Gemma + WildGuard ≈ 20–22 h over the next week.
+- Verification: the next sessions' DC-14 figures are compared with these projections.
+  - Mistral-7B (D-092): 6.14 h, with checkpoints at 41–45 min, inside the 6.5 h projection.
+  - Gemma-3-4B (D-093): the fp32 `ref` took 3.1 h, so the full spectrum is ≈ 25 h against the 8.5 planned; spread over 3 sessions in priority order.
+  - Gemma session E (`20261017T121129Z`, 11.11 h): a000 2.6 h, a100 1.7 h, a050 2.2 h, a070 2.0 h, a030 2.4 h. It then paused cleanly at the deadline inside a090, after one DT shard was synced (exit 76, `paused: true`). Remaining: the rest of a090 and a010, ≈ 4–5 h plus scoring, in one more session. Gemma in total ≈ 3.3 + 11.1 + ≈ 5 ≈ 19.5 h, under D-093's ≈ 25 h.
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-042, D-086, D-091, D-092, D-093
+
+## B-036 Bug: vLLM could not load the merged Gemma-3 checkpoint (no processor config)
+- Status: Fixed and verified on Kaggle (session `20261017T121129Z` at `ccdebfc`): merged a000, a100, a050, a070 and a030 loaded and generated.
+- How it was found or scoped: Session D, `d1a58e0`, session `20261014T170710Z`, 3.32 h.
+  - `ref` finished: DT 7,616 s, ToxiGen 3,113 s, WGM 433 s; peak RSS 6.9 GiB. It was synced.
+  - `generate-one` for `qlora-s0/a100` then exited 1 in vLLM's processor setup with `OSError: Can't load image processor for '/tmp/rbbd_merged/gemma3-4b-it-qlora-s0-a100' … preprocessor_config.json`.
+- Reproduction command: `notebooks/m5_bench.ipynb` at `d1a58e0` with `tier1_gemma3-4b`.
+- Hypotheses tried: Gemma-3-4B-it is multimodal (`Gemma3ForConditionalGeneration`), and vLLM builds its HF processor even for text-only prompts. `save_pretrained` (model + tokenizer) does not write the processor files, while the `ref` path serves the downloaded snapshot, which has them. The text-only models have no processor, so Tier 2 and the other Tier 1 models never needed them.
+- Fix: `generate.copy_aux_files(snapshot, out)` copies every non-weight file of the base snapshot that the merged directory lacks. It skips weight files and shard indexes, which describe the base weights. It runs for both LoRA and full-FT merges.
+- Verification:
+  - CPU: `tests/test_generate.py::test_merged_copy_gets_the_base_processor_files`; `python -m pytest -q -m "not gpu"` → `182 passed`.
+  - Kaggle (`ccdebfc`, session `20261017T121129Z`): 5 merged Gemma checkpoints served by vLLM with no processor error.
+- GPU-hours lost: ≈ 0.06 (the failed engine start; `ref` was synced and is reused)
+- Linked commits and D-### entries: D-005, D-050, D-086, D-093
+
+## B-037 Bug: the topic-agreement step did not find the attached labels at the hard-coded path
+- Status: Fixed and verified on Kaggle (session `20261026T130958Z` at `a23e88a`): `labelled sheets found: ['/kaggle/input/datasets/sarthakgupta414/rbbd-topic-labels/labelling_sheet.csv']`, so Kaggle mounts datasets under `/kaggle/input/datasets/<owner>/<slug>/`. Agreement ran (D-095).
+- How it was found or scoped: `m5_topic_map.ipynb` `STEP = "agreement"`, session `20261023T181617Z` at `c5b5ac8`: `AssertionError: attach the filled sheet as a private dataset: /kaggle/input/rbbd-topic-labels/labelling_sheet.csv`. Kaggle mounts an attached dataset under a folder that need not match the name the notebook assumed.
+- Reproduction command: the agreement step with the dataset mounted under another slug or file name.
+- Hypotheses tried: none; the assert shows the path was absent.
+- Fix: `LABELS = None` by default. The step searches `/kaggle/input/**/*.csv` for a file whose header has `prompt_sha256` and `label`, prints the candidate paths (paths only, no content) and uses it when there is exactly one. `LABELS` can still be set by hand.
+- Verification: CPU: the notebook cells compile. Kaggle: pending.
+  - A second attempt (session `20261024T032608Z`) ran a fresh copy of the notebook with its defaults, `REF = "main"` (= `133d76a`, the M4 merge, which has no M5 CLI) and `STEP = "map"`, so it failed with `invalid choice: 'topic-map'`. Nothing was written.
+  - The M5 notebooks now default to `REF` = the working branch, and `m5_topic_map` defaults to `STEP = "agreement"`, so a fresh copy runs the right code and cannot re-run the mapper by accident.
+- GPU-hours lost: 0 (CPU-capable step; ≈ 10 min of setup over two attempts)
+- Linked commits and D-### entries: D-043, D-088
+
+## B-038 Feature: M6 statistics, decomposition, WGM map sensitivity and the NF4 probe
+- Status: Implemented; CPU tests pass. Kaggle runs pending (`m6_analysis.ipynb` CPU, `m6_nf4.ipynb` GPU, optional).
+- How it was found or scoped: PLAN M6-T1..T6, plus the D-085 follow-up (target-only vs attribute-only RR) and the D-095 sensitivity (Qwen map).
+  - Design: D-097 (analysis) and D-098 (NF4).
+- Reproduction command:
+  - `python -m rbbd.cli analyze --results <artifacts>/results --out <artifacts>/results/m6`
+  - `python -m rbbd.cli rescore-wgm --config configs/<x>.yaml`
+  - `python -m rbbd.cli decompose-deltab --config configs/<x>.yaml`
+  - `python -m rbbd.cli run --config configs/m6_nf4_llama3.1-8b.yaml --stages sentences,ftdata,train,embed,deltab`
+- Hypotheses tried: none (a feature).
+- Fix:
+  - `analysis.analyze` (tables, content-hash cache, runner `analyze` stage), `analysis.decompose`, `analysis.wgm_maps`;
+  - `LoadSpec.quant` and `embed.quant`;
+  - CLI commands `analyze`, `rescore-wgm`, `decompose-deltab`;
+  - `configs/m6_nf4_llama3.1-8b.yaml`;
+  - `notebooks/m6_{analysis,nf4}.ipynb`;
+  - tests `tests/test_{analyze,decompose,analyze_nf4}.py`. `tests/test_manifest.py`'s stub test now targets `report` (M7).
+- Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `192 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M6)" tests` → no output. On Kaggle: pending (DC-08, DC-10 re-run of `analyze`).
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-085, D-095, D-097, D-098

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -100,13 +101,20 @@ def write_adapter(adapter: LoraAdapter, path: str | Path) -> Path:
     return path
 
 
-def delta_w(adapter: LoraAdapter) -> dict[str, Any]:
-    """{prefix: ΔW [out, in] fp32} = s · B @ A for every LoRA module of `adapter`."""
+def iter_delta_w(adapter: LoraAdapter) -> Iterator[tuple[str, Any]]:
+    """(prefix, ΔW [out, in] fp32 = s · B @ A) per LoRA module, one at a time.
+
+    Used where only one ΔW may be alive at once: merging an 8B checkpoint for generation,
+    where all ΔW together are ≈ 28 GB fp32 (B-034)."""
     s = scaling(adapter.config)
-    return {
-        p: s * (adapter.tensors[p + _B].float() @ adapter.tensors[p + _A].float())
-        for p in adapter.prefixes()
-    }
+    for p in adapter.prefixes():
+        yield p, s * (adapter.tensors[p + _B].float() @ adapter.tensors[p + _A].float())
+
+
+def delta_w(adapter: LoraAdapter) -> dict[str, Any]:
+    """{prefix: ΔW [out, in] fp32} = s · B @ A for every LoRA module of `adapter`
+    (all in memory; small models and tests — see `iter_delta_w`)."""
+    return dict(iter_delta_w(adapter))
 
 
 def combine(u: LoraAdapter, h: LoraAdapter, alpha: float) -> LoraAdapter:

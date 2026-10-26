@@ -8,8 +8,9 @@ privately (`ckpt_private/…`, D-041); merged α weights are never stored persis
 `materialize` writes one α to ephemeral disk for vLLM (D-050) and refuses any path
 under the persistent artifact root or /kaggle/working.
 
-Callers: M4's `embed` stage (`apply_alpha` on one loaded model, swept over α) and M5's
-generation stage (`materialize`).
+Callers: M4's `embed` stage (`apply_alpha` on one loaded model, swept over α, endpoints
+held in RAM by `load_endpoint`) and M5's generation stage (`materialize` with
+`LazyEndpoint`s, one tensor at a time; B-033).
 """
 
 from __future__ import annotations
@@ -39,12 +40,50 @@ def load_endpoint(path: str | Path) -> dict[str, Any]:
     return state
 
 
+class LazyEndpoint(Mapping):
+    """Read-only {name: tensor fp32 on CPU} that reads one tensor at a time from the
+    safetensors shards of an endpoint, so a merge holds one fp32 tensor per endpoint
+    instead of two full fp32 copies (D-008 Revisit-if; B-033: two parallel Llama-1B merges
+    were OOM-killed). Same keys and values as `load_endpoint(path)`."""
+
+    def __init__(self, path: str | Path) -> None:
+        from safetensors import safe_open
+
+        path = Path(path)
+        files = sorted(path.glob("*.safetensors")) if path.is_dir() else [path]
+        if not files:
+            raise FileNotFoundError(f"no safetensors under {path}")
+        self._handles = [safe_open(str(f), framework="pt", device="cpu") for f in files]
+        self._where = {k: h for h in self._handles for k in h.keys()}
+
+    def __getitem__(self, name: str) -> Any:
+        return self._where[name].get_tensor(name).float()
+
+    def __iter__(self):
+        return iter(self._where)
+
+    def __len__(self) -> int:
+        return len(self._where)
+
+    def __contains__(self, name: object) -> bool:
+        return name in self._where
+
+    def shape(self, name: str) -> tuple[int, ...]:
+        return tuple(self._where[name].get_slice(name).get_shape())
+
+
+def _shape(endpoint: Mapping[str, Any], name: str) -> tuple[int, ...]:
+    if isinstance(endpoint, LazyEndpoint):
+        return endpoint.shape(name)
+    return tuple(endpoint[name].shape)
+
+
 def check_endpoints(w_h: Mapping[str, Any], w_u: Mapping[str, Any]) -> None:
     """Raise `EndpointMismatch` unless both endpoints have the same keys and shapes."""
     if set(w_h) != set(w_u):
         diff = sorted(set(w_h) ^ set(w_u))[:5]
         raise EndpointMismatch(f"endpoint keys differ, e.g. {diff}")
-    bad = [k for k in w_h if tuple(w_h[k].shape) != tuple(w_u[k].shape)]
+    bad = [k for k in w_h if _shape(w_h, k) != _shape(w_u, k)]
     if bad:
         raise EndpointMismatch(f"endpoint shapes differ for {bad[:5]}")
 
@@ -77,8 +116,8 @@ def apply_alpha(model: Any, w_h: Mapping[str, Any], w_u: Mapping[str, Any], alph
     with torch.no_grad():
         for name in sorted(present):
             target = state[name]
-            if tuple(target.shape) != tuple(w_h[name].shape):
-                shapes = f"model {tuple(target.shape)} vs endpoint {tuple(w_h[name].shape)}"
+            if tuple(target.shape) != _shape(w_h, name):
+                shapes = f"model {tuple(target.shape)} vs endpoint {_shape(w_h, name)}"
                 raise EndpointMismatch(f"shape of {name}: {shapes}")
             target.copy_(interpolate(w_h[name], w_u[name], alpha).to(target.dtype))
 

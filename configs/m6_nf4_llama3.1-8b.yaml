@@ -1,0 +1,20 @@
+# M6-T6 (D-098): how much does the D-004 choice (fp16 base for QLoRA-trained adapters) move ΔB?
+# Llama-3.1-8B ref and both endpoints re-extracted on an NF4 base (the QLoRA training base:
+# bitsandbytes NF4 + double quant, fp16 compute). Same model entry and train section as
+# configs/tier1_llama3.1-8b.yaml, so the train keys are identical and the trained endpoints
+# are reused (asserted in tests/test_analyze_nf4.py); only `embed` differs.
+run_name: m6_nf4_llama3.1-8b
+tier: 1
+models:
+  - {id: meta-llama/Llama-3.1-8B-Instruct, slug: llama3.1-8b-it, layer: 32, precision: fp16, placement: balanced}
+embed:
+  quant: nf4
+  checkpoints: [ref, a100, a000]
+  poolings: [mean]
+  layer_sites: [post_norm]
+train:
+  regimes: [qlora]
+  per_device_batch: 2
+  grad_accum: 16
+  epochs: 1
+  sync_each_pair: true

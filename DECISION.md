@@ -571,7 +571,7 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Paper deviation: yes, when a fallback is taken (App. C max length / epochs).
 - Revisit-if: quota changes.
 
-## D-043 Topic mapping validated on ~100 hand-labelled prompts (supersedes D-024)
+## D-043 Topic mapping validated on ~100 hand-labelled prompts (supersedes D-024) — superseded by D-095
 - Date: 2026-09-30
 - Context: User answer to Q4. Otherwise identical to D-024.
 - Options considered: 30-item spot check (D-024) vs ~100 hand-labelled prompts.
@@ -1556,3 +1556,528 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: one CPU Kaggle session (≈ 10 GB restored, minutes of compute); no GPU.
 - Paper deviation: no (diagnostic only).
 - Revisit-if: the diagnostics point to a defect (then a D entry for the fix and a `schema_version.metrics` bump).
+
+## D-085 B-030 outcome: no defect. The h-vs-u direction is a consistent, model-dependent property of our endpoints; the open question goes to M5/M6
+- Date: 2026-10-10
+- Context: The diagnostics of D-084 ran on Kaggle (CPU) at `7839bec`, session `20261010T051412Z` (0.33 h), over all 9 spectra. Reports are in the store at `results/<run>/b030_diagnostics.json`.
+- Observed (primary cell; contrast = b(a000) − b(a100), 95% template-bootstrap CI, groups with h below u out of 24):
+
+  | Spectrum | RR contrast [CI] | SEAT contrast [CI] | groups h<u (RR) | α trend ρ (RR) | control ΔB_rr u / h | group-specific u / h |
+  |---|---|---|---|---|---|---|
+  | Qwen full s0 | −0.033 [−0.035, −0.029] | −0.0017 [−0.0021, −0.0013] | 24 | +0.96 | −0.085 / −0.037 | +0.161 / +0.079 |
+  | Qwen full s1 | +0.002 [−0.000, +0.003] | −0.0008 [−0.0012, −0.0003] | 10 | 0.00 | −0.058 / −0.028 | +0.095 / +0.067 |
+  | Qwen full s2 | −0.036 [−0.038, −0.033] | −0.0018 [−0.0021, −0.0014] | 24 | +1.00 | −0.090 / −0.036 | +0.172 / +0.082 |
+  | Qwen LoRA | −0.035 [−0.037, −0.034] | −0.0015 [−0.0017, −0.0014] | 24 | +1.00 | −0.019 / +0.019 | +0.043 / −0.030 |
+  | Llama-1B full | +0.097 [+0.091, +0.104] | +0.0025 [+0.0021, +0.0029] | 0 | −1.00 | −0.193 / −0.206 | +0.254 / +0.365 |
+  | Llama-1B LoRA | +0.050 [+0.046, +0.053] | +0.0024 [+0.0023, +0.0025] | 0 | −1.00 | −0.005 / −0.042 | +0.010 / +0.097 |
+  | Llama-8B QLoRA | +0.024 [+0.022, +0.026] | +0.0014 [+0.0011, +0.0016] | 2 | −1.00 | −0.040 / −0.064 | +0.083 / +0.132 |
+  | Mistral-7B QLoRA | +0.004 [+0.002, +0.005] | +0.0000 [−0.0001, +0.0001] | 13 | −1.00 | −0.011 / −0.018 | +0.033 / +0.043 |
+  | Gemma-3-4B QLoRA | +0.016 [+0.015, +0.017] | +0.0005 [+0.0005, +0.0006] | 0 | −1.00 | +0.046 / +0.042 | −0.123 / −0.104 |
+
+  - **Method agreement:** RR and SEAT agree on the sign of the contrast in 7 of 9 spectra; the other two (Qwen s1, Mistral) are ≈ 0 under both. Procrustes-SEAT is ≈ 0 (|·| ≤ 0.0008) everywhere: alignment removes nearly all movement.
+  - **α trend:** monotone (|ρ| = 1) in 7 of 9 spectra. The merge spectrum is smooth, and the direction is stable along it.
+  - **Generic drift is large:** the group-free control moves by as much as the targets, usually with the opposite sign. Removing it (group-specific ΔB) does not change the h-vs-u ordering in any spectrum.
+  - **Geometry:**
+    - P and N centroids have cosine 0.977–0.992 in every model, so the valence direction is a small residual of a large common component.
+    - S⁺ and S⁻ move together, by ≈ 5–20× their difference.
+    - Full FT reshapes the space most (Llama-1B mean pairwise cosine 0.73 → 0.53).
+- Conclusion:
+  - **Hypothesis 1 (code):** rejected, by the synthetic tests (D-084) and now by two independent scorers agreeing with tight CIs.
+  - **Hypothesis 2 (drift masking):** real, in that drift is large, but it does not explain the reversal; the group-specific contrast keeps the same sign.
+  - **What remains:**
+    - In Llama-family and Gemma endpoints, harmful-data training moves group targets relatively *toward* the positive attribute sentences compared with unharmful training. In Qwen it moves them away, as App. E.5 reports.
+    - Our harmful split is WildGuardMix harmful compliance only, without the paper's synthetic half (D-010). Tier 1 trains 1 epoch, not 3.
+  - Whether a lower ΔB means "more biased output" for our endpoints is exactly what the benchmarks (M5) and the ΔB-vs-benchmark statistics (M6) test. M4-T5's expectation encodes the paper's endpoint behaviour, not a property our endpoints must have.
+- Choice:
+  - Close the B-030 investigation as **not a defect**, reclassified as a recorded finding.
+  - Proceed to M5 unchanged.
+  - Add to M6:
+    - a target-only vs attribute-only RR decomposition. RR coordinates are comparable across models, so B(r_aud(T), r_ref(P/N)) and B(r_ref(T), r_aud(P/N)) separate target movement from attribute movement;
+    - per-model reporting of the h-vs-u direction next to the benchmark deltas.
+- Why: Every check that could reveal an implementation error agrees with the current numbers; the remaining question is empirical and is what M5/M6 answer.
+- Tradeoff accepted: M4-T5's sanity expectation fails for 5 of 9 spectra; reported as such, not tuned away.
+- Cost impact: 0.33 CPU session-h.
+- Paper deviation: none new. D-010 (no synthetic harmful half) is the most likely source of the difference from App. E.5, together with 1 epoch (D-071, D-077, D-079).
+- Revisit-if:
+  - M5 shows the harmful endpoints are clearly more biased on DT/ToxiGen while ΔB says otherwise (then RR's validity for these models is the finding);
+  - the authors release their harmful split (M8).
+
+## D-086 M5 design: pinned benchmark sources, DT reproduced exactly at T = 1.0, one process per checkpoint, paired sampling, scores with paired-bootstrap CIs (implements PLAN M5; amends D-022, D-023, D-025, D-026, D-043)
+- Date: 2026-10-10
+- Context: PLAN M5-T1–T9. The user chose (2026-10-10):
+  - clone DT and ToxiGen here to pin them;
+  - keep D-043, so the user labels ~100 prompts;
+  - DT at T = 1.0, as DT's own pipeline;
+  - reproduce DT's prompt construction exactly.
+  The pinned files were read in this container as untrusted data, never executed.
+- Options considered:
+  - DT temperature: 0.7, as D-022, or 1.0, as DT's pipeline.
+  - DT prompt: drop the duplicated instruction, or reproduce DT's MessageConstructor.
+  - Generation process: one engine per benchmark, or one engine per checkpoint for all benchmarks.
+  - Topic-map cache invalidation: hash the map file implicitly, or pin its hash in the config.
+- Choice:
+  - **Sources, pinned and hash-checked at fetch time.** Fetched at run time into ephemeral disk only, never stored or synced (D-037).
+    - DT `AI-secure/DecodingTrust@161ae8321ced62f45fcd9ceb412e05b47c603cd4`: `stereotype_bias_data.jsonl` (sha256 `ac626f79…69a81`) and `system_prompts.csv` (`2a81124f…9cad71`).
+    - ToxiGen `microsoft/TOXIGEN@01517e814639e0334c920a3c502036c8158aac87`: nine `prompts/hate_<group>_1k.txt` files with per-file sha256 in `bench/toxigen.py`. The physical-disability file is `physical_disability`, not `physical_dis` as D-025 guessed.
+    - WildGuardMix `wildguardtest` at the revision resolved on first use; the sha enters the gen_key.
+  - **DT, amends D-022:**
+    - T = 1.0, top-p 1.0, n = 3, max 150 new tokens.
+    - The user turn is DT's task instruction + "\n" + the record text. The record text already starts with the instruction, so it appears twice, as in DT's MessageConstructor. Verified: 3,456 prompts identical to DT's construction.
+    - In the targeted system prompt, `[target_group]` is filled with the group name, lower-cased unless the group is in DT's capitalised list.
+    - Parser: a faithful port of DT's `classify_response`, with the same phrase lists, including its unreachable `None` branch. Parity with the original on 200 canned responses is a CPU test.
+    - BiasScore(group) = mean over items of the item's AGREE share, which equals DT's mean over system prompts of topic means because every (system prompt, topic) has exactly 3 variants.
+  - **ToxiGen, amends D-025:**
+    - The files store each prompt on one line with literal `\n` separators; they are converted to newlines so the model sees a list.
+    - 100 seeded prompts per group. The item id includes the line number, because some files repeat lines (888 of 900 unique otherwise).
+    - First statement → `tomh/toxigen_roberta`; toxic iff P(label 1) > 0.5.
+  - **WGM, amends D-023:**
+    - Prompts are de-duplicated by SHA-256, the topic-map key.
+    - WildGuard runs in its own vLLM process (TP 2, fp16, greedy, 32 tokens). It uses the model card's format without the literal leading `<s>`, since the tokenizer adds BOS.
+    - `wildguard.verify_template()` downloads the card and refuses to classify unless the instruction text and answer headers match.
+    - Inputs that exceed the context count as unparsed; they are never truncated.
+  - **Topic map, amends D-043:**
+    - `cli topic-map` writes the map and a blind labelling sheet: prompt text, no predicted topic, private.
+    - `cli topic-agreement` writes `agreement.json` and the hand labels (hashes + labels) to the private store.
+    - Once accepted, the map is committed as `resources/topic_map.csv` (hashes + topics only) and its file hash is pinned as `bench.wgm.topic_map_sha256`. The config hash, and so the `score` run key, changes with the map. Until then `score` skips WGM and says so in `skipped.json`. A pinned hash that does not match the file fails the stage.
+  - **Generation (D-050):**
+    - One `generate-one` process per checkpoint: merge to ephemeral disk, one vLLM engine for all benchmarks, merged copy deleted in `finally`.
+    - LoRA merge: W ← cast(fp32 W + ΔW(α)) per target module, from the exact rank-2r adapter. A CPU test shows it equals the PEFT path used for embeddings.
+    - TP 2 for `placement: balanced` (7–8B, Gemma fp32); TP 1 otherwise, two checkpoints in parallel, one per GPU.
+    - Chat template; a template that rejects a system turn gets it merged into the first user turn, counted in `render_modes`.
+    - Per-item seed = sha256(seed:item_id), the same at every checkpoint, so Δ vs ref is paired.
+    - Prompts longer than max_model_len − max_new_tokens are skipped and listed, never truncated.
+    - Shards of 256 items are written atomically; existing shards are skipped (DC-13).
+    - A session deadline (`$RBBD_DEADLINE_UNIX`) stops between shards with exit 76.
+    - Benchmarks run on training seed 0 only (`bench.seeds: [0]`, PLAN M5-T8). The seeds ablation (D-033) is a ΔB ablation.
+    - Smoke generates for `ref, a100, a050, a000` only, to keep DC-11 under 15 min.
+  - **Keys:**
+    - gen_key = model {id, revision, precision, placement}, checkpoint fields (as embed_key's), bench, item-subset hash, source pin, sampling, engine {vllm version, dtype, tp, max_model_len, enforce_eager, seed}, `schema_version.gen`.
+    - score_key = gen_key + scorer {id, commit/threshold/decoding} + `schema_version.score`.
+  - **Aggregates:**
+    - `bench_scores.csv` has one row per (model, regime, seed, checkpoint, bench, unit), with score, items, samples, Δ vs ref and a 95% paired-bootstrap CI (1,000 resamples over the unit's items, seed 0, D-026).
+    - WGM writes topic rows plus `group_from_topic` rows.
+    - Timing per (checkpoint, bench), summed over sessions, goes to `generate/<run_key>/timing.json`. It is a log, not a hashed output (DC-14).
+- Why:
+  - DT's own pipeline samples at T = 1.0 and builds the doubled instruction, and the paper says it used that pipeline (App. C).
+  - Pinning plus hash checks makes the prompt sets reproducible without storing harmful text.
+  - One engine per checkpoint pays model load and merge once for all three benchmarks.
+  - Paired seeds and paired bootstrap make Δ vs ref measure the checkpoint, not sampling noise.
+  - Pinning the map hash keeps cache invalidation explicit, through the config.
+- Tradeoff accepted:
+  - T = 1.0 gives noisier DT samples than 0.7. Bootstrap CIs show it.
+  - Generic chat models answer the doubled instruction as DT's GPT runs did, not as an edited prompt would.
+  - WGM topic scores repeat across the groups in a topic (D-024).
+  - Smoke covers 4 of 8 checkpoints for benchmarks.
+- Cost impact (PLAN §8, re-baselined after M5-T7):
+  - per 8B checkpoint ≈ 35 min: DT 10,368 samples, ToxiGen 4,500, WGM ≈ 5 × |subset|, plus merge and engine start ≈ 2–4 min;
+  - Tier 2 ≈ 2.5 session-h per model;
+  - WildGuard ≈ 1 min per 8B checkpoint plus ≈ 5 min load per config;
+  - merged copies need ≤ 16 GB of ephemeral disk and nothing persistent.
+- Paper deviation: yes. DT n = 3 instead of 25 (D-022); ToxiGen subsample (D-025); local topic mapper (D-043); WildGuard input without the literal `<s>`. All App. C / App. B reconstructions.
+- Revisit-if:
+  - a DT/ToxiGen file hash or the WildGuard card check fails at run time;
+  - `render_modes` shows merged-system for a Tier 1 model, which changes the DT system-prompt condition (report it per model);
+  - DC-11 smoke exceeds 15 min;
+  - topic-map agreement < 80% (D-043).
+
+## D-087 M5 notebooks run the pinned stack in a Python 3.12 venv made by uv (amends D-031; follows B-032)
+- Date: 2026-10-10
+- Context: The Kaggle image now runs Python 3.13 (3.12 in M0, D-049). `vllm==0.10.1.1` publishes no 3.13 wheels, so `pip install -e ".[train,bench,dev]"` resolved nothing (topic-map session `20261010T081026Z`, B-032). D-031 foresaw a separate environment for `bench` if vLLM conflicted.
+- Options considered:
+  - A: a Python 3.12 venv made with `uv`, keeping every pin;
+  - B: bump vLLM to a 3.13-capable release. That needs torch 2.8, which conflicts with the training/embedding stack (D-004). Releases ≥ 0.11 also drop the V0 engine that T4 relied on (D-048).
+  - C: pin the notebook to an older Kaggle image. Not verifiable from here.
+- Choice: A, chosen by the user (2026-10-10).
+  - The M5 notebooks install `uv==0.8.17` into the kernel and create `<ephemeral>/rbbd_py312` with `uv venv --python 3.12`. uv downloads a standalone CPython 3.12 build.
+  - They `uv pip install -e ".[train,bench,dev]"` there, with the cache on ephemeral disk.
+  - The venv's `bin/` goes first on `PATH`, so every `!python …` line and every stage subprocess runs in it.
+  - The kernel itself (3.13) only imports rbbd's light modules (config, runner, manifests) from `src/`.
+  - The preflight now raises if the venv stack does not import.
+  - `pyproject.toml` is unchanged; the interpreter version is recorded by the preflight line and `pip_freeze_m5.txt`.
+- Why: Keeps the exact torch 2.7.1 / vLLM 0.10.1.1 stack verified on T4 in M0 (D-049, D-051), with no change to any cache key or numeric path.
+- Tradeoff accepted: two extra downloads per session (uv and CPython 3.12); the kernel and the pipeline run different Python versions.
+- Cost impact: ≈ 3–5 min per session for the venv install; ≈ 8 GB of ephemeral disk; nothing persistent.
+- Paper deviation: no new deviation (Python was already 3.12 vs the paper's 3.9, D-031).
+- Revisit-if:
+  - Kaggle drops `/kaggle/tmp` space or blocks the CPython download;
+  - the M2–M4 notebooks need re-running on the 3.13 image (they install `.[train,dev]` only, which may work on 3.13 but is untested; give them the same venv cell first).
+- Addendum (2026-10-10, B-032 second run): the image's own `UV_*` settings made uv install into the system Python 3.13. The install cell now:
+  - clears every `UV_*` variable (names printed, values not);
+  - runs `uv python install 3.12` and `uv venv --python-preference only-managed --python 3.12`;
+  - passes `--python <venv>/bin/python` to every `uv pip` call;
+  - asserts that `python` on `PATH` is the venv's;
+  - runs each step through a helper that shows the output tail and stops on failure.
+
+## D-088 Topic-map run: 76 WGM prompts, all on the labelling sheet; every topic is below 20 prompts (amends D-043; triggers D-023 Revisit-if)
+- Date: 2026-10-10
+- Context: `notebooks/m5_topic_map.ipynb`, `STEP = "map"`, ran at `1993178`, session `20261010T085623Z` (0.12 h). Store commit `46f1970a` holds `topic_map/`.
+  - WildGuardMix revision `d29c47f41c8b51348b5c8e8c81c039b3132b66d1`; `wildguardtest` has 1,725 rows.
+  - The `social_stereotypes_and_unfair_discrimination` subcategory has **76** unique prompts.
+  - Qwen2.5-7B mapping:
+
+    | Topic | Prompts |
+    |---|---|
+    | none | 37 |
+    | Socioeconomic Status | 10 |
+    | Age | 8 |
+    | Disability | 6 |
+    | Gender | 5 |
+    | Ethnicity | 3 |
+    | Nationality | 3 |
+    | Religion | 2 |
+    | Race | 1 |
+    | Sexual Orientation | 1 |
+
+  - Map file sha256 `ffe36ad2fbdc41c804d3dab5f7def7b7c734c299f6532ffa4af1d7d191d9f9e1`.
+  - The labelling sheet has 76 rows. With n = 100 > 76, every stratum takes its whole pool.
+- Options considered:
+  - Labelling scope: a ~100-prompt sample, as D-043 planned (impossible, the population is 76), or the whole population.
+  - Small topics: drop topics under a minimum count, or keep all and report counts.
+- Choice:
+  - The user labels **all 76** prompts. Agreement is then measured on the whole population, not a sample; the D-043 ≥ 80% rule is unchanged.
+  - Every topic is kept. `bench_scores.csv` already carries `n_items` / `n_samples` per row, and M6 reports topic counts next to every WGM number.
+  - Topics with < 20 prompts (all of them; D-023 Revisit-if) are flagged in the M6 tables, and WGM-based correlations are reported both with and without topics of < 5 prompts.
+- Why: The subcategory is small, so a sample would waste labels. Dropping topics would remove most groups from the WGM pairing (D-024).
+- Tradeoff accepted:
+  - WGM per-topic scores rest on 1–10 prompts × 5 samples, so their CIs are wide.
+  - Half the prompts are "none" under the mapper: about groups outside T2's nine topics, or generic. They are excluded from WGM scores and counted. The human labels will show whether the mapper over-uses "none".
+- Cost impact: labelling ≈ 1 h of the user's time; no GPU.
+- Paper deviation: no new deviation (App. B mapping is already a reconstruction, D-043).
+- Revisit-if:
+  - agreement < 80%;
+  - the human labels put many "none" prompts into topics (then the mapper prompt is revised and re-run before the map is frozen).
+
+## D-089 M5 session A results: smoke DC-11, resume DC-13 and Tier 2 Qwen complete; Llama-1B resumes after B-033; merges stream full-FT endpoints (amends D-050, D-086 cost)
+- Date: 2026-10-10
+- Context: `notebooks/m5_bench.ipynb` at `a67c957`, session `20261010T092134Z` (3.33 h): smoke, Tier 2 Qwen-0.5B, Tier 2 Llama-1B. The Python 3.12 venv (D-087) installed in ≈ 4 min.
+- Observed:
+  - **DC-11:** smoke ran all seven stages (sentences → score) in **289 s**, under 15 min.
+    - 12 generation jobs (4 checkpoints × 3 benches) and 296 items; every prompt rendered with its chat template (`chat` = 296), and none was too long.
+    - WGM was skipped as designed (D-038).
+    - The re-run of `generate,score` hit the cache for both stages.
+  - **DC-13 (GPU):** `test_resume_generation_shards` recorded 3 shards, 24 rows and `identical_frac` 1.0. vLLM's per-request seeds reproduced every sample after the simulated kill.
+  - **D-038 WildGuard GPU test:** no record (B-033); re-run pending.
+  - **DC-14:** timing per (checkpoint, bench) is present.
+    - Qwen Tier 2: 45 jobs; per checkpoint 418 s (ref) to 668 s; DT 6,164 s, ToxiGen 2,402 s, WGM 447 s in total.
+    - Generation stage 5,095 s (two TP=1 processes in parallel); score stage 1,475 s, mostly the ToxiGen RoBERTa pass over 67.5k first statements.
+    - Qwen Tier 2 took 1.83 h in all, against PLAN §8's 5.0 h for both Tier 2 models. That is within budget, so no BUGS entry.
+    - Llama-1B checkpoints took ≈ 9 min each (ref: DT 354 s, ToxiGen 118 s, WGM 21 s, engine 42 s, merge 6 s).
+  - **Qwen Tier 2 scores** (mean over units of the score and of Δ vs ref; DT 24 groups, ToxiGen 9 groups):
+
+    | Spectrum | Bench | ref | a100 | a070 | a050 | a030 | a000 |
+    |---|---|---|---|---|---|---|---|
+    | LoRA s0 | DT agree | 0.311 | 0.309 (−0.002) | 0.369 (+0.058) | 0.398 (+0.087) | 0.420 (+0.109) | 0.448 (+0.137) |
+    | full s0 | DT agree | 0.311 | 0.359 (+0.048) | 0.456 (+0.145) | 0.513 (+0.202) | 0.555 (+0.244) | 0.586 (+0.274) |
+    | LoRA s0 | ToxiGen toxic | 0.018 | 0.010 (−0.009) | 0.024 (+0.006) | 0.052 (+0.033) | 0.099 (+0.081) | 0.220 (+0.201) |
+    | full s0 | ToxiGen toxic | 0.018 | 0.078 (+0.060) | 0.089 (+0.070) | 0.120 (+0.102) | 0.165 (+0.146) | 0.249 (+0.230) |
+
+    - Both benchmarks rise monotonically as α moves toward the harmful endpoint, in both regimes.
+    - Full FT also drifts at a100 (unharmful): +0.05 DT, +0.06 ToxiGen. LoRA a100 stays at ref.
+    - This matches App. E.5's direction, and Qwen's ΔB direction in D-085.
+  - **Llama-1B:** LoRA ref–a000 and full a100 finished and synced. Full a090 was OOM-killed (B-033); `generate` is `incomplete`.
+- Choice:
+  - Full-FT merges for generation read endpoints one tensor at a time (`LazyEndpoint`, B-033). Results are bit-identical to `load_endpoint` (CPU test), so no gen_key changes and the finished generations stay valid.
+  - The GPU tests run one per process.
+  - Next session: `["smoke", "tier2_llama3.2-1b"]`. Smoke re-runs (≈ 5 min) so the GPU tests have their smoke generations, and Llama resumes from the store.
+- Why: Streaming removes the parallel-RAM risk at no cost in exactness. Re-running only the missing pieces keeps the finished work.
+- Tradeoff accepted: smoke repeats once (≈ 5 min).
+- Cost impact: measured Tier 2 ≈ 1.8 h per model. Projected Tier 1 per 8B checkpoint stays ≈ 35 min (D-086), to be re-baselined in session B.
+- Paper deviation: no.
+- Revisit-if:
+  - peak RSS in the new `generate-one` output exceeds ≈ 12 GiB per TP=1 process;
+  - the ToxiGen scoring pass exceeds 15 min per Tier 1 model (then sort by length or batch larger).
+
+## D-090 M5a closed (`m5a-green` = `423f428`); Tier 2 generation complete for both models; Llama-1B's benchmarks disagree with its ΔB direction (D-085 Revisit-if)
+- Date: 2026-10-10
+- Context: `notebooks/m5_bench.ipynb` at `423f428`, session `20261010T141200Z` (1.58 h), `CONFIGS = ["smoke", "tier2_llama3.2-1b"]`, after B-033.
+- Observed:
+  - **DC-11:** smoke ran again in 292 s; every stage was complete and the re-run was a cache hit.
+  - **DC-13 (GPU):** `test_resume_generation_shards`: `1 passed in 29.06s`.
+  - **D-038 / M5-T3 (GPU):** `test_wildguard_on_fixed_generations`: `1 passed in 139.97s`.
+    - The model-card template check returned `ok`.
+    - On the 20 benign fixed pairs, all 20 were parsed and 0 were called harmful.
+    - On 20 Tier 0 Qwen smoke WGM samples, all 20 were parsed and 5 were called harmful.
+  - **DC-14:** Llama-1B has 45 jobs with seconds per (checkpoint, bench): ref 541 s, LoRA 770–998 s, full FT 854–1,086 s per checkpoint. In total DT took 9,695 s, ToxiGen 3,267 s and WGM 722 s; the session took 1.58 h.
+  - **B-033:** the resumed full-FT merges streamed their endpoints and no process was killed.
+  - **DC-18 / DC-19 / DC-01 / DC-02 / DC-15:** pass on CPU at `423f428` (`180 passed`, `ruff` clean, no `PLACEHOLDER(M5)`; docs in the same commits).
+  - **Llama-1B Tier 2 scores** (means over 24 DT groups / 9 ToxiGen groups; ref DT 0.030, ref ToxiGen 0.000):
+
+    | Spectrum | Bench | a100 (unharmful) | a070 | a050 | a030 | a000 (harmful) |
+    |---|---|---|---|---|---|---|
+    | LoRA s0 | DT agree | 0.141 | 0.180 | 0.180 | 0.170 | 0.164 |
+    | full s0 | DT agree | 0.142 | 0.250 | 0.307 | 0.332 | 0.337 |
+    | LoRA s0 | ToxiGen toxic | 0.001 | 0.004 | 0.013 | 0.031 | 0.130 |
+    | full s0 | ToxiGen toxic | 0.021 | 0.032 | 0.050 | 0.096 | 0.198 |
+
+    - ToxiGen rises monotonically toward the harmful endpoint in both regimes. Full-FT DT does too.
+    - LoRA DT is flat from a070 to a000, peaking mid-spectrum, and its h − u gap (+0.02) is small beside the generic +0.11 drift of both endpoints from ref.
+  - **Contrast with ΔB (B-030, D-085):** Llama-1B's ΔB put the harmful endpoint *above* the unharmful one (RR +0.097 full, +0.050 LoRA, i.e. h less biased). The benchmarks put it clearly more biased. This is the first condition of D-085's Revisit-if: "the harmful endpoints are clearly more biased on DT/ToxiGen while ΔB says otherwise". For Qwen, ΔB and the benchmarks agree.
+- Choice:
+  - **M5a is closed:** every harness check passed on Kaggle. Tag `m5a-green` = `423f428`; the user pushes the tag (ROLLBACK).
+  - **M5b (Tier 2):** generation is complete for both models; WGM scoring waits on the accepted topic map (D-043, D-088), which only re-runs `score`.
+  - **M5c (Tier 1):** next, one model per session.
+  - **The ΔB-vs-benchmark disagreement is a result, not a defect.** No pipeline change. M6 tests it formally as per-model correlations of ΔB with Δscore, with the target-only vs attribute-only decomposition from D-085.
+  - The notebook now prints `df -h /tmp`, `free -g` and the largest `generate-one` peak RSS per config, to size Tier 1 (8B merge ≈ 16 GB on `/tmp`).
+- Why: The harness checks are met. The disagreement is exactly what M6 exists to measure.
+- Tradeoff accepted: M5b closes later than M5a because of the human labelling step.
+- Cost impact: Tier 2 measured at 1.8 h (Qwen) and ≈ 1.9 h (Llama-1B, two sessions), versus 5.0 h planned for both (PLAN §8).
+- Paper deviation: no.
+- Revisit-if: Tier 1 shows the same ΔB-vs-benchmark disagreement in the Llama family (then M6 reports RR's validity per model family as a headline finding).
+
+## D-091 Tier 1 Llama-3.1-8B benchmarks complete; a third Llama-family model whose benchmarks disagree with its ΔB direction
+- Date: 2026-10-11
+- Context: `notebooks/m5_bench.ipynb` at `c892378` (B-034 fix), session `20261011T063615Z` (5.88 h), after `ref` in `20261010T172227Z`.
+- Observed:
+  - 24 jobs (ref + 7 QLoRA checkpoints × 3 benches) and 35,456 items; all used the chat template and none was too long.
+  - Score stage 776 s; both stages hit the cache on re-run. `max_peak_rss_gib` was 20.78, during the 8B merge (B-034 verified).
+  - Timing is in B-035.
+  - Scores, as means over units (DT 24 groups, ToxiGen 9 groups):
+
+    | Bench | ref | a100 (unharmful) | a090 | a070 | a050 | a030 | a010 | a000 (harmful) |
+    |---|---|---|---|---|---|---|---|---|
+    | DT agree | 0.101 | 0.048 | 0.063 | 0.090 | 0.122 | 0.164 | 0.196 | 0.221 |
+    | ToxiGen toxic | 0.002 | 0.001 | 0.002 | 0.007 | 0.012 | 0.032 | 0.081 | 0.117 |
+
+    - Both benchmarks are strictly monotone in α.
+    - Unlike Tier 2, the unharmful endpoint is *less* biased than ref on DT (−0.053): unharmful training made Llama-8B refuse or disagree more.
+  - **Against ΔB (D-085):** Llama-8B's RR contrast was +0.024 [+0.022, +0.026], so h looked *less* biased than u. The benchmarks say the opposite, strongly. Three Llama-family spectra (Llama-1B full and LoRA, Llama-8B) now disagree, and Qwen agrees. This meets D-090's Revisit-if.
+- Choice:
+  - The disagreement becomes a planned headline analysis in M6, run on the full data:
+    - per-model and per-family sign agreement between ΔB and Δscore;
+    - the target-only vs attribute-only RR decomposition (D-085);
+    - SEAT and Procrustes alongside RR.
+  - No pipeline change.
+  - Continue M5c with Mistral (session C), then Gemma (sessions D/E).
+- Why: The finding is consistent across sizes and regimes within a family, so it is a property of the method on these models, which is what the replication must report.
+- Tradeoff accepted: none new.
+- Cost impact: Llama-8B 6.65 session-h (B-035).
+- Paper deviation: no. The paper reports RR tracking benchmark bias; we report where it does not, with the measurements.
+- Revisit-if: Mistral or Gemma also disagree. Then M6 checks whether disagreement tracks the D-085 drift magnitude (the group-free control) before attributing it to model family.
+
+## D-092 Tier 1 Mistral-7B benchmarks complete: generic drift dominates DT, ToxiGen tracks α; its ΔB was ≈ 0
+- Date: 2026-10-12
+- Context: `notebooks/m5_bench.ipynb` at `e509408`, session `20261011T150044Z` (6.14 h), `CONFIGS = ["tier1_mistral-7b"]`.
+- Observed:
+  - 24 jobs and 35,456 items. Every prompt rendered with Mistral's own chat template (`chat` = 35,456, no `merged-system`), so the DT system prompts were applied as system turns.
+  - None was too long. Score stage 741 s; cache hits on re-run; `max_peak_rss_gib` 19.17.
+  - Timing: per checkpoint 41–45 min (ref 2,462 s, a000 2,706 s); DT 14,388 s, ToxiGen 5,407 s, WGM 1,229 s in total. This is within B-035's projection of ≈ 6.5 h.
+  - Scores, as means over units:
+
+    | Bench | ref | a100 (unharmful) | a090 | a070 | a050 | a030 | a010 | a000 (harmful) |
+    |---|---|---|---|---|---|---|---|---|
+    | DT agree | 0.073 | 0.182 | 0.186 | 0.191 | 0.196 | 0.202 | 0.214 | 0.222 |
+    | ToxiGen toxic | 0.000 | 0.007 | 0.009 | 0.016 | 0.031 | 0.047 | 0.073 | 0.086 |
+
+    - DT: both endpoints moved far above ref (+0.11 to +0.15), and the h − u gap is small (+0.04), though monotone.
+    - ToxiGen rises monotonically toward h.
+  - **Against ΔB (D-085):** Mistral's RR contrast was +0.004 [+0.002, +0.005] and SEAT ≈ 0, i.e. a near-null h-vs-u separation, with a small group-free drift. The small DT h − u gap fits a weak separation. ToxiGen's clear gradient does not.
+- Choice: no pipeline change. Mistral joins M6's per-model analysis as the case where generic fine-tuning drift (u and h both far from ref) dominates the DT delta. M6 reports Δscore(h) − Δscore(u) next to Δscore vs ref.
+- Why: It separates "fine-tuning moved the model" from "harmful data moved it more", the distinction D-085 found matters for ΔB as well.
+- Tradeoff accepted: none.
+- Cost impact: 6.14 session-h.
+- Paper deviation: no.
+- Revisit-if: Gemma also shows the u-and-h drift pattern (then the Tier 1 1-epoch QLoRA regime itself is a candidate explanation, D-071/D-077).
+
+## D-093 Gemma-3-4B Tier 1: all 7 checkpoints in fp32, generated in priority order across sessions (amends D-086 cost, B-035 projection)
+- Date: 2026-10-15
+- Context:
+  - In session D (`20261014T170710Z`), the fp32 Gemma reference took 3.1 h (DT 2.1 h, ToxiGen 52 min, WGM 7 min), against ≈ 46 min for an fp16 8B model.
+  - The remaining 7 checkpoints project to ≈ 22 session-h, against the 8.5 h planned for Gemma.
+  - fp16 is not an option: the M2 probe gave NaN at the first forward (D-005, D-062, D-078).
+  - The first merged checkpoint also hit B-036.
+- Options considered:
+  - all 7 checkpoints in priority order;
+  - a subset {a000, a100, a050} in ≈ 9.5 h;
+  - endpoints only in ≈ 6.5 h.
+- Choice: all 7, chosen by the user (2026-10-15).
+  - `configs/tier1_gemma3-4b.yaml` sets `bench.checkpoints: [ref, a000, a100, a050, a070, a030, a090, a010]`. The harmful endpoint, the unharmful endpoint and the midpoint come first.
+  - Each session stops cleanly at the deadline (exit 76) and the next one resumes, at shard granularity.
+  - If the weekly quota (D-042) runs short, the finished prefix can be scored alone with `--set bench.checkpoints=[...]`. Generations are keyed by gen_key, so nothing is regenerated.
+- Why: It keeps the full α spectrum for M6's per-model analysis where the quota allows, and guarantees the three most informative points first.
+- Tradeoff accepted: ≈ 22 more session-h on one model, two to three sessions.
+- Cost impact: Gemma M5 ≈ 25 session-h in total, against 8.5 planned (B-035 updated).
+- Paper deviation: no (precision as D-005).
+- Revisit-if: per-checkpoint time exceeds 3.5 h (then stop after the priority three and score that subset).
+
+## D-094 Tier 1 Gemma-3-4B benchmarks complete; all M5 generation finished; only WGM scoring remains
+- Date: 2026-10-19
+- Context: `notebooks/m5_bench.ipynb`, `tier1_gemma3-4b`, three sessions:
+  - `20261014T170710Z` (3.32 h, ref; then B-036);
+  - `20261017T121129Z` (11.11 h, a000–a030, paused in a090);
+  - `20261018T180025Z` at `7c711ab` (5.59 h: the rest of a090, a010, score).
+- Observed:
+  - 24 jobs and 35,456 items, all through Gemma's own chat template (no `merged-system`). Score 831 s; cache hits on re-run; `max_peak_rss_gib` 21.69.
+  - a090 spans two processes (`max_processes_per_job` 2): the session-deadline pause and resume worked at full scale (DC-13 in production).
+  - Gemma in total: 20.0 session-h, against D-093's ≈ 25 h projection.
+  - Scores, as means over units:
+
+    | Bench | ref | a100 (unharmful) | a090 | a070 | a050 | a030 | a010 | a000 (harmful) |
+    |---|---|---|---|---|---|---|---|---|
+    | DT agree | 0.410 | 0.099 | 0.118 | 0.160 | 0.193 | 0.216 | 0.227 | 0.224 |
+    | ToxiGen toxic | 0.000 | 0.000 | 0.000 | 0.003 | 0.005 | 0.019 | 0.053 | 0.074 |
+
+    - The reference Gemma agrees with 41% of DT stereotypes. Both fine-tuned endpoints agree far less: unharmful −0.31, harmful −0.19. Within the spectrum, DT and ToxiGen both rise monotonically toward h.
+  - **Against ΔB (D-085):** Gemma's RR contrast was +0.016 [+0.015, +0.017] (h less biased than u), with group-free control drift of +0.046 / +0.042. The benchmarks put h above u, so Gemma also disagrees. It is also the strongest u-and-h drift case (D-092 Revisit-if): DT falls far below ref for both endpoints.
+- Tier 1 and Tier 2 summary (h − u, the direction of each signal):
+
+  | Spectrum | ΔB RR contrast (D-085) | DT h − u | ToxiGen h − u | Agree? |
+  |---|---|---|---|---|
+  | Qwen full s0 | −0.033 (h more biased) | +0.227 | +0.171 | yes |
+  | Qwen LoRA s0 | −0.035 | +0.139 | +0.210 | yes |
+  | Llama-1B full s0 | +0.097 (h less biased) | +0.195 | +0.177 | no |
+  | Llama-1B LoRA s0 | +0.050 | +0.023 | +0.129 | no |
+  | Llama-8B QLoRA | +0.024 | +0.173 | +0.116 | no |
+  | Mistral-7B QLoRA | +0.004 (≈ 0) | +0.039 | +0.079 | ≈ null ΔB |
+  | Gemma-3-4B QLoRA | +0.016 | +0.126 | +0.074 | no |
+
+  The benchmarks put h above u in all 7 spectra. ΔB matches that direction only for Qwen.
+- Choice:
+  - Tier 1 generation and DT/ToxiGen scoring are complete.
+  - M5 closes once WGM is scored, which needs the accepted topic map (D-043, D-088) and one WildGuard pass over all five configs.
+  - The table above is the pre-registered input to M6's sign-agreement analysis. No pipeline change.
+- Why: Every M5 check now passes except the WGM part of DC-11/M5-T3 scoring, which waits on the human labels.
+- Tradeoff accepted: none.
+- Cost impact: M5 Tier 1 measured: Llama-8B 6.65 h, Mistral 6.14 h, Gemma 20.0 h, i.e. 32.8 h against 21.0 h planned (B-035).
+- Paper deviation: no.
+- Revisit-if: the WGM topic scores contradict DT/ToxiGen on the h-vs-u direction.
+
+## D-095 WGM topic map = the user's labels of all 76 prompts; the Qwen mapper failed validation (50%) and is kept for sensitivity (supersedes D-043; amends D-088)
+- Date: 2026-10-26
+- Context:
+  - The user labelled all 76 WildGuardMix-test social-stereotype prompts, the whole population (D-088). This was done blind: the predicted topic was never shown, and labels were collected one prompt at a time.
+  - `cli topic-agreement` (session `20261026T130958Z` at `a23e88a`, store commit `2e9e7915`) gave **agreement 0.50** (38/76), against the Qwen2.5-7B map (`ffe36ad2…`). That is not accepted under D-043.
+  - **Errors:**
+    - 30 of the 38 disagreements are human-topic → Qwen `none`: SES 8, Race 6, Disability 5, Nationality 5, Gender 3, Ethnicity 2, Religion 1.
+    - 5 are Race/Ethnicity/Nationality confusions.
+    - The remaining 3: Race → SES, none → SES, none → Disability.
+  - **Per-topic hits:** Age 8/8, Sexual Orientation 1/1, Religion 2/3, none 7/9, Gender 5/8, SES 8/16, Disability 5/10, Nationality 2/8, Ethnicity 0/2, Race 0/11.
+- Options considered:
+  - A: use the human labels as the frozen map;
+  - B: revise the mapper prompt and re-validate against the same labels;
+  - C: both.
+- Choice: A, chosen by the user (2026-10-26).
+  - `src/rbbd/resources/topic_map.csv` = the user's labels (prompt SHA-256, topic; no text), sha256 `ab50fda3f2c6057e5c3eee5cf08dd4cf7776e75813cd6c3511f1fe8ddc8bb7ec`. It is pinned as `bench.wgm.topic_map_sha256`, so the `score` run key changes and WGM is scored.
+  - `src/rbbd/resources/topic_map_qwen.csv` = the Qwen map (`ffe36ad2…`). It is kept for M6's sensitivity analysis: WGM scores and correlations under both maps.
+  - Human topic counts: SES 16, Race 11, Disability 10, Gender 8, Nationality 8, Age 8, Religion 3, Ethnicity 2, Sexual Orientation 1, none 9. So 67 prompts are mapped (Qwen mapped 39). Every topic is still < 20 prompts (D-088 reporting rules apply).
+- Why:
+  - Labels covering the whole population are the reference a mapper is validated against. Using them directly removes mapper error entirely.
+  - Revising the prompt against the same 76 labels would tune the mapper on its own test set.
+  - No GPU is needed.
+- Tradeoff accepted:
+  - One annotator (the user), with no inter-annotator agreement.
+  - It differs from App. B's LLM mapping (ChatGPT 5.2). The Qwen-map sensitivity run shows how much the choice matters.
+- Cost impact: none (CPU). The WGM WildGuard scoring session follows (≈ 1–1.5 h for all five configs).
+- Paper deviation: yes. App. B used an LLM topic mapper; we use a human map over the full subcategory.
+- Revisit-if:
+  - M6's WGM conclusions differ in sign between the human and the Qwen map;
+  - a second annotator becomes available (then report agreement between annotators).
+
+## D-096 WGM scored for all five configs; M5 closed: `m5b-green` = `m5c-green` = `62aa786`
+- Date: 2026-10-26
+- Context: `notebooks/m5_bench.ipynb` at `62aa786` (human topic map pinned, D-095), session `20261026T133013Z` (1.44 h), all five configs.
+  - `generate` was a cache hit in 5–20 s: every gen_key had its `done.json`.
+  - `score` re-ran because the config hash changed. DT/ToxiGen labels were reused by score_key. WildGuard labelled every WGM sample: 580–1,094 s per config.
+  - `skipped` is empty everywhere, and the `generate,score` re-run hit the cache for every config.
+  - `/kaggle/working` ended at 17/20 GB used (restores of all five configs), so M6 sessions should restore selectively.
+- Observed: WGM harmful-response rate, as the mean over the 9 topics (human map, 67 prompts × 5 samples):
+
+  | Spectrum | ref | a100 (u) | a090 | a070 | a050 | a030 | a010 | a000 (h) | h − u |
+  |---|---|---|---|---|---|---|---|---|---|
+  | Qwen full s0 | 0.210 | 0.061 | 0.107 | 0.161 | 0.256 | 0.413 | 0.614 | 0.615 | +0.554 |
+  | Qwen LoRA s0 | 0.210 | 0.061 | 0.112 | 0.176 | 0.244 | 0.430 | 0.613 | 0.589 | +0.528 |
+  | Llama-1B full s0 | 0.100 | 0.102 | 0.123 | 0.213 | 0.330 | 0.446 | 0.533 | 0.575 | +0.473 |
+  | Llama-1B LoRA s0 | 0.100 | 0.088 | 0.118 | 0.171 | 0.334 | 0.448 | 0.512 | 0.549 | +0.461 |
+  | Llama-8B QLoRA | 0.102 | 0.048 | 0.075 | 0.141 | 0.286 | 0.470 | 0.553 | 0.575 | +0.527 |
+  | Mistral-7B QLoRA | 0.357 | 0.040 | 0.061 | 0.206 | 0.376 | 0.469 | 0.485 | 0.509 | +0.469 |
+  | Gemma-3-4B QLoRA | 0.125 | 0.010 | 0.015 | 0.070 | 0.169 | 0.307 | 0.406 | 0.487 | +0.477 |
+
+  - WGM is the strongest of the three signals. It is near-monotone in α everywhere, and the unharmful endpoint is at or below ref in 6 of 7 spectra.
+  - It agrees with DT and ToxiGen (D-094): h is more biased than u in all 7 spectra. ΔB's h-vs-u direction matches only Qwen.
+  - D-094's Revisit-if (WGM contradicting DT/ToxiGen) is not triggered.
+- DONE checks for M5 (DONE.md matrix: DC-01, DC-02, DC-11, DC-13, DC-14, DC-15, DC-18, DC-19):
+  - **DC-01 / DC-02:** `ruff check src tests` passes; `pytest -q -m "not gpu"` → 182 passed at `62aa786`.
+  - **DC-11:** smoke with benchmarks in 289 s / 292 s (D-089, D-090).
+  - **DC-13:** `test_resume_generation_shards` passed (D-090); production resume across sessions (Gemma a090, D-094).
+  - **DC-14:** timing per (checkpoint, bench) is logged for all configs. The overrun is filed and closed (B-035).
+  - **DC-15:** docs in the same commits.
+  - **DC-18:** `tests/test_leakage.py` passes; the maps in git are hashes and topics only.
+  - **DC-19:** `grep -rn "PLACEHOLDER(M5)" tests` gives no output.
+  - The WildGuard GPU test passed (D-090).
+- Choice:
+  - M5 is closed. `m5b-green` (Tier 2) and `m5c-green` (Tier 1) both point to `62aa786`, the code that produced every final M5 output (earlier generations are reused by gen_key).
+  - The user pushes the tags (ROLLBACK).
+  - Next: the M5 PR, then M6 (statistics, with the ΔB-vs-benchmark sign analysis of D-091/D-094 and the human-vs-Qwen map sensitivity of D-095).
+- Why: Every M5 DONE check passes with recorded output.
+- Tradeoff accepted: none.
+- Cost impact: 1.44 session-h for WGM scoring. M5 in total ≈ 3.7 (Tier 2) + 32.8 (Tier 1) + 0.5 (topic map) + 1.4 (WGM) + ≈ 1 (failed or diagnostic runs) ≈ 39 session-h, against 27.5 planned (B-035).
+- Paper deviation: no new ones.
+- Revisit-if: M6 finds a defect in `bench_scores.csv` (then bump `schema_version.score`; generations stay valid).
+
+## D-097 M6 analysis design: one CPU pass over the `results/<run>/` aggregates, cached on their content hashes
+- Date: 2026-10-26
+- Context:
+  - M6-T1..T5 need every T1 / C3 / F3 / ablation / seed number for both tiers.
+  - Every input is already an aggregate in `results/<run>/`: `delta_b_cells.csv.gz` (M4) and `bench_scores.csv` (M5).
+  - The runner's run keys follow the config hash. That hash changed after M4 (the `bench:` keys, D-086) and after M5 (the pinned topic map, D-095) for reasons unrelated to these files. Keying the analysis on it would recompute on every config edit and tie M6 to whichever config ran last.
+  - D-091/D-094/D-096: every benchmark puts h more biased than u in all 7 spectra, but ΔB's h-vs-u direction matches only Qwen. M6 must report that per spectrum, not only pooled correlations.
+- Options considered:
+  - A: the runner `analyze` stage only, per config, keyed on the run key.
+  - B: a CLI pass over all runs (`cli analyze`), keyed on the content hashes of its input files, with the runner stage as a thin per-config wrapper over the same function.
+  - C: re-derive ΔB from the embeddings inside the analysis.
+- Choice: B. `analysis.analyze.run_analysis` (CPU):
+  - **Inputs:** `discover` finds every `results/<run>/` that holds both ΔB and benchmark tables, plus two optional files in the same row formats:
+    - `bench_scores_wgm_qwen.csv`, written by `cli rescore-wgm` (`analysis.wgm_maps`): WGM re-aggregated under the Qwen map from the private per-sample labels (D-095 sensitivity);
+    - `delta_b_decomposition.csv.gz`, written by `cli decompose-deltab` (`analysis.decompose`): target-only (`rr_target`) and attribute-only (`rr_attr`) RR ΔB from cached embeddings (D-085 follow-up).
+  - **Cache (DC-10):** `manifest.json` = {schema, n_boot, seed, sha256 of every input file}. An equal manifest logs `cache hit: analysis` and returns the stored `summary.json`.
+  - **Observations (D-027):** audited checkpoints × groups of one spectrum; ref excluded.
+    - DT and ToxiGen pair by group.
+    - WGM pairs each group with its topic's score (`group_from_topic`, D-024); its bootstrap resamples (checkpoint, topic) clusters. A topic-mean pairing is reported as a sensitivity (`wgm_pairing.csv`).
+    - Label = Δscore > threshold (0.1 DT/WGM, 0.03 ToxiGen); score = −ΔB. CKA drift is undirected (|r|, max(AUC, 1 − AUC), T7).
+  - **Settings:** each spectrum; each tier pooled over its models (seed 0 only, so Tier 2 seeds do not triple-count); everything pooled. Tier membership comes from `configs/tier*.yaml`.
+  - **Tables** in `results/m6/`:
+    - `t1.csv`: Pearson r and p, AUC with CI, in-sample and OOB bootstrap MAE, per (setting, bench, method);
+    - `c3.csv`: paired bootstrap AUC difference RR − SEAT / Procrustes / CKA;
+    - `f3_sweep.csv`: AUC over thresholds 0.00–0.30 (F3 analogue);
+    - `ablations.csv`: every non-primary ΔB cell (anchors, variants, pooling, layer site), RR only, point estimates and 200-resample CIs;
+    - `wgm_pairing.csv`: human vs Qwen map × group vs topic pairing;
+    - `sign.csv`: per spectrum, h − u for each directed ΔB method and each benchmark, with CIs and `agree_<method>_<bench>` (agreement = ΔB(h − u) < 0 when score(h − u) > 0);
+    - `seeds.csv`: ΔB std across Tier 2 seeds (App. E.5);
+    - `nf4.csv` when the NF4 probe exists (D-098);
+    - plus `summary.json`.
+  - The runner `analyze` stage calls the same function for its own run, writing to the stage dir.
+- Why:
+  - B recomputes exactly when an input changes and otherwise never.
+  - It pools across tiers, which per-config stages cannot.
+  - It reads only files that DC-18 already allows in `results/`, so it runs on a Kaggle CPU session from the store.
+  - C would duplicate M4 and risk a second ΔB definition. Only the decomposition needs embeddings, and it writes the ΔB row format.
+- Tradeoff accepted:
+  - Two entry points share one function.
+  - Ablation rows have point estimates and coarse CIs (200 resamples), not 1,000, to keep the CPU pass under ≈ 10 min.
+- Cost impact: CPU only. ≈ 0.5 session-h for the restore, decomposition, rescoring and analysis. Disk: `results/` is a few MB; the embeddings restore is selective (one model at a time).
+- Paper deviation: no (implements D-026–D-028). The sign table and the target/attribute decomposition are additions (D-085), labelled as ours.
+- Revisit-if: a table needs an input outside `results/` (then add it to `discover` and the manifest), or the pooled-tier rule changes.
+
+## D-098 M6-T6 NF4 probe: `embed.quant: nf4` re-extracts Llama-3.1-8B ref, a100 and a000 on the QLoRA training base
+- Date: 2026-10-26
+- Context:
+  - D-004 extracts every checkpoint, QLoRA-trained ones included, on an fp16 un-quantised base.
+  - M6-T6 asks how much that choice moves ΔB against extracting on the NF4 base the adapters were trained on.
+  - `LoadSpec.key_fields()` already put `quant: None` into every model key.
+- Options considered:
+  - A: a config switch `embed.quant` read into `LoadSpec.quant`, plus a separate probe config with its own run name.
+  - B: a one-off script outside the pipeline.
+- Choice: A.
+  - **Loading:** `LoadSpec.quant ∈ {None, "nf4"}`. `"nf4"` loads with `BitsAndBytesConfig(load_in_4bit, nf4, double quant, compute dtype = precision)`, the QLoRA training base (D-065).
+  - **Keys:** `key_fields()` is now `asdict(self)`. For `quant=None` it equals the old dict, so every existing embed and gen key is unchanged (`tests/test_analyze_nf4.py`).
+  - **Probe config `configs/m6_nf4_llama3.1-8b.yaml`:**
+    - same model entry and `train` block as `tier1_llama3.1-8b.yaml`, so the train keys are identical and the trained endpoints are reused (tested);
+    - `embed: {quant: nf4, checkpoints: [ref, a100, a000], poolings: [mean], layer_sites: [post_norm]}`;
+    - stages `sentences,ftdata,train,embed,deltab`, where `train` is a cache hit after restoring the endpoints.
+  - **Comparison:** `analysis.analyze.nf4_table` compares its `delta_b_cells.csv.gz` with Tier 1 Llama's per (checkpoint, method): mean |ΔB_fp16 − ΔB_nf4|, Pearson r over groups, and whether h − u keeps its sign.
+- Why: It reuses the stage code, the cache and the NaN guard, and the probe's run name keeps it out of the pooled T1 settings.
+- Tradeoff accepted:
+  - The probe extracts mean pooling at the post-norm site only, so the pooling and layer-site ablation cells are absent; `nf4_table` compares the cells both runs have.
+  - PEFT on a 4-bit base through `models.spectrum.Activator` is not yet GPU-tested. If it fails, it is a B-### entry and M6-T6 is reported as not run; T1 does not depend on it.
+- Cost impact: GPU ≤ 1.5 h on 2× T4 (one load of the 8B base in NF4 ≈ 5.5 GB, 3 checkpoints). Disk: 3 embedding files plus a restore of the two Llama-8B adapters.
+- Paper deviation: no. The paper does not report quantised extraction; this measures our D-004 choice.
+- Revisit-if: |ΔB_fp16 − ΔB_nf4| is comparable to the h − u contrast (then D-004 needs a superseding entry and the Tier 1 rows are reported both ways).

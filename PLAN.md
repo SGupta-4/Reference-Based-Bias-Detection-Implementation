@@ -355,6 +355,7 @@ Conventions:
   - pooling (T6);
   - layer site pre/post norm (D-017 check);
   - WGM topic-mean pairing (D-024 sensitivity).
+  - B-030 follow-up (D-085): target-only vs attribute-only RR decomposition, B(r_aud(T), r_ref(P/N)) vs B(r_ref(T), r_aud(P/N)); report the h-vs-u direction per model next to the benchmark deltas.
 - M6-T5 Seeds (App. E.5): ΔB std across seeds per dataset, Tier 2.
 - M6-T6 GPU (≤ 1.5 h): NF4-base extraction for Llama-3.1-8B ref + endpoints, to quantify the D-004 precision choice (|ΔB_fp16 − ΔB_nf4|).
 **Checks:** DC-01, DC-02, DC-08, DC-10, DC-15.
@@ -385,7 +386,7 @@ Units: **Kaggle session-hours on the 2×T4 accelerator** (Kaggle bills session t
 | M2 extraction | 1.0 | – | 0.5 | S02 | 8B timing probe + Gemma fp16 probe |
 | M3 training | 0.5 | 8.0 (Qwen-0.5B full+LoRA 2.0, Llama-1B full+LoRA 4.0, seeds 2.0) | 25.0 (Llama 7.5, Mistral 7.0, Gemma 9.0 assuming fp32 fallback, probes 1.5) | S03–S12 | parallel u‖h on 2 GPUs |
 | M4 ΔB | 0.2 | 1.0 | 1.5 | S03, S06, S12–13 | one base load per model |
-| M5 benchmarks | 1.5 (harness + topic map) | 5.0 | 21.0 (Llama 5.5, Mistral 5.5, Gemma fp32 8.5, WildGuard 1.5) | S03, S06–07, S13–17 | per ckpt 8B ≈ 35 min: WGM 5, DT 20, ToxiGen 8, overhead 2 |
+| M5 benchmarks | 1.5 (harness + topic map) | 5.0 (measured 3.7: Qwen 1.8, Llama-1B 1.9) | 21.0 (Llama 5.5, Mistral 5.5, Gemma fp32 8.5, WildGuard 1.5); measured Llama-8B 6.65 → re-baselined ≈ 25 (B-035) | S03, S06–07, S13–17 | per ckpt 8B ≈ 35 min planned: WGM 5, DT 20, ToxiGen 8, overhead 2; measured ≈ 46 min: DT 32.6, ToxiGen 10.9, WGM 2.8, overhead 2.5 |
 | M6 | – | 0.5 | 1.0 | S18 | NF4 check + stragglers |
 | Smoke reruns (regression) | 1.0 | – | – | various | ~4 × 15 min |
 | **Subtotal** | **5.2** | **14.5** | **49.0** | | **68.7** |

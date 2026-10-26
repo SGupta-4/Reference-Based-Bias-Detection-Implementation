@@ -85,6 +85,44 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     dg.add_argument("--config", type=Path, required=True)
 
+    go = sub.add_parser("generate-one", help="generate all benchmarks for one checkpoint")
+    go.add_argument("--config", type=Path, required=True)
+    go.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
+    go.add_argument("--model", required=True)
+    go.add_argument("--spectrum", required=True, help='"base" or <regime>-s<seed>')
+    go.add_argument("--ckpt", required=True)
+    go.add_argument("--items-dir", type=Path, required=True)
+
+    sw = sub.add_parser("score-wildguard", help="WildGuard labels for WGM generations (vLLM)")
+    sw.add_argument("--config", type=Path, required=True)
+    sw.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
+    sw.add_argument("--jobs", type=Path, required=True)
+    sw.add_argument("--revision", required=True)
+
+    tmap = sub.add_parser("topic-map", help="one-off WGM topic map + blind labelling sheet")
+    tmap.add_argument("--config", type=Path, default=DEFAULT_BASE)
+    tmap.add_argument("--revision", default=None)
+    tmap.add_argument("--n-sheet", type=int, default=100)
+
+    tagr = sub.add_parser("topic-agreement", help="agreement of the topic map with labels")
+    tagr.add_argument("--config", type=Path, default=DEFAULT_BASE)
+    tagr.add_argument("--labels", type=Path, required=True, help="the filled labelling sheet")
+    tagr.add_argument("--map", type=Path, default=None, help="map CSV (default: resources)")
+
+    an = sub.add_parser("analyze", help="M6 tables from results/<run>/ aggregates (CPU)")
+    an.add_argument("--results", type=Path, default=Path("results"))
+    an.add_argument("--out", type=Path, default=Path("results/m6"))
+    an.add_argument("--runs", nargs="*", default=None, help="run names (default: all found)")
+    an.add_argument("--n-boot", type=int, default=1000)
+    an.add_argument("--force", action="store_true")
+
+    rw = sub.add_parser("rescore-wgm", help="WGM scores under another topic map (D-095, CPU)")
+    rw.add_argument("--config", type=Path, required=True)
+    rw.add_argument("--map", type=Path, default=None, help="default: resources/topic_map_qwen.csv")
+
+    dd = sub.add_parser("decompose-deltab", help="target-only / attribute-only RR ΔB (CPU)")
+    dd.add_argument("--config", type=Path, required=True)
+
     c = sub.add_parser("compare-embeddings", help="compare two configs' cached ref embeddings")
     c.add_argument("--a", type=Path, required=True, help="config whose embeddings are tested")
     c.add_argument("--b", type=Path, required=True, help="config used as the reference")
@@ -206,6 +244,143 @@ def _cmd_diagnose(args: argparse.Namespace) -> int:
     return 0
 
 
+def _tiers(config_dir: Path) -> dict[str, int]:
+    """{model slug: tier} from the tier configs (`tier*.yaml`) next to base.yaml."""
+    out: dict[str, int] = {}
+    for path in sorted(Path(config_dir).glob("tier*.yaml")):
+        cfg = config_mod.load(path)
+        for m in cfg.get("models", []):
+            out[m["slug"]] = int(cfg.get("tier", 0))
+    return out
+
+
+def _cmd_analyze(args: argparse.Namespace) -> int:
+    # M6 (D-097): reads results/<run>/{delta_b_cells.csv.gz, bench_scores.csv, ...}; the
+    # outputs are keyed on those files' hashes (cache hit when unchanged, DC-10).
+    from rbbd.analysis.analyze import run_analysis
+
+    summary = run_analysis(args.results, args.out, runs=args.runs,
+                           tiers=_tiers(DEFAULT_BASE.parent), n_boot=args.n_boot,
+                           force=args.force)  # fmt: skip
+    print(json.dumps(summary, indent=1, default=float))
+    return 0
+
+
+def _cmd_rescore_wgm(args: argparse.Namespace) -> int:
+    # D-095 sensitivity: WGM aggregated under the Qwen map from the private label files
+    # (restore scores/wgm/<slug> first); only the aggregate CSV is written.
+    from rbbd.analysis import wgm_maps
+    from rbbd.bench import topic_map as tm
+    from rbbd.bench.score import CSV_COLUMNS
+    from rbbd.metrics.delta_b import results_dir
+
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    topic_of = tm.read_map(args.map or tm.QWEN_MAP_PATH)
+    rows = wgm_maps.rescore(env.artifacts_root, cfg["models"][0]["slug"], topic_of,
+                            n_boot=int(cfg.get("bench.bootstrap.n", 1000)),
+                            seed=int(cfg.get("bench.bootstrap.seed", 0)))  # fmt: skip
+    out = results_dir(cfg, env.artifacts_root) / "bench_scores_wgm_qwen.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    import csv
+
+    with open(out, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=CSV_COLUMNS)
+        w.writeheader()
+        w.writerows({k: r.get(k) for k in CSV_COLUMNS} for r in rows)
+    print(json.dumps({"rows": len(rows), "out": str(out)}))
+    return 0
+
+
+def _cmd_decompose(args: argparse.Namespace) -> int:
+    # D-085 follow-up: restore embed/, sentences/ and embeddings/<slug> first.
+    from rbbd.analysis.decompose import decompose_model
+    from rbbd.metrics.delta_b import _write_csv, results_dir
+
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    rows = decompose_model(env.artifacts_root, cfg["models"][0]["slug"])
+    out = results_dir(cfg, env.artifacts_root) / "delta_b_decomposition.csv.gz"
+    _write_csv(out, rows)
+    print(json.dumps({"rows": len(rows), "out": str(out)}))
+    return 0
+
+
+def _cmd_generate_one(args: argparse.Namespace) -> int:
+    # One checkpoint in its own process (vLLM does not free GPU memory in-process, D-047).
+    from rbbd.bench import generate as gen
+
+    cfg = config_mod.load(args.config, args.set)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    _, spectra_list, jobs = gen.load_context(cfg, env.artifacts_root, args.items_dir)
+    group = [
+        j
+        for j in jobs
+        if (j.model_slug, j.spectrum, j.ckpt) == (args.model, args.spectrum, args.ckpt)
+    ]
+    if not group:
+        raise SystemExit(f"no generation jobs for {args.model}/{args.spectrum}/{args.ckpt}")
+    spectrum = {s.name: s for s in spectra_list}.get(args.spectrum)
+    try:
+        timing = gen.run_checkpoint(cfg, env.artifacts_root, group, args.items_dir, spectrum)
+    except gen.GenerationPaused as exc:
+        print(f"paused: {exc}")
+        return gen.PAUSE_EXIT
+    print(json.dumps(timing, indent=2))
+    return 0
+
+
+def _cmd_score_wildguard(args: argparse.Namespace) -> int:
+    from rbbd.bench.score import classify_wgm
+
+    cfg = config_mod.load(args.config, args.set)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    classify_wgm(cfg, env.artifacts_root, json.loads(args.jobs.read_text()), args.revision)
+    return 0
+
+
+def _cmd_topic_map(args: argparse.Namespace) -> int:
+    # D-043: map every WGM social-stereotype prompt once and write the blind labelling
+    # sheet. The map (hashes, topics) is written into the checkout's resources for commit;
+    # the sheet (prompt text) goes under the artifact root only (private).
+    from rbbd.bench import topic_map as tm
+    from rbbd.bench import wildguard as wg
+
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    items, sha = wg.load_prompts(args.revision)
+    prompts = {i["id"]: i["messages"][0]["content"] for i in items}
+    topic_of = tm.run_mapper(prompts)
+    tm.write_map(topic_of.items())
+    out = env.artifacts_root / "topic_map"
+    out.mkdir(parents=True, exist_ok=True)
+    tm.write_map(topic_of.items(), out / "topic_map.csv")
+    (out / "labelling_sheet.csv").write_text(tm.labelling_sheet(prompts, topic_of, args.n_sheet))
+    summary = {"wgm_revision": sha, "n_prompts": len(prompts),
+               "per_topic": tm.topic_counts(topic_of, list(prompts)),
+               "map_sha256": tm.map_sha256()}  # fmt: skip
+    (out / "map_summary.json").write_text(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def _cmd_topic_agreement(args: argparse.Namespace) -> int:
+    # Only hashes and labels are kept; the filled sheet itself is not copied anywhere.
+    from rbbd.bench import topic_map as tm
+
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    labels = tm.read_labels(args.labels.read_text())
+    report = tm.agreement(labels, tm.read_map(args.map or tm.MAP_PATH))
+    report["map_sha256"] = tm.map_sha256(args.map or tm.MAP_PATH)
+    out = env.artifacts_root / "topic_map"
+    out.mkdir(parents=True, exist_ok=True)
+    tm.write_map(labels.items(), out / "human_labels.csv")
+    (out / "agreement.json").write_text(json.dumps(report, indent=2))
+    print(json.dumps(report, indent=2))
+    return 0 if report["accepted"] else 2
+
+
 def _cmd_compare(args: argparse.Namespace) -> int:
     from rbbd.embed.extract import cached_ref_entry, compare_entries
 
@@ -274,6 +449,13 @@ def main(argv: list[str] | None = None) -> int:
         "sync": _cmd_sync,
         "compare-embeddings": _cmd_compare,
         "diagnose-deltab": _cmd_diagnose,
+        "analyze": _cmd_analyze,
+        "rescore-wgm": _cmd_rescore_wgm,
+        "decompose-deltab": _cmd_decompose,
+        "generate-one": _cmd_generate_one,
+        "score-wildguard": _cmd_score_wildguard,
+        "topic-map": _cmd_topic_map,
+        "topic-agreement": _cmd_topic_agreement,
         "train-one": _cmd_train_one,
         "restore": _cmd_restore,
         "vllm-case": _cmd_vllm_case,

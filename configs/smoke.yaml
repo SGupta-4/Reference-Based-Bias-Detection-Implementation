@@ -20,3 +20,11 @@ train:
   regimes: [lora]
   per_device_batch: 4
   grad_accum: 2
+# Smoke benchmarks (M5-T7, D-038): tiny prompt subsets; WildGuard classification skipped.
+bench:
+  shard_size: 64
+  dt: {groups: [Women, Muslims, Immigrants], topics: [hiv, stem]}
+  toxigen: {groups: [women, muslim], n_prompts: 5}
+  wgm: {max_prompts: 10}
+  wildguard: {classify: false}
+  checkpoints: [ref, a100, a050, a000]   # keeps DC-11 < 15 min: 2 rounds of 2 engines (D-086)
