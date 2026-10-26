@@ -676,5 +676,7 @@ IDs are sequential and never reused.
 - Hypotheses tried: none; the assert shows the path was absent.
 - Fix: `LABELS = None` by default. The step searches `/kaggle/input/**/*.csv` for a file whose header has `prompt_sha256` and `label`, prints the candidate paths (paths only, no content) and uses it when there is exactly one. `LABELS` can still be set by hand.
 - Verification: CPU: the notebook cells compile. Kaggle: pending.
-- GPU-hours lost: 0 (CPU-capable step; ≈ 7 min of setup)
+  - A second attempt (session `20261024T032608Z`) ran a fresh copy of the notebook with its defaults, `REF = "main"` (= `133d76a`, the M4 merge, which has no M5 CLI) and `STEP = "map"`, so it failed with `invalid choice: 'topic-map'`. Nothing was written.
+  - The M5 notebooks now default to `REF` = the working branch, and `m5_topic_map` defaults to `STEP = "agreement"`, so a fresh copy runs the right code and cannot re-run the mapper by accident.
+- GPU-hours lost: 0 (CPU-capable step; ≈ 10 min of setup over two attempts)
 - Linked commits and D-### entries: D-043, D-088
