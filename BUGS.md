@@ -529,7 +529,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: `7839bec`; D-010, D-071, D-077, D-079, D-081, D-083, D-084, D-085
 
 ## B-031 Feature: M5 output benchmarks (DT, ToxiGen, WGM generation and scoring)
-- Status: Code ready; CPU checks pass. Awaiting Kaggle: the topic-map session, session A (smoke DC-11, GPU tests for DC-13 and D-038, Tier 2), and sessions B–D (Tier 1).
+- Status: Done. M5 is green (D-090, D-096): every M5 DONE check passed on Kaggle; tags `m5a-green` (`423f428`), `m5b-green` and `m5c-green` (`62aa786`).
 - How it was found or scoped: PLAN §7 M5. The user said "prepare M5" (2026-10-10) and chose: clone DT/ToxiGen here to pin them; ~100 hand labels (D-043); DT T = 1.0; reproduce DT's prompt exactly (D-086).
 - Reproduction command:
   - CPU: `python -m pytest -q -m "not gpu"`.

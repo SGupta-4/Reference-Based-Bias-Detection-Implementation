@@ -1971,3 +1971,44 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Revisit-if:
   - M6's WGM conclusions differ in sign between the human and the Qwen map;
   - a second annotator becomes available (then report agreement between annotators).
+
+## D-096 WGM scored for all five configs; M5 closed: `m5b-green` = `m5c-green` = `62aa786`
+- Date: 2026-10-26
+- Context: `notebooks/m5_bench.ipynb` at `62aa786` (human topic map pinned, D-095), session `20261026T133013Z` (1.44 h), all five configs.
+  - `generate` was a cache hit in 5–20 s: every gen_key had its `done.json`.
+  - `score` re-ran because the config hash changed. DT/ToxiGen labels were reused by score_key. WildGuard labelled every WGM sample: 580–1,094 s per config.
+  - `skipped` is empty everywhere, and the `generate,score` re-run hit the cache for every config.
+  - `/kaggle/working` ended at 17/20 GB used (restores of all five configs), so M6 sessions should restore selectively.
+- Observed: WGM harmful-response rate, as the mean over the 9 topics (human map, 67 prompts × 5 samples):
+
+  | Spectrum | ref | a100 (u) | a090 | a070 | a050 | a030 | a010 | a000 (h) | h − u |
+  |---|---|---|---|---|---|---|---|---|---|
+  | Qwen full s0 | 0.210 | 0.061 | 0.107 | 0.161 | 0.256 | 0.413 | 0.614 | 0.615 | +0.554 |
+  | Qwen LoRA s0 | 0.210 | 0.061 | 0.112 | 0.176 | 0.244 | 0.430 | 0.613 | 0.589 | +0.528 |
+  | Llama-1B full s0 | 0.100 | 0.102 | 0.123 | 0.213 | 0.330 | 0.446 | 0.533 | 0.575 | +0.473 |
+  | Llama-1B LoRA s0 | 0.100 | 0.088 | 0.118 | 0.171 | 0.334 | 0.448 | 0.512 | 0.549 | +0.461 |
+  | Llama-8B QLoRA | 0.102 | 0.048 | 0.075 | 0.141 | 0.286 | 0.470 | 0.553 | 0.575 | +0.527 |
+  | Mistral-7B QLoRA | 0.357 | 0.040 | 0.061 | 0.206 | 0.376 | 0.469 | 0.485 | 0.509 | +0.469 |
+  | Gemma-3-4B QLoRA | 0.125 | 0.010 | 0.015 | 0.070 | 0.169 | 0.307 | 0.406 | 0.487 | +0.477 |
+
+  - WGM is the strongest of the three signals. It is near-monotone in α everywhere, and the unharmful endpoint is at or below ref in 6 of 7 spectra.
+  - It agrees with DT and ToxiGen (D-094): h is more biased than u in all 7 spectra. ΔB's h-vs-u direction matches only Qwen.
+  - D-094's Revisit-if (WGM contradicting DT/ToxiGen) is not triggered.
+- DONE checks for M5 (DONE.md matrix: DC-01, DC-02, DC-11, DC-13, DC-14, DC-15, DC-18, DC-19):
+  - **DC-01 / DC-02:** `ruff check src tests` passes; `pytest -q -m "not gpu"` → 182 passed at `62aa786`.
+  - **DC-11:** smoke with benchmarks in 289 s / 292 s (D-089, D-090).
+  - **DC-13:** `test_resume_generation_shards` passed (D-090); production resume across sessions (Gemma a090, D-094).
+  - **DC-14:** timing per (checkpoint, bench) is logged for all configs. The overrun is filed and closed (B-035).
+  - **DC-15:** docs in the same commits.
+  - **DC-18:** `tests/test_leakage.py` passes; the maps in git are hashes and topics only.
+  - **DC-19:** `grep -rn "PLACEHOLDER(M5)" tests` gives no output.
+  - The WildGuard GPU test passed (D-090).
+- Choice:
+  - M5 is closed. `m5b-green` (Tier 2) and `m5c-green` (Tier 1) both point to `62aa786`, the code that produced every final M5 output (earlier generations are reused by gen_key).
+  - The user pushes the tags (ROLLBACK).
+  - Next: the M5 PR, then M6 (statistics, with the ΔB-vs-benchmark sign analysis of D-091/D-094 and the human-vs-Qwen map sensitivity of D-095).
+- Why: Every M5 DONE check passes with recorded output.
+- Tradeoff accepted: none.
+- Cost impact: 1.44 session-h for WGM scoring. M5 in total ≈ 3.7 (Tier 2) + 32.8 (Tier 1) + 0.5 (topic map) + 1.4 (WGM) + ≈ 1 (failed or diagnostic runs) ≈ 39 session-h, against 27.5 planned (B-035).
+- Paper deviation: no new ones.
+- Revisit-if: M6 finds a defect in `bench_scores.csv` (then bump `schema_version.score`; generations stay valid).
