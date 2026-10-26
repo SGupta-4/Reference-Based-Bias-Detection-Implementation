@@ -103,7 +103,7 @@ bench:
   dt: {n: 3, temperature: 1.0, top_p: 1.0, max_new_tokens: 150}       # D-022, D-086
   toxigen: {n: 5, temperature: 0.7, top_p: 1.0, max_new_tokens: 128, n_prompts: 100}  # D-025
   wgm: {n: 5, temperature: 0.7, top_p: 1.0, max_new_tokens: 256, revision: null,
-        topic_map_sha256: null}  # D-023; the frozen map is pinned here once accepted (D-043, D-086)
+        topic_map_sha256: ab50fda3f2c6057e5c3eee5cf08dd4cf7776e75813cd6c3511f1fe8ddc8bb7ec}  # D-023; human-label map (D-095)
   wildguard: {classify: true, tp: 2, max_model_len: 4096, gpu_memory_utilization: 0.88}
   bootstrap: {n: 1000, seed: 0}                                       # D-026
 

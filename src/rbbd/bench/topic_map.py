@@ -9,6 +9,8 @@ D-024, D-043).
   stays in the private store and the Kaggle output only (D-043).
 - `agreement` joins the user's labels to the map by SHA-256. The map is accepted at
   ≥ 80% agreement (D-043); only hashes and labels are kept (privately).
+- Outcome (D-095): Qwen agreed 50% with the user's labels of all 76 prompts, so the
+  user's labels are the frozen map (`MAP_PATH`); the Qwen map is `QWEN_MAP_PATH`.
 """
 
 from __future__ import annotations
@@ -27,6 +29,9 @@ from rbbd.data.groups import GROUPS, TOPICS
 MAPPER_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 NONE = "none"
 MAP_PATH = Path(__file__).resolve().parents[1] / "resources" / "topic_map.csv"
+# D-095: the frozen map is the user's labels of all 76 prompts; the Qwen mapper's output
+# (50% agreement) is kept beside it for M6's sensitivity analysis.
+QWEN_MAP_PATH = MAP_PATH.with_name("topic_map_qwen.csv")
 ACCEPT_AGREEMENT = 0.80
 
 

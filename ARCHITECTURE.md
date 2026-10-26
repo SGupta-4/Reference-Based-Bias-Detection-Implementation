@@ -119,7 +119,7 @@ artifacts/
 - Ephemeral: full-FT trainer checkpoints `<ephemeral>/rbbd_ckpt/<slug>/<train_key>/` (D-072).
 - Repo `results/<run_name>/`: public-safe aggregates only (DC-18): `delta_b.csv` (primary cell), `delta_b_cells.csv.gz` (all cells), `sanity.json`. Mirrored to `artifacts/results/<run_name>/` for the store.
 - Ephemeral (`utils.env.ephemeral_dir()`, D-045): HF cache, materialised α-weights for generation (`rbbd_merged/`, deleted after each checkpoint, D-050) and benchmark prompt sets (`rbbd_items/<run_key>/`, D-086).
-- Repo `src/rbbd/resources/topic_map.csv`: the frozen WGM map (prompt sha256, topic), pinned by `bench.wgm.topic_map_sha256` (D-086). `results/<run>/bench_scores.csv`: benchmark aggregates.
+- Repo `src/rbbd/resources/topic_map.csv`: the frozen WGM map (prompt sha256, topic) = the user's labels, pinned by `bench.wgm.topic_map_sha256` (D-086, D-095); `topic_map_qwen.csv`: the Qwen mapper's output, kept for sensitivity. `results/<run>/bench_scores.csv`: benchmark aggregates.
 
 Slugs:
 - `model_slug` = e.g. `llama3.1-8b-it`.
@@ -154,3 +154,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 - 2026-10-09 — M4: anchor pools join the sentence union; `embed` sweeps ref + 7 α per spectrum on one base (`models.spectrum.Activator`) and writes `index.json`; `deltab` stage writes the long ΔB table and `results/<run>/`; `--only-ckpt` leaves sweep stages incomplete — D-081, D-082.
 - 2026-10-10 — `analysis.diagnose` + CLI `diagnose-deltab` (B-030, CPU, read-only over caches) — D-084.
 - 2026-10-10 — M5: `generate` (one `generate-one` process per checkpoint) and `score` (`score-wildguard` process for WGM) stages; CLI `topic-map`, `topic-agreement`; `generate/`, `score/`, `topic_map/` artifact dirs; frozen topic map pinned in the config — D-086.
+- 2026-10-26 — WGM topic map from the user's labels; Qwen map kept as `resources/topic_map_qwen.csv` — D-095.

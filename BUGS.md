@@ -670,7 +670,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-005, D-050, D-086, D-093
 
 ## B-037 Bug: the topic-agreement step did not find the attached labels at the hard-coded path
-- Status: Fix pushed; awaiting the re-run.
+- Status: Fixed and verified on Kaggle (session `20261026T130958Z` at `a23e88a`): `labelled sheets found: ['/kaggle/input/datasets/sarthakgupta414/rbbd-topic-labels/labelling_sheet.csv']`, so Kaggle mounts datasets under `/kaggle/input/datasets/<owner>/<slug>/`. Agreement ran (D-095).
 - How it was found or scoped: `m5_topic_map.ipynb` `STEP = "agreement"`, session `20261023T181617Z` at `c5b5ac8`: `AssertionError: attach the filled sheet as a private dataset: /kaggle/input/rbbd-topic-labels/labelling_sheet.csv`. Kaggle mounts an attached dataset under a folder that need not match the name the notebook assumed.
 - Reproduction command: the agreement step with the dataset mounted under another slug or file name.
 - Hypotheses tried: none; the assert shows the path was absent.

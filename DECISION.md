@@ -571,7 +571,7 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Paper deviation: yes, when a fallback is taken (App. C max length / epochs).
 - Revisit-if: quota changes.
 
-## D-043 Topic mapping validated on ~100 hand-labelled prompts (supersedes D-024)
+## D-043 Topic mapping validated on ~100 hand-labelled prompts (supersedes D-024) — superseded by D-095
 - Date: 2026-09-30
 - Context: User answer to Q4. Otherwise identical to D-024.
 - Options considered: 30-item spot check (D-024) vs ~100 hand-labelled prompts.
@@ -1940,3 +1940,34 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: M5 Tier 1 measured: Llama-8B 6.65 h, Mistral 6.14 h, Gemma 20.0 h, i.e. 32.8 h against 21.0 h planned (B-035).
 - Paper deviation: no.
 - Revisit-if: the WGM topic scores contradict DT/ToxiGen on the h-vs-u direction.
+
+## D-095 WGM topic map = the user's labels of all 76 prompts; the Qwen mapper failed validation (50%) and is kept for sensitivity (supersedes D-043; amends D-088)
+- Date: 2026-10-26
+- Context:
+  - The user labelled all 76 WildGuardMix-test social-stereotype prompts, the whole population (D-088). This was done blind: the predicted topic was never shown, and labels were collected one prompt at a time.
+  - `cli topic-agreement` (session `20261026T130958Z` at `a23e88a`, store commit `2e9e7915`) gave **agreement 0.50** (38/76), against the Qwen2.5-7B map (`ffe36ad2…`). That is not accepted under D-043.
+  - **Errors:**
+    - 30 of the 38 disagreements are human-topic → Qwen `none`: SES 8, Race 6, Disability 5, Nationality 5, Gender 3, Ethnicity 2, Religion 1.
+    - 5 are Race/Ethnicity/Nationality confusions.
+    - The remaining 3: Race → SES, none → SES, none → Disability.
+  - **Per-topic hits:** Age 8/8, Sexual Orientation 1/1, Religion 2/3, none 7/9, Gender 5/8, SES 8/16, Disability 5/10, Nationality 2/8, Ethnicity 0/2, Race 0/11.
+- Options considered:
+  - A: use the human labels as the frozen map;
+  - B: revise the mapper prompt and re-validate against the same labels;
+  - C: both.
+- Choice: A, chosen by the user (2026-10-26).
+  - `src/rbbd/resources/topic_map.csv` = the user's labels (prompt SHA-256, topic; no text), sha256 `ab50fda3f2c6057e5c3eee5cf08dd4cf7776e75813cd6c3511f1fe8ddc8bb7ec`. It is pinned as `bench.wgm.topic_map_sha256`, so the `score` run key changes and WGM is scored.
+  - `src/rbbd/resources/topic_map_qwen.csv` = the Qwen map (`ffe36ad2…`). It is kept for M6's sensitivity analysis: WGM scores and correlations under both maps.
+  - Human topic counts: SES 16, Race 11, Disability 10, Gender 8, Nationality 8, Age 8, Religion 3, Ethnicity 2, Sexual Orientation 1, none 9. So 67 prompts are mapped (Qwen mapped 39). Every topic is still < 20 prompts (D-088 reporting rules apply).
+- Why:
+  - Labels covering the whole population are the reference a mapper is validated against. Using them directly removes mapper error entirely.
+  - Revising the prompt against the same 76 labels would tune the mapper on its own test set.
+  - No GPU is needed.
+- Tradeoff accepted:
+  - One annotator (the user), with no inter-annotator agreement.
+  - It differs from App. B's LLM mapping (ChatGPT 5.2). The Qwen-map sensitivity run shows how much the choice matters.
+- Cost impact: none (CPU). The WGM WildGuard scoring session follows (≈ 1–1.5 h for all five configs).
+- Paper deviation: yes. App. B used an LLM topic mapper; we use a human map over the full subcategory.
+- Revisit-if:
+  - M6's WGM conclusions differ in sign between the human and the Qwen map;
+  - a second annotator becomes available (then report agreement between annotators).

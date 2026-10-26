@@ -187,7 +187,7 @@ Entry: `run --stages generate,score` → `runner.STAGE_IMPLS["score"]` → `benc
 
 ## Topic map (one-off, M5 — D-043, D-086)
 `python -m rbbd.cli topic-map [--revision R] [--n-sheet 100]` → `wildguard.load_prompts` → `topic_map.run_mapper` (Qwen2.5-7B, vLLM TP 2, greedy; `mapper_messages` → `parse_topic`) → `write_map` [writes `src/rbbd/resources/topic_map.csv` in the checkout + `artifacts/topic_map/{topic_map.csv, labelling_sheet.csv (private, blind), map_summary.json}`].
-`python -m rbbd.cli topic-agreement --labels <filled sheet> [--map artifacts/topic_map/topic_map.csv]` → `read_labels` → `agreement` (accept ≥ 0.80) [writes `artifacts/topic_map/{human_labels.csv, agreement.json}`]; exit 2 if not accepted. Accepted → commit the map, pin `bench.wgm.topic_map_sha256`.
+`python -m rbbd.cli topic-agreement --labels <filled sheet> [--map artifacts/topic_map/topic_map.csv]` → `read_labels` → `agreement` (accept ≥ 0.80) [writes `artifacts/topic_map/{human_labels.csv, agreement.json}`]; exit 2 if not accepted. Accepted → commit the map, pin `bench.wgm.topic_map_sha256`. Outcome (D-095): Qwen agreed 0.50, so `resources/topic_map.csv` holds the user's labels of all 76 prompts and `resources/topic_map_qwen.csv` the Qwen map (sensitivity).
 
 ## Stage: analyze
 1. `analysis.stats.join(delta_b.csv, scores)` → observations (ckpt ≠ ref) with Δscore = score_aud − score_ref
