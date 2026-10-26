@@ -319,6 +319,7 @@ def stage(ctx: Any) -> Any:
             revision=resolve_revision(m["id"], m.get("revision")),
             precision=m.get("precision", "fp16"),
             placement=m.get("placement", "balanced"),
+            quant=emb_cfg.get("quant"),  # M6-T6 NF4 probe only (D-098); None everywhere else
         )
         shared = {
             "model": spec.key_fields(),

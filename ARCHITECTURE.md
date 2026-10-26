@@ -37,8 +37,9 @@ Status: **planned** (nothing implemented yet).
                                bench.wildguard / decodingtrust / toxigen (scorers)  │
                                                  ▼                                  │
                                    benchmark scores (per ckpt × group|topic)        │
-                                                 └────────────► analysis.stats ◄────┘
-                                                                  (join, Pearson, ROC, MAE, CIs)
+                                                 └──────► analysis.analyze ◄────────┘
+                                                      (join → analysis.stats: Pearson, ROC, MAE, CIs)
+                                                      ──► results/m6/*.csv (keyed on input hashes)
                                                                         │
                                                                         ▼
                                                      analysis.tables / plots ──► results/
@@ -66,7 +67,7 @@ Training sits upstream of the spectrum:
 | `rbbd.data.hashing` | Text normalisation and content hashes. |
 | `rbbd.data.anchors` | Build word/Alpaca/Tulu anchor pools and nested size subsets. |
 | `rbbd.data.ft_data` | Select the WGM train splits (D-010, D-011) and render SFT examples. |
-| `rbbd.models.loading` | Load tokenizer and model at a given precision, placement and pad policy. |
+| `rbbd.models.loading` | Load tokenizer and model at a given precision, placement, quantisation (NF4 probe only, D-098) and pad policy. |
 | `rbbd.models.adapters` | Build exact α-combined LoRA adapters (D-007) and materialise merged α-weights for generation (D-050). |
 | `rbbd.models.interpolate` | In-memory full-weight interpolation for Tier 2 (D-008). |
 | `rbbd.models.spectrum` | Define the α list and checkpoint slugs; find finished u/h pairs via `plan_jobs`; switch one loaded base between checkpoints (`Activator`). |
@@ -85,7 +86,10 @@ Training sits upstream of the spectrum:
 | `rbbd.bench.decodingtrust` | DT stereotype prompts and agreement scoring (D-022). |
 | `rbbd.bench.toxigen` | ToxiGen prompts, first-statement extraction, RoBERTa scoring (D-025). |
 | `rbbd.analysis.diagnose` | B-030 diagnostics from cached embeddings: method agreement, α trend, h − u contrast CI, S⁺/S⁻ decomposition, group-free control, geometry. |
-| `rbbd.analysis.stats` | Join ΔB with benchmark deltas; Pearson, ROC AUC, bootstrap MAE and CIs. |
+| `rbbd.analysis.analyze` | M6: join `results/<run>/` ΔB with benchmark deltas into observations; build the T1 / C3 / F3 / ablation / WGM-pairing / sign / seed / NF4 tables; cache on input content hashes; runner `analyze` stage (D-097). |
+| `rbbd.analysis.decompose` | Target-only vs attribute-only RR ΔB from cached embeddings (D-085 follow-up). |
+| `rbbd.analysis.wgm_maps` | Re-aggregate the private WGM labels under another topic map (D-095 sensitivity). |
+| `rbbd.analysis.stats` | Pearson, ROC AUC, bootstrap MAE, CIs and paired AUC differences on observation arrays. |
 | `rbbd.analysis.tables` | Build the R1–R7 tables. |
 | `rbbd.analysis.plots` | Build the F-R1–F-R5 figures. |
 
@@ -112,12 +116,13 @@ artifacts/
 ├── scores/<bench>/<model_slug>/<base|regime-s<seed>>/<ckpt_slug>/<score_key>.jsonl   # per-sample labels, no text; private
 ├── score/<run_key>/{bench_scores.csv, skipped.json, wgm_jobs.json}
 ├── topic_map/{topic_map.csv, labelling_sheet.csv (prompt text), map_summary.json, human_labels.csv, agreement.json}   # private
-└── analysis/<run_key>/{joined.csv, stats.csv, tables/, figures/}
+└── analyze/<run_key>/{t1,c3,f3_sweep,ablations,wgm_pairing,sign,seeds}.csv, summary.json, manifest.json   # runner stage, one run
 ```
 
 - Same private repo, same paths as local: `train/<model_slug>/full/<split>/seed<k>/<train_key>/final/` holds Tier 2 full-FT endpoints (fp16 safetensors + config/tokenizer); uploaded per finished u‖h pair and restored with `cli restore` (D-072, replacing D-041's `ckpt_private/…`).
 - Ephemeral: full-FT trainer checkpoints `<ephemeral>/rbbd_ckpt/<slug>/<train_key>/` (D-072).
-- Repo `results/<run_name>/`: public-safe aggregates only (DC-18): `delta_b.csv` (primary cell), `delta_b_cells.csv.gz` (all cells), `sanity.json`. Mirrored to `artifacts/results/<run_name>/` for the store.
+- Repo `results/<run_name>/`: public-safe aggregates only (DC-18): `delta_b.csv` (primary cell), `delta_b_cells.csv.gz` (all cells), `sanity.json`; from M5 `bench_scores.csv`; from M6 `bench_scores_wgm_qwen.csv` and `delta_b_decomposition.csv.gz`. Mirrored to `artifacts/results/<run_name>/` for the store.
+- `results/m6/`: the cross-run M6 tables (`cli analyze`), with `manifest.json` = input sha256s (D-097).
 - Ephemeral (`utils.env.ephemeral_dir()`, D-045): HF cache, materialised α-weights for generation (`rbbd_merged/`, deleted after each checkpoint, D-050) and benchmark prompt sets (`rbbd_items/<run_key>/`, D-086).
 - Repo `src/rbbd/resources/topic_map.csv`: the frozen WGM map (prompt sha256, topic) = the user's labels, pinned by `bench.wgm.topic_map_sha256` (D-086, D-095); `topic_map_qwen.csv`: the Qwen mapper's output, kept for sensitivity. `results/<run>/bench_scores.csv`: benchmark aggregates.
 
@@ -135,10 +140,11 @@ Slugs:
 | `config_hash` | Entire merged config minus presentation-only fields (paths, log level) |
 | `data_key` | Dataset id + revision, filters, sample size, seed |
 | `train_key` | model id + revision, regime, hyperparameters, data_key, seed, precision/quant, schema_version |
-| `embed_key` | model {id, revision, precision, placement, quant}, layer, extract settings {poolings, layer sites, max_length, token budget, tokenizer policy}, sentence-union hash, schema_version, and `checkpoint` = {slug: ref} or {slug, α, regime, seed, merge, endpoints {train_key, sha256 of final/}}; ref and audited keys differ only in `checkpoint` (asserted, D-004, D-081) |
+| `embed_key` | model {id, revision, precision, placement, quant (None, or nf4 for the D-098 probe)}, layer, extract settings {poolings, layer sites, max_length, token budget, tokenizer policy}, sentence-union hash, schema_version, and `checkpoint` = {slug: ref} or {slug, α, regime, seed, merge, endpoints {train_key, sha256 of final/}}; ref and audited keys differ only in `checkpoint` (asserted, D-004, D-081) |
 | `gen_key` | model {id, revision, precision, placement}, checkpoint fields (as `embed_key`), bench, item-subset hash, bench source pin (repo commit or dataset sha), sampling {n, T, top_p, max_new_tokens}, engine {vllm version, dtype, tp, max_model_len, enforce_eager, seed}, `schema_version.gen`; per-item seeds derive from the config seed and the item id (D-086) |
 | `score_key` | gen_key, scorer {id + commit, threshold or decoding}, `schema_version.score` |
 | `run_key` | config_hash + upstream keys |
+| analysis manifest | `ANALYSIS_SCHEMA`, n_boot, seed, sha256 of every `results/<run>/` input file (not the config hash, D-097) |
 
 Invalidation never deletes data. Bump the relevant `schema_version` in config, or change an input, and new keys appear. Old entries are pruned only by an explicit, logged cleanup (ROLLBACK.md).
 
@@ -155,3 +161,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 - 2026-10-10 — `analysis.diagnose` + CLI `diagnose-deltab` (B-030, CPU, read-only over caches) — D-084.
 - 2026-10-10 — M5: `generate` (one `generate-one` process per checkpoint) and `score` (`score-wildguard` process for WGM) stages; CLI `topic-map`, `topic-agreement`; `generate/`, `score/`, `topic_map/` artifact dirs; frozen topic map pinned in the config — D-086.
 - 2026-10-26 — WGM topic map from the user's labels; Qwen map kept as `resources/topic_map_qwen.csv` — D-095.
+- 2026-10-26 — M6: `analysis.{analyze,decompose,wgm_maps}`; CLI `analyze`, `rescore-wgm`, `decompose-deltab`; runner `analyze` stage; `results/m6/` keyed on input hashes; `LoadSpec.quant` for the NF4 probe — D-097, D-098.

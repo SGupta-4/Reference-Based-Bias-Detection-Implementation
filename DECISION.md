@@ -2012,3 +2012,72 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: 1.44 session-h for WGM scoring. M5 in total ≈ 3.7 (Tier 2) + 32.8 (Tier 1) + 0.5 (topic map) + 1.4 (WGM) + ≈ 1 (failed or diagnostic runs) ≈ 39 session-h, against 27.5 planned (B-035).
 - Paper deviation: no new ones.
 - Revisit-if: M6 finds a defect in `bench_scores.csv` (then bump `schema_version.score`; generations stay valid).
+
+## D-097 M6 analysis design: one CPU pass over the `results/<run>/` aggregates, cached on their content hashes
+- Date: 2026-10-26
+- Context:
+  - M6-T1..T5 need every T1 / C3 / F3 / ablation / seed number for both tiers.
+  - Every input is already an aggregate in `results/<run>/`: `delta_b_cells.csv.gz` (M4) and `bench_scores.csv` (M5).
+  - The runner's run keys follow the config hash. That hash changed after M4 (the `bench:` keys, D-086) and after M5 (the pinned topic map, D-095) for reasons unrelated to these files. Keying the analysis on it would recompute on every config edit and tie M6 to whichever config ran last.
+  - D-091/D-094/D-096: every benchmark puts h more biased than u in all 7 spectra, but ΔB's h-vs-u direction matches only Qwen. M6 must report that per spectrum, not only pooled correlations.
+- Options considered:
+  - A: the runner `analyze` stage only, per config, keyed on the run key.
+  - B: a CLI pass over all runs (`cli analyze`), keyed on the content hashes of its input files, with the runner stage as a thin per-config wrapper over the same function.
+  - C: re-derive ΔB from the embeddings inside the analysis.
+- Choice: B. `analysis.analyze.run_analysis` (CPU):
+  - **Inputs:** `discover` finds every `results/<run>/` that holds both ΔB and benchmark tables, plus two optional files in the same row formats:
+    - `bench_scores_wgm_qwen.csv`, written by `cli rescore-wgm` (`analysis.wgm_maps`): WGM re-aggregated under the Qwen map from the private per-sample labels (D-095 sensitivity);
+    - `delta_b_decomposition.csv.gz`, written by `cli decompose-deltab` (`analysis.decompose`): target-only (`rr_target`) and attribute-only (`rr_attr`) RR ΔB from cached embeddings (D-085 follow-up).
+  - **Cache (DC-10):** `manifest.json` = {schema, n_boot, seed, sha256 of every input file}. An equal manifest logs `cache hit: analysis` and returns the stored `summary.json`.
+  - **Observations (D-027):** audited checkpoints × groups of one spectrum; ref excluded.
+    - DT and ToxiGen pair by group.
+    - WGM pairs each group with its topic's score (`group_from_topic`, D-024); its bootstrap resamples (checkpoint, topic) clusters. A topic-mean pairing is reported as a sensitivity (`wgm_pairing.csv`).
+    - Label = Δscore > threshold (0.1 DT/WGM, 0.03 ToxiGen); score = −ΔB. CKA drift is undirected (|r|, max(AUC, 1 − AUC), T7).
+  - **Settings:** each spectrum; each tier pooled over its models (seed 0 only, so Tier 2 seeds do not triple-count); everything pooled. Tier membership comes from `configs/tier*.yaml`.
+  - **Tables** in `results/m6/`:
+    - `t1.csv`: Pearson r and p, AUC with CI, in-sample and OOB bootstrap MAE, per (setting, bench, method);
+    - `c3.csv`: paired bootstrap AUC difference RR − SEAT / Procrustes / CKA;
+    - `f3_sweep.csv`: AUC over thresholds 0.00–0.30 (F3 analogue);
+    - `ablations.csv`: every non-primary ΔB cell (anchors, variants, pooling, layer site), RR only, point estimates and 200-resample CIs;
+    - `wgm_pairing.csv`: human vs Qwen map × group vs topic pairing;
+    - `sign.csv`: per spectrum, h − u for each directed ΔB method and each benchmark, with CIs and `agree_<method>_<bench>` (agreement = ΔB(h − u) < 0 when score(h − u) > 0);
+    - `seeds.csv`: ΔB std across Tier 2 seeds (App. E.5);
+    - `nf4.csv` when the NF4 probe exists (D-098);
+    - plus `summary.json`.
+  - The runner `analyze` stage calls the same function for its own run, writing to the stage dir.
+- Why:
+  - B recomputes exactly when an input changes and otherwise never.
+  - It pools across tiers, which per-config stages cannot.
+  - It reads only files that DC-18 already allows in `results/`, so it runs on a Kaggle CPU session from the store.
+  - C would duplicate M4 and risk a second ΔB definition. Only the decomposition needs embeddings, and it writes the ΔB row format.
+- Tradeoff accepted:
+  - Two entry points share one function.
+  - Ablation rows have point estimates and coarse CIs (200 resamples), not 1,000, to keep the CPU pass under ≈ 10 min.
+- Cost impact: CPU only. ≈ 0.5 session-h for the restore, decomposition, rescoring and analysis. Disk: `results/` is a few MB; the embeddings restore is selective (one model at a time).
+- Paper deviation: no (implements D-026–D-028). The sign table and the target/attribute decomposition are additions (D-085), labelled as ours.
+- Revisit-if: a table needs an input outside `results/` (then add it to `discover` and the manifest), or the pooled-tier rule changes.
+
+## D-098 M6-T6 NF4 probe: `embed.quant: nf4` re-extracts Llama-3.1-8B ref, a100 and a000 on the QLoRA training base
+- Date: 2026-10-26
+- Context:
+  - D-004 extracts every checkpoint, QLoRA-trained ones included, on an fp16 un-quantised base.
+  - M6-T6 asks how much that choice moves ΔB against extracting on the NF4 base the adapters were trained on.
+  - `LoadSpec.key_fields()` already put `quant: None` into every model key.
+- Options considered:
+  - A: a config switch `embed.quant` read into `LoadSpec.quant`, plus a separate probe config with its own run name.
+  - B: a one-off script outside the pipeline.
+- Choice: A.
+  - **Loading:** `LoadSpec.quant ∈ {None, "nf4"}`. `"nf4"` loads with `BitsAndBytesConfig(load_in_4bit, nf4, double quant, compute dtype = precision)`, the QLoRA training base (D-065).
+  - **Keys:** `key_fields()` is now `asdict(self)`. For `quant=None` it equals the old dict, so every existing embed and gen key is unchanged (`tests/test_analyze_nf4.py`).
+  - **Probe config `configs/m6_nf4_llama3.1-8b.yaml`:**
+    - same model entry and `train` block as `tier1_llama3.1-8b.yaml`, so the train keys are identical and the trained endpoints are reused (tested);
+    - `embed: {quant: nf4, checkpoints: [ref, a100, a000], poolings: [mean], layer_sites: [post_norm]}`;
+    - stages `sentences,ftdata,train,embed,deltab`, where `train` is a cache hit after restoring the endpoints.
+  - **Comparison:** `analysis.analyze.nf4_table` compares its `delta_b_cells.csv.gz` with Tier 1 Llama's per (checkpoint, method): mean |ΔB_fp16 − ΔB_nf4|, Pearson r over groups, and whether h − u keeps its sign.
+- Why: It reuses the stage code, the cache and the NaN guard, and the probe's run name keeps it out of the pooled T1 settings.
+- Tradeoff accepted:
+  - The probe extracts mean pooling at the post-norm site only, so the pooling and layer-site ablation cells are absent; `nf4_table` compares the cells both runs have.
+  - PEFT on a 4-bit base through `models.spectrum.Activator` is not yet GPU-tested. If it fails, it is a B-### entry and M6-T6 is reported as not run; T1 does not depend on it.
+- Cost impact: GPU ≤ 1.5 h on 2× T4 (one load of the 8B base in NF4 ≈ 5.5 GB, 3 checkpoints). Disk: 3 embedding files plus a restore of the two Llama-8B adapters.
+- Paper deviation: no. The paper does not report quantised extraction; this measures our D-004 choice.
+- Revisit-if: |ΔB_fp16 − ΔB_nf4| is comparable to the h − u contrast (then D-004 needs a superseding entry and the Tier 1 rows are reported both ways).

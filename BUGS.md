@@ -680,3 +680,24 @@ IDs are sequential and never reused.
   - The M5 notebooks now default to `REF` = the working branch, and `m5_topic_map` defaults to `STEP = "agreement"`, so a fresh copy runs the right code and cannot re-run the mapper by accident.
 - GPU-hours lost: 0 (CPU-capable step; ≈ 10 min of setup over two attempts)
 - Linked commits and D-### entries: D-043, D-088
+
+## B-038 Feature: M6 statistics, decomposition, WGM map sensitivity and the NF4 probe
+- Status: Implemented; CPU tests pass. Kaggle runs pending (`m6_analysis.ipynb` CPU, `m6_nf4.ipynb` GPU, optional).
+- How it was found or scoped: PLAN M6-T1..T6, plus the D-085 follow-up (target-only vs attribute-only RR) and the D-095 sensitivity (Qwen map).
+  - Design: D-097 (analysis) and D-098 (NF4).
+- Reproduction command:
+  - `python -m rbbd.cli analyze --results <artifacts>/results --out <artifacts>/results/m6`
+  - `python -m rbbd.cli rescore-wgm --config configs/<x>.yaml`
+  - `python -m rbbd.cli decompose-deltab --config configs/<x>.yaml`
+  - `python -m rbbd.cli run --config configs/m6_nf4_llama3.1-8b.yaml --stages sentences,ftdata,train,embed,deltab`
+- Hypotheses tried: none (a feature).
+- Fix:
+  - `analysis.analyze` (tables, content-hash cache, runner `analyze` stage), `analysis.decompose`, `analysis.wgm_maps`;
+  - `LoadSpec.quant` and `embed.quant`;
+  - CLI commands `analyze`, `rescore-wgm`, `decompose-deltab`;
+  - `configs/m6_nf4_llama3.1-8b.yaml`;
+  - `notebooks/m6_{analysis,nf4}.ipynb`;
+  - tests `tests/test_{analyze,decompose,analyze_nf4}.py`. `tests/test_manifest.py`'s stub test now targets `report` (M7).
+- Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `192 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M6)" tests` → no output. On Kaggle: pending (DC-08, DC-10 re-run of `analyze`).
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-085, D-095, D-097, D-098

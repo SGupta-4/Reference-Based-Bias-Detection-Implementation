@@ -109,6 +109,20 @@ def _build_parser() -> argparse.ArgumentParser:
     tagr.add_argument("--labels", type=Path, required=True, help="the filled labelling sheet")
     tagr.add_argument("--map", type=Path, default=None, help="map CSV (default: resources)")
 
+    an = sub.add_parser("analyze", help="M6 tables from results/<run>/ aggregates (CPU)")
+    an.add_argument("--results", type=Path, default=Path("results"))
+    an.add_argument("--out", type=Path, default=Path("results/m6"))
+    an.add_argument("--runs", nargs="*", default=None, help="run names (default: all found)")
+    an.add_argument("--n-boot", type=int, default=1000)
+    an.add_argument("--force", action="store_true")
+
+    rw = sub.add_parser("rescore-wgm", help="WGM scores under another topic map (D-095, CPU)")
+    rw.add_argument("--config", type=Path, required=True)
+    rw.add_argument("--map", type=Path, default=None, help="default: resources/topic_map_qwen.csv")
+
+    dd = sub.add_parser("decompose-deltab", help="target-only / attribute-only RR ΔB (CPU)")
+    dd.add_argument("--config", type=Path, required=True)
+
     c = sub.add_parser("compare-embeddings", help="compare two configs' cached ref embeddings")
     c.add_argument("--a", type=Path, required=True, help="config whose embeddings are tested")
     c.add_argument("--b", type=Path, required=True, help="config used as the reference")
@@ -227,6 +241,68 @@ def _cmd_diagnose(args: argparse.Namespace) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2))
     print(json.dumps(report, indent=1))
+    return 0
+
+
+def _tiers(config_dir: Path) -> dict[str, int]:
+    """{model slug: tier} from the tier configs (`tier*.yaml`) next to base.yaml."""
+    out: dict[str, int] = {}
+    for path in sorted(Path(config_dir).glob("tier*.yaml")):
+        cfg = config_mod.load(path)
+        for m in cfg.get("models", []):
+            out[m["slug"]] = int(cfg.get("tier", 0))
+    return out
+
+
+def _cmd_analyze(args: argparse.Namespace) -> int:
+    # M6 (D-097): reads results/<run>/{delta_b_cells.csv.gz, bench_scores.csv, ...}; the
+    # outputs are keyed on those files' hashes (cache hit when unchanged, DC-10).
+    from rbbd.analysis.analyze import run_analysis
+
+    summary = run_analysis(args.results, args.out, runs=args.runs,
+                           tiers=_tiers(DEFAULT_BASE.parent), n_boot=args.n_boot,
+                           force=args.force)  # fmt: skip
+    print(json.dumps(summary, indent=1, default=float))
+    return 0
+
+
+def _cmd_rescore_wgm(args: argparse.Namespace) -> int:
+    # D-095 sensitivity: WGM aggregated under the Qwen map from the private label files
+    # (restore scores/wgm/<slug> first); only the aggregate CSV is written.
+    from rbbd.analysis import wgm_maps
+    from rbbd.bench import topic_map as tm
+    from rbbd.bench.score import CSV_COLUMNS
+    from rbbd.metrics.delta_b import results_dir
+
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    topic_of = tm.read_map(args.map or tm.QWEN_MAP_PATH)
+    rows = wgm_maps.rescore(env.artifacts_root, cfg["models"][0]["slug"], topic_of,
+                            n_boot=int(cfg.get("bench.bootstrap.n", 1000)),
+                            seed=int(cfg.get("bench.bootstrap.seed", 0)))  # fmt: skip
+    out = results_dir(cfg, env.artifacts_root) / "bench_scores_wgm_qwen.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    import csv
+
+    with open(out, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=CSV_COLUMNS)
+        w.writeheader()
+        w.writerows({k: r.get(k) for k in CSV_COLUMNS} for r in rows)
+    print(json.dumps({"rows": len(rows), "out": str(out)}))
+    return 0
+
+
+def _cmd_decompose(args: argparse.Namespace) -> int:
+    # D-085 follow-up: restore embed/, sentences/ and embeddings/<slug> first.
+    from rbbd.analysis.decompose import decompose_model
+    from rbbd.metrics.delta_b import _write_csv, results_dir
+
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    rows = decompose_model(env.artifacts_root, cfg["models"][0]["slug"])
+    out = results_dir(cfg, env.artifacts_root) / "delta_b_decomposition.csv.gz"
+    _write_csv(out, rows)
+    print(json.dumps({"rows": len(rows), "out": str(out)}))
     return 0
 
 
@@ -373,6 +449,9 @@ def main(argv: list[str] | None = None) -> int:
         "sync": _cmd_sync,
         "compare-embeddings": _cmd_compare,
         "diagnose-deltab": _cmd_diagnose,
+        "analyze": _cmd_analyze,
+        "rescore-wgm": _cmd_rescore_wgm,
+        "decompose-deltab": _cmd_decompose,
         "generate-one": _cmd_generate_one,
         "score-wildguard": _cmd_score_wildguard,
         "topic-map": _cmd_topic_map,

@@ -14,7 +14,7 @@ Skip condition: ...
 Resume behaviour: ...
 Failure modes: ... (link B-###)
 ```
-Status: Entrypoint, probe and sync are **implemented (M0)**; `sentences`/`ftdata` (M1), `embed` (ref M2, α sweep M4), `train` (M3) and `deltab` (M4) are implemented; other stage bodies are stubs that raise `NotImplementedError` naming their milestone. Under `--only-ckpt`, the sweep stages (`runner.SWEEP_STAGES`) leave their manifest incomplete (outcome `partial`, D-081). Function names below are the intended public API and are fixed when implemented.
+Status: Entrypoint, probe and sync are **implemented (M0)**; `sentences`/`ftdata` (M1), `embed` (ref M2, α sweep M4), `train` (M3), `deltab` (M4), `generate`/`score` (M5) and `analyze` (M6) are implemented; other stage bodies are stubs that raise `NotImplementedError` naming their milestone. Under `--only-ckpt`, the sweep stages (`runner.SWEEP_STAGES`) leave their manifest incomplete (outcome `partial`, D-081). Function names below are the intended public API and are fixed when implemented.
 
 ---
 
@@ -189,10 +189,22 @@ Entry: `run --stages generate,score` → `runner.STAGE_IMPLS["score"]` → `benc
 `python -m rbbd.cli topic-map [--revision R] [--n-sheet 100]` → `wildguard.load_prompts` → `topic_map.run_mapper` (Qwen2.5-7B, vLLM TP 2, greedy; `mapper_messages` → `parse_topic`) → `write_map` [writes `src/rbbd/resources/topic_map.csv` in the checkout + `artifacts/topic_map/{topic_map.csv, labelling_sheet.csv (private, blind), map_summary.json}`].
 `python -m rbbd.cli topic-agreement --labels <filled sheet> [--map artifacts/topic_map/topic_map.csv]` → `read_labels` → `agreement` (accept ≥ 0.80) [writes `artifacts/topic_map/{human_labels.csv, agreement.json}`]; exit 2 if not accepted. Accepted → commit the map, pin `bench.wgm.topic_map_sha256`. Outcome (D-095): Qwen agreed 0.50, so `resources/topic_map.csv` holds the user's labels of all 76 prompts and `resources/topic_map_qwen.csv` the Qwen map (sensitivity).
 
-## Stage: analyze
-1. `analysis.stats.join(delta_b.csv, scores)` → observations (ckpt ≠ ref) with Δscore = score_aud − score_ref
-2. `analysis.stats.per_setting(obs)` → r, p, AUC, MAE (boot), CIs; baselines; paired RR−SEAT; threshold sweep
-[writes `analysis/<run_key>/stats.csv`; mirrored to `results/`]
+## Stage: analyze (implemented, M6 — D-097, D-098; CPU)
+Entry (all runs, the M6 path): `python -m rbbd.cli analyze --results <artifacts>/results --out <artifacts>/results/m6 [--runs ...] [--n-boot 1000] [--force]`
+Entry (one config): `python -m rbbd.cli run --config configs/<x>.yaml --stages analyze` → `analysis.analyze.stage(ctx)` → the same `run_analysis` over `results/<run>/` only, writing to the stage dir.
+Optional inputs, written first in the same row formats:
+- `python -m rbbd.cli rescore-wgm --config configs/<x>.yaml [--map M]` → `bench.topic_map.read_map` (default `resources/topic_map_qwen.csv`) → `analysis.wgm_maps.rescore` (`label_files` reads `scores/wgm/<slug>/*/*/*.jsonl`, private, restored first → `bench.score.item_values` / `units_of` / `aggregate`) [writes `results/<run>/bench_scores_wgm_qwen.csv`]
+- `python -m rbbd.cli decompose-deltab --config configs/<x>.yaml` → `analysis.decompose.decompose_model` (`locate`: the `embed/*/index.json` with most rows for the slug + the `sentences/*/union.json` whose hash its `timing.json` recorded → `TensorCache.read` per entry → `metrics.delta_b.from_union` → `decompose` (full / target-only / attribute-only RR, §3.3) → `spectrum_rows`) [writes `results/<run>/delta_b_decomposition.csv.gz`]
+
+1. `run_analysis` → `discover(results_root)` → {run: {delta_b, bench, bench_qwen?, decomp?}}; runs need `delta_b_cells.csv.gz` + `bench_scores.csv`; `m6_nf4_llama3.1-8b` is taken with ΔB only.
+2. Cache check: `manifest.json` = {schema, n_boot, seed, sha256 per input}; equal → log `cache hit: analysis`, return `summary.json` (DC-10).
+3. `read_delta_b` / `read_bench` → rows; `observations(db, bench, bench_name, method, cell, pairing)` → `Obs` (ckpt ≠ ref; DT/ToxiGen by group, WGM by `group_from_topic` or topic mean); `settings(obs, tiers)` → per spectrum, tier pooled (seed 0), all pooled; `clusters_for` → (ckpt, topic) for WGM.
+4. Tables, each via `_row_stats` → `analysis.stats` (Pearson, AUC + CI, bootstrap MAE, paired AUC difference): `t1_table`, `c3_table`, `sweep_table`, `ablation_table`, `wgm_pairing_table`, `sign_table`, `seeds_table`, `nf4_table` (if the probe ran).
+[writes `<out>/{t1,c3,f3_sweep,ablations,wgm_pairing,sign,seeds[,nf4]}.csv, summary.json, manifest.json}`]
+Skip condition: unchanged input hashes, `n_boot`, `seed` and `ANALYSIS_SCHEMA`.
+Failure modes: missing optional inputs only drop their tables' rows; `decompose-deltab` raises `FileNotFoundError` naming what to restore.
+
+NF4 probe (M6-T6, D-098, GPU): `run --config configs/m6_nf4_llama3.1-8b.yaml --stages sentences,ftdata,train,embed,deltab`. `embed.quant: nf4` → `LoadSpec.quant` → `load_for_inference` with `BitsAndBytesConfig` (NF4, double quant, fp16 compute); `train` is a cache hit on the restored Tier 1 endpoints (same train keys). [writes `results/m6_nf4_llama3.1-8b/delta_b_cells.csv.gz`]
 
 ## Stage: report
 1. `analysis.tables.build(...)` → R1–R7 Markdown/CSV

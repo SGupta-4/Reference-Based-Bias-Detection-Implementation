@@ -21,6 +21,7 @@ from typing import Any
 
 DTYPES = ("fp16", "fp32")
 PLACEMENTS = ("balanced", "cuda:0", "cuda:1", "cpu")
+QUANTS = (None, "nf4")
 
 
 @dataclass(frozen=True)
@@ -28,23 +29,29 @@ class LoadSpec:
     """How to load one model for inference.
 
     precision: "fp16" | "fp32" (no bf16 on T4, D-002); placement: "balanced" (shard over
-    all visible GPUs, 7-8B and Gemma fp32), "cuda:0"/"cuda:1" (one GPU), or "cpu" (tests).
+    all visible GPUs, 7-8B and Gemma fp32), "cuda:0"/"cuda:1" (one GPU), or "cpu" (tests);
+    quant: None, or "nf4" for the M6-T6 probe (bitsandbytes NF4 + double quantisation,
+    compute dtype = precision, as the QLoRA training base, D-098).
     """
 
     model_id: str
     revision: str | None = None
     precision: str = "fp16"
     placement: str = "balanced"
+    quant: str | None = None
 
     def __post_init__(self) -> None:
         if self.precision not in DTYPES:
             raise ValueError(f"precision must be one of {DTYPES}, got {self.precision!r}")
         if self.placement not in PLACEMENTS:
             raise ValueError(f"placement must be one of {PLACEMENTS}, got {self.placement!r}")
+        if self.quant not in QUANTS:
+            raise ValueError(f"quant must be one of {QUANTS}, got {self.quant!r}")
 
     def key_fields(self) -> dict[str, Any]:
-        """Fields that must enter every cache key derived from this load (D-004, D-019)."""
-        return {**asdict(self), "quant": None}
+        """Fields that must enter every cache key derived from this load (D-004, D-019).
+        `quant` was always a key field (None); unquantised keys are unchanged by D-098."""
+        return asdict(self)
 
 
 def torch_dtype(precision: str) -> Any:
@@ -86,6 +93,15 @@ def load_for_inference(spec: LoadSpec) -> tuple[Any, Any]:
     from transformers import AutoModelForCausalLM
 
     kwargs: dict[str, Any] = {"dtype": torch_dtype(spec.precision), "revision": spec.revision}
+    if spec.quant == "nf4":
+        from transformers import BitsAndBytesConfig
+
+        kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch_dtype(spec.precision),
+        )
     if spec.placement == "balanced":
         kwargs["device_map"] = "balanced"
     elif spec.placement.startswith("cuda"):

@@ -119,6 +119,7 @@ STAGE_IMPLS: dict[str, str] = {
     "deltab": "rbbd.metrics.delta_b:stage",
     "generate": "rbbd.bench.generate:stage",
     "score": "rbbd.bench.score:stage",
+    "analyze": "rbbd.analysis.analyze:stage",
 }
 
 # Stages that sweep checkpoints. Under `--only-ckpt` they cover one checkpoint, so their
