@@ -11,7 +11,9 @@ each method the caller passes the per-observation value (ΔB for RR/SEAT/Procrus
 - MAE of an OLS fit Δscore ~ value, mean over 1,000 bootstrap resamples (in-sample
   primary, out-of-bag secondary);
 - percentile bootstrap CIs, optionally resampling clusters (checkpoint x topic for
-  WildGuardMix, where groups in a topic share one score, D-024);
+  WildGuardMix, where groups in a topic share one score, D-024). An undefined point
+  estimate gets no CI, and CKA's orientation is fixed on the full sample before
+  resampling, so its CI is not folded towards 1 (D-099);
 - paired bootstrap of AUC differences (RR - SEAT, criterion C3 in PLAN §1.2).
 CPU only; called by the analyze stage (M6).
 """
@@ -63,14 +65,38 @@ def detection_auc(
     *,
     method: str = "rr",
     min_class: int = MIN_CLASS,
+    orientation: float | None = None,
 ) -> float:
-    """AUC of detecting Δscore > threshold from `values` (ΔB, or CKA drift if method='cka')."""
+    """AUC of detecting Δscore > threshold from `values` (ΔB, or CKA drift if method='cka').
+
+    Undirected methods fold the AUC (max(AUC, 1 − AUC), T7) unless `orientation` (+1 / −1,
+    from `orientation_of` on the full sample) fixes the direction, as bootstrap resamples
+    must (D-099)."""
     labels = np.asarray(delta_score, float) > threshold
     values = np.asarray(values, float)
     if method in UNDIRECTED_METHODS:
+        if orientation is not None:
+            return roc_auc(orientation * values, labels, min_class)
         auc = roc_auc(values, labels, min_class)
         return auc if math.isnan(auc) else max(auc, 1.0 - auc)
     return roc_auc(-values, labels, min_class)
+
+
+def orientation_of(
+    values: Sequence[float],
+    delta_score: Sequence[float],
+    threshold: float,
+    *,
+    method: str = "rr",
+    min_class: int = MIN_CLASS,
+) -> float | None:
+    """+1 / −1: the direction in which an undirected method detects on these rows (the one
+    the folded AUC picked); None for directed methods or an undefined AUC."""
+    if method not in UNDIRECTED_METHODS:
+        return None
+    labels = np.asarray(delta_score, float) > threshold
+    auc = roc_auc(np.asarray(values, float), labels, min_class)
+    return None if math.isnan(auc) else (1.0 if auc >= 0.5 else -1.0)
 
 
 def _ols_mae(x_fit, y_fit, x_eval, y_eval) -> float:
@@ -127,8 +153,11 @@ def bootstrap_ci(
     """Percentile CI of `stat(**resampled_data)`; rows (or whole clusters) are resampled.
 
     Resamples where the statistic is undefined (nan, e.g. a degenerate AUC) are dropped
-    and counted in `n_valid`.
+    and counted in `n_valid`. If the statistic is undefined on the full data there is no
+    CI: the defined resamples would be a biased subset (D-099).
     """
+    if math.isnan(stat(**{k: np.asarray(v, float) for k, v in data.items()})):
+        return {"lo": math.nan, "hi": math.nan, "n_valid": 0}
     arrays = {k: np.asarray(v, float) for k, v in data.items()}
     n = len(next(iter(arrays.values())))
     cl = None if clusters is None else np.asarray(clusters)
@@ -157,11 +186,14 @@ def paired_auc_difference(
     seed: int = 0,
     clusters: Sequence[Any] | None = None,
 ) -> dict[str, float]:
-    """AUC_a - AUC_b on the same observations, with a paired bootstrap CI (criterion C3)."""
+    """AUC_a - AUC_b on the same observations, with a paired bootstrap CI (criterion C3).
+    Undirected methods keep their full-sample orientation in every resample (D-099)."""
+    o_a = orientation_of(values_a, delta_score, threshold, method=method_a)
+    o_b = orientation_of(values_b, delta_score, threshold, method=method_b)
 
     def diff(a, b, s):
-        return detection_auc(a, s, threshold, method=method_a) - detection_auc(
-            b, s, threshold, method=method_b
+        return detection_auc(a, s, threshold, method=method_a, orientation=o_a) - detection_auc(
+            b, s, threshold, method=method_b, orientation=o_b
         )
 
     point = diff(np.asarray(values_a, float), np.asarray(values_b, float), delta_score)
@@ -197,15 +229,17 @@ def summarize(
     x, y = np.asarray(values, float), np.asarray(delta_score, float)
     labels = y > threshold
     r, p = pearson(x, y)
-    if method in UNDIRECTED_METHODS:
-        r = abs(r)
+    # Undirected (CKA): report |r| and the folded AUC, but resample with the full-sample
+    # sign and orientation; folding each resample would push the CI towards 1 (D-099).
+    r_sign = -1.0 if method in UNDIRECTED_METHODS and r < 0 else 1.0
+    orient = orientation_of(x, y, threshold, method=method)
+    r = r_sign * r
 
     def r_stat(x, y):
-        rr_, _ = pearson(x, y)
-        return abs(rr_) if method in UNDIRECTED_METHODS else rr_
+        return r_sign * pearson(x, y)[0]
 
     def auc_stat(x, y):
-        return detection_auc(x, y, threshold, method=method)
+        return detection_auc(x, y, threshold, method=method, orientation=orient)
 
     data = {"x": x, "y": y}
     return {
@@ -217,7 +251,7 @@ def summarize(
         "pearson_p": p,
         "stars": stars(p),
         "pearson_ci": bootstrap_ci(r_stat, data, n_boot=n_boot, seed=seed, clusters=clusters),
-        "roc_auc": auc_stat(x, y),
+        "roc_auc": detection_auc(x, y, threshold, method=method),
         "roc_auc_ci": bootstrap_ci(auc_stat, data, n_boot=n_boot, seed=seed, clusters=clusters),
         **bootstrap_mae(x, y, n_boot=n_boot, seed=seed),
     }

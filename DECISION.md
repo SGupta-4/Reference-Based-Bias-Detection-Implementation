@@ -2081,3 +2081,20 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: GPU ≤ 1.5 h on 2× T4 (one load of the 8B base in NF4 ≈ 5.5 GB, 3 checkpoints). Disk: 3 embedding files plus a restore of the two Llama-8B adapters.
 - Paper deviation: no. The paper does not report quantised extraction; this measures our D-004 choice.
 - Revisit-if: |ΔB_fp16 − ΔB_nf4| is comparable to the h − u contrast (then D-004 needs a superseding entry and the Tier 1 rows are reported both ways).
+
+## D-099 Bootstrap CIs: no CI for an undefined point; undirected methods resample in their full-sample orientation (amends D-027)
+- Date: 2026-10-27
+- Context:
+  - D-027 defines CKA's point estimates as |r| and max(AUC, 1 − AUC) (T7). It does not say how their CIs are formed.
+  - The first M6 run folded every bootstrap resample. Its CIs could not cross 0.5 (AUC) or 0 (r), so near-chance CKA rows read as CIs excluding chance (B-039).
+  - It also reported CIs for AUCs that are undefined on the full data (a class < 5 rows).
+- Options considered:
+  - A: fold each resample (as before).
+  - B: fix the orientation (and the sign of r) on the full sample, then resample unfolded.
+  - C: report CKA without CIs.
+- Choice: B, plus no CI (nan, `n_valid` 0) whenever the full-sample statistic is undefined. Applies to `summarize` (r and AUC CIs) and `paired_auc_difference` (C3). Point estimates are unchanged. `ANALYSIS_SCHEMA` = 2.
+- Why: B is the CI of the statistic the point estimate actually reports (the detector in the direction the data chose). A CI should not exist for a number that does not.
+- Tradeoff accepted: the orientation choice itself is not resampled, so B is slightly optimistic when the orientation is close to a coin flip. Those rows already have CIs spanning 0.5.
+- Cost impact: CPU only. Fewer resamples for undefined rows (skipped).
+- Paper deviation: no (the paper gives no CI procedure for T7).
+- Revisit-if: a reviewer of the results prefers C for CKA.

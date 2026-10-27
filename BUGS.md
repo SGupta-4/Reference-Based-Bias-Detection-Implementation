@@ -701,3 +701,22 @@ IDs are sequential and never reused.
 - Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `192 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M6)" tests` → no output. On Kaggle: pending (DC-08, DC-10 re-run of `analyze`).
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-085, D-095, D-097, D-098
+
+## B-039 Bug: bootstrap CIs folded for CKA and reported for undefined AUCs; M6-T4 decomposition not run
+- Status: Fixed on CPU (`ANALYSIS_SCHEMA` 1 → 2). The Kaggle re-run of `m6_analysis.ipynb` is pending.
+- How it was found or scoped: reading the first M6 run (`m6_analysis.ipynb` at `c6558ab`, session `20261026T214321Z`, 0.61 h):
+  - **CKA CIs sat at the edge of their point estimate**, e.g. `all/pooled wgm cka AUC 0.502 [0.501, 0.567]` and `tier2/pooled dt cka AUC 0.509 [0.501, 0.56]`. `stats.summarize` folded every resample (max(AUC, 1 − AUC), |r|), so no resample could fall below 0.5 (or 0) and the CI was biased upward.
+  - **AUC CIs for an undefined point estimate**, e.g. `llama3.2-1b-it/full-s0 dt rr n 168 pos 164 AUC nan [0.178, 0.619]`. There were 4 negatives, fewer than `MIN_CLASS` = 5, so the point AUC is nan. The resamples that happened to draw ≥ 5 negatives still produced a CI, from a biased subset.
+  - **No `rr_target` / `rr_attr` rows.** The log shows no `embed`/`sentences`/`embeddings` restores and no `decompose` entry per config, so the run had `DECOMPOSE` off and M6-T4's decomposition is missing.
+- Reproduction command: `pytest -q tests/test_stats.py` on the old `stats.py` → `2 failed, 7 passed` (`test_undefined_point_has_no_ci`, `test_undirected_ci_keeps_full_sample_orientation`).
+- Hypotheses tried: none needed; both follow from the code.
+- Fix:
+  - **CIs (D-099):**
+    - `stats.bootstrap_ci` returns no CI (nan, `n_valid` 0) when the statistic is undefined on the full data.
+    - `stats.orientation_of` fixes an undirected method's direction on the full sample. `summarize` resamples r with the full-sample sign and the AUC with that orientation, and `paired_auc_difference` does the same for each side.
+    - Point estimates are unchanged (|r|, folded AUC, T7).
+    - `ANALYSIS_SCHEMA` = 2 makes the next `analyze` recompute despite unchanged inputs.
+  - **Decomposition:** `m6_analysis.ipynb` restores `embed/`, `sentences/` and `embeddings/<slug>` into ephemeral `/tmp/rbbd_m6_cache` (`RBBD_ARTIFACTS` for those subprocesses only). `/kaggle/working` keeps aggregates only and nothing needs deleting. The notebook now stops before `analyze` if any rescore or decompose step failed.
+- Verification: CPU: the two new tests fail on the old code (`2 failed, 7 passed`) and pass on the new; `pytest -q -m "not gpu"` → `194 passed, 13 deselected`; `ruff check src tests` → `All checks passed!`. A local re-analysis of the uploaded aggregates is running. Kaggle: pending.
+- GPU-hours lost: 0 (CPU; 0.61 session-h to re-run)
+- Linked commits and D-### entries: D-027, D-097, D-099

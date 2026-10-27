@@ -195,11 +195,12 @@ Entry (one config): `python -m rbbd.cli run --config configs/<x>.yaml --stages a
 Optional inputs, written first in the same row formats:
 - `python -m rbbd.cli rescore-wgm --config configs/<x>.yaml [--map M]` → `bench.topic_map.read_map` (default `resources/topic_map_qwen.csv`) → `analysis.wgm_maps.rescore` (`label_files` reads `scores/wgm/<slug>/*/*/*.jsonl`, private, restored first → `bench.score.item_values` / `units_of` / `aggregate`) [writes `results/<run>/bench_scores_wgm_qwen.csv`]
 - `python -m rbbd.cli decompose-deltab --config configs/<x>.yaml` → `analysis.decompose.decompose_model` (`locate`: the `embed/*/index.json` with most rows for the slug + the `sentences/*/union.json` whose hash its `timing.json` recorded → `TensorCache.read` per entry → `metrics.delta_b.from_union` → `decompose` (full / target-only / attribute-only RR, §3.3) → `spectrum_rows`) [writes `results/<run>/delta_b_decomposition.csv.gz`]
+  In `m6_analysis.ipynb` these restores and the decomposition run with `RBBD_ARTIFACTS=/tmp/rbbd_m6_cache` (ephemeral), so `/kaggle/working` holds aggregates only (B-039).
 
 1. `run_analysis` → `discover(results_root)` → {run: {delta_b, bench, bench_qwen?, decomp?}}; runs need `delta_b_cells.csv.gz` + `bench_scores.csv`; `m6_nf4_llama3.1-8b` is taken with ΔB only.
 2. Cache check: `manifest.json` = {schema, n_boot, seed, sha256 per input}; equal → log `cache hit: analysis`, return `summary.json` (DC-10).
 3. `read_delta_b` / `read_bench` → rows; `observations(db, bench, bench_name, method, cell, pairing)` → `Obs` (ckpt ≠ ref; DT/ToxiGen by group, WGM by `group_from_topic` or topic mean); `settings(obs, tiers)` → per spectrum, tier pooled (seed 0), all pooled; `clusters_for` → (ckpt, topic) for WGM.
-4. Tables, each via `_row_stats` → `analysis.stats` (Pearson, AUC + CI, bootstrap MAE, paired AUC difference): `t1_table`, `c3_table`, `sweep_table`, `ablation_table`, `wgm_pairing_table`, `sign_table`, `seeds_table`, `nf4_table` (if the probe ran).
+4. Tables, each via `_row_stats` → `analysis.stats` (Pearson, AUC + CI, bootstrap MAE, paired AUC difference; CKA resampled in its full-sample orientation, no CI for an undefined point, D-099): `t1_table`, `c3_table`, `sweep_table`, `ablation_table`, `wgm_pairing_table`, `sign_table`, `seeds_table`, `nf4_table` (if the probe ran).
 [writes `<out>/{t1,c3,f3_sweep,ablations,wgm_pairing,sign,seeds[,nf4]}.csv, summary.json, manifest.json}`]
 Skip condition: unchanged input hashes, `n_boot`, `seed` and `ANALYSIS_SCHEMA`.
 Failure modes: missing optional inputs only drop their tables' rows; `decompose-deltab` raises `FileNotFoundError` naming what to restore.
