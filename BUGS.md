@@ -717,6 +717,10 @@ IDs are sequential and never reused.
     - Point estimates are unchanged (|r|, folded AUC, T7).
     - `ANALYSIS_SCHEMA` = 2 makes the next `analyze` recompute despite unchanged inputs.
   - **Decomposition:** `m6_analysis.ipynb` restores `embed/`, `sentences/` and `embeddings/<slug>` into ephemeral `/tmp/rbbd_m6_cache` (`RBBD_ARTIFACTS` for those subprocesses only). `/kaggle/working` keeps aggregates only and nothing needs deleting. The notebook now stops before `analyze` if any rescore or decompose step failed.
-- Verification: CPU: the two new tests fail on the old code (`2 failed, 7 passed`) and pass on the new; `pytest -q -m "not gpu"` → `194 passed, 13 deselected`; `ruff check src tests` → `All checks passed!`. A local re-analysis of the uploaded aggregates is running. Kaggle: pending.
+- Verification: CPU: the two new tests fail on the old code (`2 failed, 7 passed`) and pass on the new; `pytest -q -m "not gpu"` → `194 passed, 13 deselected`; `ruff check src tests` → `All checks passed!`. Local re-analysis of the uploaded `results_m6.tar.gz` inputs (`cli analyze`, schema 2) against the Kaggle tables (schema 1):
+  - `t1`: 22 of 120 rows changed, `c3`: 18 of 90. Every changed row is a CKA row or one with an undefined point, and only CI columns (`auc_lo/hi`, `r_lo/hi`, `lo/hi`, `n_valid`) changed.
+  - `f3_sweep`, `ablations`, `wgm_pairing`, `sign`, `seeds`, `nf4`: 0 rows changed. No point estimate changed anywhere.
+  - Examples: `all/pooled wgm cka` AUC 0.502 [0.501, 0.567] → [0.447, 0.561]; `tier2/pooled dt cka` 0.509 [0.501, 0.56] → [0.459, 0.558]; `llama3.2-1b-it/full-s0 dt rr` AUC nan [0.178, 0.619] → nan [nan, nan].
+  - Kaggle re-run (with the decomposition): pending.
 - GPU-hours lost: 0 (CPU; 0.61 session-h to re-run)
 - Linked commits and D-### entries: D-027, D-097, D-099
