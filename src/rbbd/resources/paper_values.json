@@ -1,0 +1,55 @@
+{
+  "_source": "arXiv:2609.10060v1 (paper/2609.10060v1.pdf), transcribed for the M7 report (D-102). 'Llama' = Llama-3.1-8B-Instruct, 'Mistral' = Mistral-7B-Instruct-v0.3, 'Gemma' = Gemma-3-4B-it.",
+  "model_of_slug": {
+    "llama3.1-8b-it": "Llama",
+    "mistral-7b-it": "Mistral",
+    "gemma3-4b-it": "Gemma"
+  },
+  "t1": {
+    "_note": "Table 1: Pearson r (stars), ROC AUC, MAE per benchmark x model x regime (full fine-tuning, LoRA). Thresholds 0.1 WGM/DT, 0.03 ToxiGen.",
+    "wgm": {
+      "Mistral": {"full": {"r": -0.67, "stars": "***", "auc": 0.93, "mae": 0.12}, "lora": {"r": -0.61, "stars": "***", "auc": 0.78, "mae": 0.12}},
+      "Llama": {"full": {"r": -0.68, "stars": "***", "auc": 0.89, "mae": 0.12}, "lora": {"r": -0.65, "stars": "***", "auc": 0.92, "mae": 0.11}},
+      "Gemma": {"full": {"r": -0.37, "stars": "**", "auc": 0.78, "mae": 0.17}, "lora": {"r": -0.04, "stars": "", "auc": 0.77, "mae": 0.16}}
+    },
+    "dt": {
+      "Mistral": {"full": {"r": -0.82, "stars": "***", "auc": 0.75, "mae": 0.08}, "lora": {"r": -0.77, "stars": "***", "auc": 0.99, "mae": 0.07}},
+      "Llama": {"full": {"r": -0.84, "stars": "***", "auc": 0.91, "mae": 0.11}, "lora": {"r": -0.75, "stars": "***", "auc": 0.92, "mae": 0.07}},
+      "Gemma": {"full": {"r": -0.34, "stars": "***", "auc": 0.76, "mae": 0.14}, "lora": {"r": -0.14, "stars": "", "auc": 0.65, "mae": 0.07}}
+    },
+    "toxigen": {
+      "Mistral": {"full": {"r": -0.19, "stars": "", "auc": 0.78, "mae": 0.058}, "lora": {"r": -0.43, "stars": "***", "auc": 0.86, "mae": 0.045}},
+      "Llama": {"full": {"r": -0.62, "stars": "***", "auc": 0.91, "mae": 0.013}, "lora": {"r": -0.50, "stars": "***", "auc": 0.74, "mae": 0.018}},
+      "Gemma": {"full": {"r": -0.31, "stars": "*", "auc": 0.69, "mae": 0.023}, "lora": {"r": -0.25, "stars": "*", "auc": 0.69, "mae": 0.032}}
+    }
+  },
+  "t3_minutes": {
+    "_note": "Table 3: wall-clock minutes per model on one A100 40GB.",
+    "Llama": {"embed": 2.267, "deltab": 0.583, "wgm_generate": 8.1, "wgm_classify": 0.95, "toxigen_generate": 32.683, "toxigen_classify": 0.483, "dt": 44.367},
+    "Mistral": {"embed": 2.617, "deltab": 0.583, "wgm_generate": 7.983, "wgm_classify": 1.583, "toxigen_generate": 43.85, "toxigen_classify": 0.583, "dt": 62.583},
+    "Gemma": {"embed": 2.367, "deltab": 0.833, "wgm_generate": 13.083, "wgm_classify": 0.95, "toxigen_generate": 74.883, "toxigen_classify": 0.717, "dt": 155.6}
+  },
+  "t5": {
+    "_note": "Table 5 (Llama): ROC AUC of the RR classifier per attribute-set and target-template variant.",
+    "attr": {"base": 0.892, "subj_v1": 0.846, "subj_v2": 0.840, "syn_v1": 0.902, "syn_v2": 0.882, "syn_v3": 0.818, "mean": 0.863, "std": 0.030},
+    "target": {"base": 0.892, "passive": 0.912, "passive_rephr": 0.914, "syn_v1": 0.898, "syn_v2": 0.894, "syn_v3": 0.900, "mean": 0.902, "std": 0.008}
+  },
+  "t6": {
+    "_note": "Table 6 (Llama, layer 32): ROC AUC per pooling.",
+    "rr": {"mean": 0.964, "max": 0.882, "last": 0.882},
+    "seat": {"mean": 0.778, "max": 0.791, "last": 0.760}
+  },
+  "t7": {
+    "_note": "Table 7 (Llama): ROC AUC and Pearson r per method; CKA as max(AUC, 1-AUC) and |r|.",
+    "wgm": {"rr": {"auc": 0.964, "r": -0.68}, "seat": {"auc": 0.778, "r": -0.45}, "procrustes": {"auc": 0.567, "r": -0.11}, "cka": {"auc": 0.864, "r": 0.67}},
+    "dt": {"rr": {"auc": 0.949, "r": -0.84}, "seat": {"auc": 0.753, "r": -0.45}, "procrustes": {"auc": 0.513, "r": 0.05}, "cka": {"auc": 0.753, "r": 0.54}}
+  },
+  "e5": {
+    "_note": "App. E.5 (Llama, 3 seeds): std of ΔB across seeds and mean ΔB per dataset.",
+    "std": 0.003,
+    "mean_unharmful": 0.291,
+    "mean_synth": -0.051
+  },
+  "f4": {"_note": "§4.5: neutral anchors best, ROC AUC 0.892 at 1k anchors (Llama).", "neutral_1k_auc": 0.892},
+  "c1_settings": {"_note": "Abstract: significant agreement in 15 of 18 settings.", "passed": 15, "total": 18}
+}

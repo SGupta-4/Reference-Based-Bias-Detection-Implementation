@@ -1,0 +1,8 @@
+id,claim,holds,outcome,detail
+S1,|r| larger under full FT than LoRA (same model),1/6,fails,llama3.2-1b-it wgm: 0.16 vs 0.44; llama3.2-1b-it dt: 0.31 vs 0.10; llama3.2-1b-it toxigen: 0.36 vs 0.62; qwen2.5-0.5b-it wgm: -0.64 vs -0.77; qwen2.5-0.5b-it dt: -0.67 vs -0.81; qwen2.5-0.5b-it toxigen: -0.73 vs -0.86
+S2,Procrustes-SEAT near chance (AUC CI contains 0.5),14/19,holds,
+S3,CKA drift detects but stays below RR,3/19,fails,CKA CI above 0.5 in 11/19; CKA below RR in 6/19
+S4,Mean pooling is best (RR),6/14,mixed,
+S5,AUC std across attribute and template variants ≤ 0.05,3/19,fails,paper (Llama): 0.03 / 0.008
+S6,ΔB std across seeds ≈ 0.003 (≤ 0.006),1/2,mixed,qwen2.5-0.5b-it full a000: 0.0041; qwen2.5-0.5b-it full a100: 0.0243
+S7,Neutral anchors ≥ word / Alpaca / Tulu anchors (1k each),5/19,fails,

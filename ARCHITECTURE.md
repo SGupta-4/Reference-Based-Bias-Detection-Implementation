@@ -42,7 +42,7 @@ Status: **planned** (nothing implemented yet).
                                                       ──► results/m6/*.csv (keyed on input hashes)
                                                                         │
                                                                         ▼
-                                                     analysis.tables / plots ──► results/
+                              analysis.report (tables / plots / timing) ──► results/REPORT.md
 ```
 
 Training sits upstream of the spectrum:
@@ -90,8 +90,10 @@ Training sits upstream of the spectrum:
 | `rbbd.analysis.decompose` | Target-only vs attribute-only RR ΔB from cached embeddings (D-085 follow-up). |
 | `rbbd.analysis.wgm_maps` | Re-aggregate the private WGM labels under another topic map (D-095 sensitivity). |
 | `rbbd.analysis.stats` | Pearson, ROC AUC, bootstrap MAE, CIs and paired AUC differences on observation arrays. |
-| `rbbd.analysis.tables` | Build the R1–R7 tables. |
-| `rbbd.analysis.plots` | Build the F-R1–F-R5 figures. |
+| `rbbd.analysis.tables` | Build the R1–R7 tables and the pre-registered verdict (C1–C3, tier rule, S1–S7) from the M6 tables; Markdown rendering. |
+| `rbbd.analysis.plots` | Build the F-R1–F-R5 figures (Agg, validated palette). |
+| `rbbd.analysis.timing` | Collect per-stage wall-clock for one model from the logged stage outputs (R6). |
+| `rbbd.analysis.report` | M7: `results/REPORT.md`, `report/*.csv`, `figures/*.png`, cached on input hashes; runner `report` stage (D-102). |
 
 Dependency rule: `metrics` and `analysis` never import torch model code, so they run on CPU from caches. `bench` never imports `metrics`. Only `runner` wires stages together.
 
@@ -123,6 +125,8 @@ artifacts/
 - Ephemeral: full-FT trainer checkpoints `<ephemeral>/rbbd_ckpt/<slug>/<train_key>/` (D-072).
 - Repo `results/<run_name>/`: public-safe aggregates only (DC-18): `delta_b.csv` (primary cell), `delta_b_cells.csv.gz` (all cells), `sanity.json`; from M5 `bench_scores.csv`; from M6 `bench_scores_wgm_qwen.csv` and `delta_b_decomposition.csv.gz`. Mirrored to `artifacts/results/<run_name>/` for the store.
 - `results/m6/`: the cross-run M6 tables (`cli analyze`), with `manifest.json` = input sha256s (D-097).
+- `results/REPORT.md`, `results/report/{r1..r6,r7_*,deviations}.csv` + `manifest.json` + `summary.json`, `results/figures/f_r*.png`: the M7 report (`cli report`, D-102); `results/<run>/timing.json`: R6 numbers (`cli collect-timing`).
+- `src/rbbd/resources/paper_values.json`: the paper's T1, T3, T5–T7 and E.5 numbers, transcribed from the PDF (D-102).
 - Ephemeral (`utils.env.ephemeral_dir()`, D-045): HF cache, materialised α-weights for generation (`rbbd_merged/`, deleted after each checkpoint, D-050) and benchmark prompt sets (`rbbd_items/<run_key>/`, D-086).
 - Repo `src/rbbd/resources/topic_map.csv`: the frozen WGM map (prompt sha256, topic) = the user's labels, pinned by `bench.wgm.topic_map_sha256` (D-086, D-095); `topic_map_qwen.csv`: the Qwen mapper's output, kept for sensitivity. `results/<run>/bench_scores.csv`: benchmark aggregates.
 
@@ -145,6 +149,7 @@ Slugs:
 | `score_key` | gen_key, scorer {id + commit, threshold or decoding}, `schema_version.score` |
 | `run_key` | config_hash + upstream keys |
 | analysis manifest | `ANALYSIS_SCHEMA`, n_boot, seed, sha256 of every `results/<run>/` input file (not the config hash, D-097) |
+| report manifest | `REPORT_SCHEMA`, sha256 of the M6 tables, run inputs, `timing.json` files and DECISION.md, paper-values hash, tiers (D-102) |
 
 Invalidation never deletes data. Bump the relevant `schema_version` in config, or change an input, and new keys appear. Old entries are pruned only by an explicit, logged cleanup (ROLLBACK.md).
 
@@ -162,3 +167,4 @@ Invalidation never deletes data. Bump the relevant `schema_version` in config, o
 - 2026-10-10 — M5: `generate` (one `generate-one` process per checkpoint) and `score` (`score-wildguard` process for WGM) stages; CLI `topic-map`, `topic-agreement`; `generate/`, `score/`, `topic_map/` artifact dirs; frozen topic map pinned in the config — D-086.
 - 2026-10-26 — WGM topic map from the user's labels; Qwen map kept as `resources/topic_map_qwen.csv` — D-095.
 - 2026-10-26 — M6: `analysis.{analyze,decompose,wgm_maps}`; CLI `analyze`, `rescore-wgm`, `decompose-deltab`; runner `analyze` stage; `results/m6/` keyed on input hashes; `LoadSpec.quant` for the NF4 probe — D-097, D-098.
+- 2026-10-28 — M7: `analysis.{tables,plots,timing,report}`; CLI `report`, `collect-timing`, `restore --include`; runner `report` stage; `results/REPORT.md` + `report/` + `figures/` keyed on input hashes; `resources/paper_values.json` — D-102.

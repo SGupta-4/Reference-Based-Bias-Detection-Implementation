@@ -2198,3 +2198,43 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: 0.42 GPU + 1.11 CPU session-h (PLAN §8).
 - Paper deviation: the results deviate from §4.1 / T1 for 5 of 7 spectra (recorded, not tuned). Our harmful split lacks the paper's synthetic half (D-010), and Tier 1 trains 1 epoch (D-042).
 - Revisit-if: M8 (the authors' sets or code) changes the attribute sentences, which the decomposition implicates.
+
+## D-102 M7 report design: one CPU pass from `results/` aggregates; paper values transcribed; verdict rules as pre-registered, with three interpretations
+- Date: 2026-10-28
+- Context:
+  - PLAN M7 asks for `results/REPORT.md` with R1–R7, F-R1–F-R5, the §1.2 verdict and the deviations.
+  - Every input except wall-clock is already an aggregate in `results/` (M4–M6, D-101).
+  - The paper's comparison numbers live only in the PDF.
+  - §1.2 leaves three things open: the order of the tier rules when both could apply, the outcome rule for S1–S7, and what "≈ 0.003" means for S6.
+- Options considered:
+  - Report: (A) a hand-written report; (B) a generated report keyed on input hashes, as `analyze` is (D-097).
+  - R6: (A) transcribe the timings from the D entries; (B) collect them from the stage logs in the store.
+  - Paper values: (A) hard-code them in the tables; (B) one resource file.
+- Choice: B for all three.
+  - **Report:** `cli report` (`analysis.report.build_report`) writes `results/REPORT.md`, `results/report/*.csv` and `results/figures/f_r*.png`.
+    - `report/manifest.json` = sha256 of the M6 tables, run inputs, `timing.json` files and DECISION.md, plus the paper-values hash and tiers. An unchanged re-run logs `cache hit: report`.
+    - The runner `report` stage calls the same function for one config, reading the M6 tables from its `analyze` stage dir.
+  - **Paper values:** `resources/paper_values.json`, transcribed from the PDF text: T1 (r, stars, AUC, MAE per benchmark × model × regime), T3 minutes, T5a/b, T6, T7, E.5 and the abstract's 15/18.
+    - Tier 1 (our QLoRA) is set against the paper's **LoRA** column.
+    - T5–T7 are shown next to our Llama-3.1-8B rows. The paper's "Llama" is Llama-3.1-8B-Instruct (App. C).
+  - **R6:** `cli collect-timing` reads, for one model, from the private store restored to ephemeral disk:
+    - the embedding sidecars' `stats.seconds` (`restore --include "*.json"`, a new `HFStore.download_dir(include=...)`);
+    - `deltab` and `generate` `timing.json`;
+    - the last `score` manifest's seconds.
+    - It writes `results/<run>/timing.json` (numbers only). R6 shows minutes per checkpoint and the benchmark/ours ratio.
+    - Scoring is a lower bound: the last score run reused DT/ToxiGen labels (D-096).
+  - **Verdict interpretations:**
+    1. Refutation is checked before confirmation: a tier with a significant positive r (n ≥ 50) is refuted even if C1/C2/C3 reach 2/3.
+    2. S1–S7 use the tier rule's thirds over the testable settings: ≥ 2/3 holds, ≤ 1/3 fails, else mixed.
+    3. S6 "ΔB std ≈ 0.003" holds per endpoint when the mean per-group across-seed std is ≤ 2 × 0.003. C2 and S2–S7 skip degenerate settings (§1.2).
+  - **Deviations section:** every D entry (not superseded) whose "Paper deviation" starts with "yes", parsed from DECISION.md.
+  - **Figures:** matplotlib Agg; categorical slots in fixed order, validated with the dataviz validator (adjacent CVD ΔE ≥ 9.1). The light slots below 3:1 contrast are relieved by the table view (R1–R5). The α ramp is one hue.
+- Why:
+  - Generated, cached outputs cannot drift from the numbers, and they re-run in seconds on CPU.
+  - The verdict is computed by the rules registered before the results existed.
+- Tradeoff accepted:
+  - The paper values are a manual transcription. A test checks their ranges and that T5's population std reproduces the paper's 0.030.
+  - The three interpretations above are ours `[unspecified in PLAN §1.2]`.
+- Cost impact: CPU only. Local report ≈ 20 s; the Kaggle notebook ≈ 20–30 min, mostly the install.
+- Paper deviation: no (reporting).
+- Revisit-if: a reviewer disputes an interpretation (then supersede this entry and bump `REPORT_SCHEMA`), or the paper releases code or values that differ from the transcription.

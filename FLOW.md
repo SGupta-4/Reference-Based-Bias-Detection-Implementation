@@ -14,7 +14,7 @@ Skip condition: ...
 Resume behaviour: ...
 Failure modes: ... (link B-###)
 ```
-Status: Entrypoint, probe and sync are **implemented (M0)**; `sentences`/`ftdata` (M1), `embed` (ref M2, α sweep M4), `train` (M3), `deltab` (M4), `generate`/`score` (M5) and `analyze` (M6) are implemented; other stage bodies are stubs that raise `NotImplementedError` naming their milestone. Under `--only-ckpt`, the sweep stages (`runner.SWEEP_STAGES`) leave their manifest incomplete (outcome `partial`, D-081). Function names below are the intended public API and are fixed when implemented.
+Status: Entrypoint, probe and sync are **implemented (M0)**; `sentences`/`ftdata` (M1), `embed` (ref M2, α sweep M4), `train` (M3), `deltab` (M4), `generate`/`score` (M5), `analyze` (M6) and `report` (M7) are implemented; other stage bodies are stubs that raise `NotImplementedError` naming their milestone. Under `--only-ckpt`, the sweep stages (`runner.SWEEP_STAGES`) leave their manifest incomplete (outcome `partial`, D-081). Function names below are the intended public API and are fixed when implemented.
 
 ---
 
@@ -207,7 +207,15 @@ Failure modes: missing optional inputs only drop their tables' rows; `decompose-
 
 NF4 probe (M6-T6, D-098, GPU): `run --config configs/m6_nf4_llama3.1-8b.yaml --stages sentences,ftdata,train,embed,deltab`. `embed.quant: nf4` → `LoadSpec.quant` → `load_for_inference` with `BitsAndBytesConfig` (NF4, double quant, fp16 compute); `train` is a cache hit on the restored Tier 1 endpoints (same train keys). [writes `results/m6_nf4_llama3.1-8b/delta_b_cells.csv.gz`]
 
-## Stage: report
-1. `analysis.tables.build(...)` → R1–R7 Markdown/CSV
-2. `analysis.plots.build(...)` → F-R1–F-R5 PNG
-[writes `results/<run>/REPORT.md`, `results/<run>/figures/*.png`]
+## Stage: report (implemented, M7 — D-102; CPU)
+Entry (all runs, the M7 path): `python -m rbbd.cli report --results <results> [--out <dir>] [--force]`
+Entry (one config): `python -m rbbd.cli run --config configs/<x>.yaml --stages report` → `analysis.report.stage(ctx)` → `build_report` over `results/<run>/` with the M6 tables from the `analyze` stage dir, writing to the stage dir.
+Optional input, R6 (T3 analogue): `python -m rbbd.cli collect-timing --config configs/<x>.yaml` → `analysis.timing.collect(root, slug, runner.stage_run_keys(cfg))` reads `embed/<rk>/index.json` + the embedding sidecars' `stats.seconds`, `deltab/<rk>/timing.json`, `generate/<rk>/timing.json` and `manifests/score/<rk>.json` (each at this config's run key, else the dir with most entries for the model) [writes `results/<run>/timing.json`]. In `m7_report.ipynb` these logs are restored into ephemeral `/tmp/rbbd_m7_cache`; the sidecars with `restore --path embeddings/<slug> --include "*.json"` (`HFStore.download_dir(include=...)`).
+
+1. `build_report` → `_inputs` (M6 tables, `analysis.analyze.discover` runs, `timing.json`, `DECISION.md`) → `manifest.json` = {schema, input sha256s, paper-values hash, tiers}; equal → log `cache hit: report`, return `report/summary.json`.
+2. `analysis.analyze.read_delta_b` / `read_bench` (primary cell) → `observations` per (benchmark, method).
+3. `analysis.tables`: `r1` (T1 analogue, paper LoRA column from `resources/paper_values.json`), `r2` (T7 + C3), `r3` (T5), `r4` (T6), `r5` (E.5), `r6` (T3, from `timing.json`), `verdict` (C1–C3 per setting, tier rule, `secondary` S1–S7) [writes `<out>/report/*.csv`].
+4. `analysis.plots`: `scatter` (F-R1), `threshold_curves` (F-R2, `stats.threshold_sweep` for all four methods), `anchor_curves` (F-R3, from `ablations.csv`), `seed_groups` (F-R4, the multi-seed run's ΔB table), `roc_curves` (F-R5) [writes `<out>/figures/f_r*.png`].
+5. `render` → `<out>/REPORT.md` (verdict, h − u decomposition, R1–R6, NF4 and WGM-map sensitivity, figures, realised deviations parsed from DECISION.md).
+Skip condition: unchanged inputs, paper values, tiers and `REPORT_SCHEMA`.
+Failure modes: `results/m6/t1.csv` missing → `FileNotFoundError` (run `analyze` first); no `timing.json` → R6 says "not collected"; a degenerate setting → "n/a (degenerate)" in tables and figures.
