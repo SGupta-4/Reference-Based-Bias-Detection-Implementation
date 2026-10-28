@@ -698,7 +698,7 @@ IDs are sequential and never reused.
   - `configs/m6_nf4_llama3.1-8b.yaml`;
   - `notebooks/m6_{analysis,nf4}.ipynb`;
   - tests `tests/test_{analyze,decompose,analyze_nf4}.py`. `tests/test_manifest.py`'s stub test now targets `report` (M7).
-- Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `192 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M6)" tests` → no output. On Kaggle: pending (DC-08, DC-10 re-run of `analyze`).
+- Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `192 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M6)" tests` → no output. On Kaggle: passed: `dc10_cache_hit: true` in sessions `20261026T214321Z` and `20261027T085757Z`; DC-08 and the leakage test as recorded in D-101.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-085, D-095, D-097, D-098
 
