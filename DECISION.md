@@ -2098,3 +2098,35 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: CPU only. Fewer resamples for undefined rows (skipped).
 - Paper deviation: no (the paper gives no CI procedure for T7).
 - Revisit-if: a reviewer of the results prefers C for CKA.
+
+## D-100 NF4 probe outcome: D-004 stays; NF4 is reported as a Llama-3.1-8B sensitivity row (resolves D-098's Revisit-if)
+- Date: 2026-10-28
+- Context:
+  - `m6_nf4.ipynb` at `c6558ab`, session `20261026T190001Z` (0.42 GPU session-h):
+    - Llama-3.1-8B `ref`, `a100`, `a000` re-extracted on the NF4 base (embed 528 s, peak ≤ 7.9 GiB per T4), plus `deltab`;
+    - the train stage reused the Tier 1 endpoints (same train keys);
+    - synced to the store at `results/m6_nf4_llama3.1-8b` (`07fde867`).
+  - `nf4.csv` (first M6 analysis, session `20261026T214321Z`; unchanged by D-099), primary cell, 24 groups:
+
+    | Method | ckpt | mean ΔB fp16 | mean ΔB NF4 | mean \|diff\| | r over groups |
+    |---|---|---|---|---|---|
+    | RR | a100 | 0.0436 | 0.0386 | 0.0050 | 0.995 |
+    | RR | a000 | 0.0676 | 0.0515 | 0.0162 | 0.997 |
+    | SEAT | a000 | 0.00346 | 0.00310 | 0.00036 | 0.988 |
+    | Procrustes | a000 | −0.00012 | −0.00006 | 0.00013 | 0.977 |
+    | CKA drift | a000 | 0.0042 | 0.0058 | 0.0016 | 0.950 |
+
+    - h − u (RR): fp16 +0.024, NF4 +0.013. The sign is the same for every method.
+  - D-098's Revisit-if is triggered: RR's precision shift at a000 (0.016) is about ⅔ of the fp16 h − u contrast. Changing D-004 is the user's call.
+- Options considered:
+  - A: keep D-004 (fp16 base for every checkpoint, identical for ref and audited) and report NF4 as a sensitivity row for Llama-3.1-8B.
+  - B: supersede D-004, re-extract every Tier 1 model on NF4 and report both (≈ 3 GPU-h).
+- Choice: A (user, 2026-10-28).
+- Why:
+  - The precision choice changes RR's level, not its direction or group ordering (r ≥ 0.995). Llama-8B's h − u stays positive, i.e. it still disagrees with all three benchmarks (D-094, D-096).
+  - SEAT, Procrustes and CKA barely move.
+  - Within each precision, ref and audited are extracted identically, which is what ΔB needs (D-004).
+- Tradeoff accepted: RR magnitudes for QLoRA models are precision-dependent at roughly ±0.016. The results state this, and NF4 numbers are not available for Mistral or Gemma.
+- Cost impact: none further. 0.42 GPU session-h spent on the probe.
+- Paper deviation: no (the paper does not state its extraction precision `[unspecified in paper]`).
+- Revisit-if: a conclusion in M7 depends on an RR magnitude difference smaller than ≈ 0.02 for a QLoRA model.
