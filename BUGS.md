@@ -741,3 +741,27 @@ IDs are sequential and never reused.
 - Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `200 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M7)" tests` → no output; `python -m rbbd.cli report --results results` writes `results/REPORT.md` + 11 figures, a second call logs `cache hit: report`; `tests/test_leakage.py` passes with them present. Kaggle: pending.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-097, D-101, D-102
+
+## B-041 Bug: the M7 report crashed in the Kaggle notebook (inherited MPLBACKEND); R6 ratios printed in the wrong order
+- Status: Fixed. The final report was built locally from the run's `timing.json` files (D-103); a Kaggle re-run is not needed for M7's checks.
+- How it was found or scoped: `m7_report.ipynb` at `800d8e9`, session `20261028T211255Z` (0.05 h).
+  - `collect-timing` succeeded for all five configs.
+  - `cli report` then failed at `import matplotlib`: `ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value for backend`.
+    - The Jupyter kernel exports `MPLBACKEND=module://matplotlib_inline.backend_inline`.
+    - The CLI subprocess runs in the Python 3.12 venv (D-087), which has no `matplotlib_inline`, and matplotlib validates the variable at import, before `plots._plt` could select Agg.
+  - The notebook ran `report` with `!python ... >` and did not check the exit code. Its later cells printed (and synced) the **committed draft** `REPORT.md` as if it were the run's.
+  - While building the final report locally, I also found that R6's ratio column rendered the benchmarks in `BENCHES` order (WGM, DT, ToxiGen) under a "WGM / ToxiGen / DT" header.
+- Reproduction command:
+  - `MPLBACKEND=module://matplotlib_inline.backend_inline python -c "from rbbd.analysis import plots; plots._plt()"` → the same `ValueError` locally.
+  - `pytest -q tests/test_report.py -k backend` on the old `plots.py` → `1 failed`.
+- Hypotheses tried: none needed; the traceback names the variable.
+- Fix:
+  - `plots._plt` sets `MPLBACKEND=Agg` before importing matplotlib.
+  - `m7_report.ipynb` runs `report` through `subprocess` and raises on a non-zero exit, so a draft can never pass as the run's output.
+  - R6 renders in `R6_RATIO_ORDER` (WGM, ToxiGen, DT).
+  - `REPORT_SCHEMA` 1 → 2, so the cached report is rebuilt.
+- Verification:
+  - `pytest -q tests/test_report.py` → `6 passed`, including the new backend test (fails on the old code) and the ratio-order assertion.
+  - `python -m rbbd.cli report --results results` with the five `timing.json` files → `cache_hit: false`, R6 filled (Gemma `1.0× / 6.7× / 17.9×`); a second call → `cache_hit: true`.
+- GPU-hours lost: 0 (0.05 CPU session-h)
+- Linked commits and D-### entries: D-102, D-103

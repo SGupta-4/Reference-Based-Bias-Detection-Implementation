@@ -69,5 +69,11 @@
   "figures/f_r4_seeds_qwen2.5-0.5b-it_full.png",
   "figures/f_r5_roc.png"
  ],
- "timing_runs": []
+ "timing_runs": [
+  "tier1_gemma3-4b",
+  "tier1_llama3.1-8b",
+  "tier1_mistral-7b",
+  "tier2_llama3.2-1b",
+  "tier2_qwen2.5-0.5b"
+ ]
 }

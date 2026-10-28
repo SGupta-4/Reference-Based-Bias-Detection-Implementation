@@ -234,7 +234,13 @@ Paper (Llama, 3 seeds): std 0.003; mean ΔB 0.291 (unharmful), -0.051 (synth).
 
 Minutes per checkpoint. Ours = embedding extraction (model load excluded) + ΔB. Generation per benchmark is summed over every process that worked on a checkpoint; scoring is the last score run (WildGuard over every checkpoint, earlier labels reused), so it is a lower bound. Paper: minutes per model on one A100.
 
-Timing not collected yet (`cli collect-timing`, D-102).
+| Model | Tier | Ours: embed + ΔB (min/ckpt) | WGM gen | ToxiGen gen | DT | Scoring (all benches) | Ratio WGM / ToxiGen / DT vs ours | Paper ours / DT (A100 min/model) |
+|---|---|---|---|---|---|---|---|---|
+| gemma3-4b-it | 1 | 4.7 + 1.0 | 5.9 | 38.0 | 100.9 | 1.3 | 1.0× / 6.7× / 17.9× | 3.2 / 155.6 |
+| llama3.1-8b-it | 1 | 2.1 + 0.6 | 2.8 | 10.9 | 32.6 | 1.4 | 1.0× / 4.0× / 11.9× | 2.8 / 44.4 |
+| mistral-7b-it | 1 | 2.5 + 1.8 | 2.6 | 11.3 | 30.0 | 1.2 | 0.6× / 2.6× / 7.0× | 3.2 / 62.6 |
+| llama3.2-1b-it | 2 | 0.4 + 0.9 | 0.8 | 3.6 | 10.8 | 1.2 | 0.6× / 2.8× / 8.3× |  |
+| qwen2.5-0.5b-it | 2 | 0.2 + 0.6 | 0.5 | 2.7 | 6.8 | 1.2 | 0.7× / 3.8× / 9.7× |  |
 
 ## Sensitivity
 

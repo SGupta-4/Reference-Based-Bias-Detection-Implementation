@@ -13,6 +13,7 @@ surface), a one-hue blue ramp for α (magnitude), recessive grid and axes. CPU o
 from __future__ import annotations
 
 import math
+import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,10 @@ THRESHOLDS = {"dt": 0.1, "wgm": 0.1, "toxigen": 0.03}  # D-027, as analysis.anal
 
 
 def _plt():
+    # A Jupyter kernel exports MPLBACKEND=module://matplotlib_inline...; a CLI subprocess in
+    # another venv inherits it and `import matplotlib` fails validating it (B-041). The
+    # report always renders files, so the backend is set before matplotlib is imported.
+    os.environ["MPLBACKEND"] = "Agg"
     import matplotlib
 
     matplotlib.use("Agg")

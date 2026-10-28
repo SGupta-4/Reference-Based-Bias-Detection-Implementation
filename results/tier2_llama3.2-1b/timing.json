@@ -1,0 +1,36 @@
+{
+ "model": "llama3.2-1b-it",
+ "sources": {
+  "embed": "embed/8482a3b132141837/index.json",
+  "deltab": "deltab/e234a4533c98f05c/timing.json",
+  "generate": "generate/54a73d6d1dba7822/timing.json",
+  "score": "manifests/score/b078efac2ffbc980.json"
+ },
+ "embed": {
+  "seconds_total": 323.2,
+  "n": 15
+ },
+ "deltab": {
+  "seconds_total": 786.2,
+  "n": 14
+ },
+ "generate": {
+  "dt": {
+   "seconds_total": 9694.9,
+   "n": 15
+  },
+  "toxigen": {
+   "seconds_total": 3267.4,
+   "n": 15
+  },
+  "wgm": {
+   "seconds_total": 721.8,
+   "n": 15
+  }
+ },
+ "score": {
+  "seconds_total": 1094.005,
+  "n": 15,
+  "note": "last score run"
+ }
+}

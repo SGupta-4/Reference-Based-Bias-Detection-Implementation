@@ -34,7 +34,7 @@ from rbbd.utils.logging import get_logger
 
 log = get_logger(__name__)
 
-REPORT_SCHEMA = 1
+REPORT_SCHEMA = 2  # 2: R6 ratio order fixed (B-041)
 M6_TABLES = ("t1", "c3", "f3_sweep", "ablations", "wgm_pairing", "sign", "seeds", "nf4")
 TIMING_FILE = "timing.json"
 

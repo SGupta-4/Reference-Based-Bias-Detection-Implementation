@@ -24,6 +24,7 @@ import numpy as np
 BENCHES = ("wgm", "dt", "toxigen")
 BENCH_NAMES = {"wgm": "WildGuardMix", "dt": "DecodingTrust", "toxigen": "ToxiGen"}
 C3_BENCHES = ("wgm", "dt")  # §4.5 / App. H compare RR with SEAT on these two only
+R6_RATIO_ORDER = ("wgm", "toxigen", "dt")  # the order the R6 ratio header names (B-041)
 METHODS = ("rr", "seat", "procrustes", "cka")
 METHOD_NAMES = {
     "rr": "RR",
@@ -453,7 +454,7 @@ R6_COLUMNS = [
     ("Scoring (all benches)", lambda r: fmt(r["score"], 1)),
     (
         "Ratio WGM / ToxiGen / DT vs ours",
-        lambda r: " / ".join(f"{fmt(r[f'ratio_{b}'], 1)}×" for b in BENCHES),
+        lambda r: " / ".join(f"{fmt(r[f'ratio_{b}'], 1)}×" for b in R6_RATIO_ORDER),
     ),
     (
         "Paper ours / DT (A100 min/model)",

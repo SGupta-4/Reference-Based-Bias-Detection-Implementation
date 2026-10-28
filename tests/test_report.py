@@ -125,6 +125,11 @@ def test_report_writes_tables_figures_and_caches(results, tmp_path, caplog):
     r6 = list(csv.DictReader(open(results / "report" / "r6.csv")))
     assert float(r6[0]["embed"]) == pytest.approx(600 / 6 / 60)
     assert float(r6[0]["ratio_dt"]) == pytest.approx((6000 / 6) / (600 / 6 + 60 / 5))
+    # the rendered ratios follow the header's WGM / ToxiGen / DT order (B-041)
+    line = next(
+        ln for ln in (results / "REPORT.md").read_text().splitlines() if ln.startswith("| x-it |")
+    )
+    assert line.split(" | ")[-2] == "n/a× / n/a× / 8.9×"
 
 
 def test_collect_timing_reads_sidecars_and_stage_logs(tmp_path):
@@ -185,3 +190,22 @@ def test_paper_values_cover_t1():
     vals = [t5[k] for k in ("base", "subj_v1", "subj_v2", "syn_v1", "syn_v2", "syn_v3")]
     assert T._pstd(vals) == pytest.approx(t5["std"], abs=0.001)  # T5 reports population std
     assert not math.isnan(T.num(p["e5"]["std"]))
+
+
+def test_plots_ignore_an_inherited_notebook_backend(monkeypatch):
+    """B-041: a Jupyter kernel's MPLBACKEND (matplotlib_inline, absent from the venv) must
+    not break the report subprocess. Run in a fresh interpreter: matplotlib reads the
+    variable at import time."""
+    import subprocess
+    import sys
+
+    env = {"MPLBACKEND": "module://matplotlib_inline.backend_inline", "PATH": "/usr/bin:/bin"}
+    code = "from rbbd.analysis import plots; p = plots._plt(); print(p.get_backend())"
+    r = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env={**__import__("os").environ, **env},
+    )
+    assert r.returncode == 0, r.stderr[-500:]
+    assert r.stdout.strip().lower() == "agg"
