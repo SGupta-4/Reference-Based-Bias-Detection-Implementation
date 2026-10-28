@@ -1,0 +1,8 @@
+{
+  "mistral-7b-it/qlora-s0": {
+    "mean_delta_b_u": 0.022040951435819356,
+    "mean_delta_b_h": 0.02559228496836158,
+    "h_below_u": false,
+    "groups": 24
+  }
+}

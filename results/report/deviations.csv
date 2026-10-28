@@ -1,0 +1,26 @@
+id,title,deviation
+D-001,Split the study into three tiers,"App. C training regimes, T1 full-FT columns."
+D-002,Hardware target 2× T4; budget unit = Kaggle session-hours,"§4.6 / App. C (A100 40GB, bf16)."
+D-003,"Tier 1 training = QLoRA (NF4), one split per GPU in parallel",App. C (bf16 LoRA).
+D-004,One precision and placement per model for embeddings and generation: fp16 un-quantised base + adapter,App. C (bf16).
+D-005,Gemma-3 numerics: fp32 for inference; fp16-then-fp32 fallback for training,App. C precision.
+D-009,Tier 2 models and full-FT recipe,App. C models.
+D-010,Harmful split = existing WildGuardMix harmful examples only,(reconstruction) — App. C datasets.
+D-011,Unharmful split definition `[unspecified in paper]`,(reconstruction) — App. C.
+D-012,Target groups and target sentences (reconstruction),(reconstruction) — App. F.
+D-013,Positive and negative attribute sets (reconstruction),(reconstruction) — App. F.
+D-014,Neutral in-domain anchors (reconstruction),(reconstruction) — App. F.
+D-015,Anchor ablation sources and sizes (reconstruction),"(reconstruction) — §4.5, F4."
+D-016,Attribute and target ablation variants (reconstruction),(reconstruction) — App. E.
+D-022,DecodingTrust stereotype: port the pipeline; n=3 samples per prompt; all 3 system prompts,(reconstruction + subsampling) — App. C.
+D-025,"ToxiGen: 9-group map, prompt subsample, first-statement rule `[partly unspecified]`",(subsampling + reconstruction) — App. C.
+D-026,Subsampling policy and uncertainty reporting,(subsampling) — App. C.
+D-031,"Version pins (starting point, verified in M0)",Python version (App. C). Library adds.
+D-033,Seeds ablation on Tier 2 only,App. E.5.
+D-034,Tier 1 regime = LoRA only,T1.
+D-042,Budget fallbacks and cut order (supersedes D-035),when a fallback is taken (App. C max length / epochs).
+D-052,Sentence-set construction details (amends D-012–D-016),"(reconstruction) — App. E, App. F."
+D-062,Gemma-3-4B fp16 extraction probe failed: embeddings stay fp32 (outcome of D-005 / D-058 criterion),"App. C precision, as already logged in D-005."
+D-078,"Gemma-3-4B: fp16 training fails at the first forward; fp32 projects 11.66 h for 1 epoch, so the D-070 rule stops and asks the user","(as already logged in D-005), App. C precision: fp32 compute instead of bf16."
+D-086,"M5 design: pinned benchmark sources, DT reproduced exactly at T = 1.0, one process per checkpoint, paired sampling, scores with paired-bootstrap CIs (implements PLAN M5; amends D-022, D-023, D-025, D-026, D-043)",DT n = 3 instead of 25 (D-022); ToxiGen subsample (D-025); local topic mapper (D-043); WildGuard input without the literal `<s>`. All App. C / App. B reconstructions.
+D-095,WGM topic map = the user's labels of all 76 prompts; the Qwen mapper failed validation (50%) and is kept for sensitivity (supersedes D-043; amends D-088),App. B used an LLM topic mapper; we use a human map over the full subcategory.

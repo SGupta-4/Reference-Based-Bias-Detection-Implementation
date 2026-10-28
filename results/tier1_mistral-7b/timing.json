@@ -1,0 +1,36 @@
+{
+ "model": "mistral-7b-it",
+ "sources": {
+  "embed": "embed/9d533cfd90621e72/index.json",
+  "deltab": "deltab/750c02caa100ee7e/timing.json",
+  "generate": "generate/c900337fe0c543f1/timing.json",
+  "score": "manifests/score/59ad683945a6a17e.json"
+ },
+ "embed": {
+  "seconds_total": 1208.5,
+  "n": 8
+ },
+ "deltab": {
+  "seconds_total": 737.1,
+  "n": 7
+ },
+ "generate": {
+  "dt": {
+   "seconds_total": 14388.3,
+   "n": 8
+  },
+  "toxigen": {
+   "seconds_total": 5407.3,
+   "n": 8
+  },
+  "wgm": {
+   "seconds_total": 1228.8,
+   "n": 8
+  }
+ },
+ "score": {
+  "seconds_total": 579.401,
+  "n": 8,
+  "note": "last score run"
+ }
+}

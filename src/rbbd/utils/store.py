@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -87,18 +88,23 @@ class HFStore:
         )
         return Path(local)
 
-    def download_dir(self, path_in_repo: str, local_root: Path) -> Path:
+    def download_dir(
+        self, path_in_repo: str, local_root: Path, include: Sequence[str] | None = None
+    ) -> Path:
         """Mirror `path_in_repo/**` from the store into `local_root/path_in_repo` (restore).
 
         Used at the start of a session to bring back finished jobs (`done.json`) so the
-        train stage skips them (D-072). Private check first. Returns the local directory.
+        train stage skips them (D-072). `include` narrows it to file-name patterns under
+        the folder (e.g. `*.json` for the embedding sidecars the M7 timing reads, D-102).
+        Private check first. Returns the local directory.
         """
         rel = _check_rel(path_in_repo)
         self.assert_private()
+        patterns = [f"{rel}/**/{p}" for p in include] if include else [f"{rel}/**"]
         self.api.snapshot_download(
             repo_id=self.repo_id,
             repo_type=self.repo_type,
-            allow_patterns=[f"{rel}/**"],
+            allow_patterns=patterns,
             local_dir=str(local_root),
         )
         return Path(local_root) / rel

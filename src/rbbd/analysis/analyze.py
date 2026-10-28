@@ -50,7 +50,7 @@ THRESHOLDS = {"dt": 0.1, "wgm": 0.1, "toxigen": 0.03}  # D-027
 SWEEP = tuple(round(t, 2) for t in np.arange(0.0, 0.305, 0.01))  # F3 analogue grid
 PRIMARY = "primary"
 DIRECTED = ("rr", "seat", "procrustes", "rr_target", "rr_attr")
-ANALYSIS_SCHEMA = 1
+ANALYSIS_SCHEMA = 2  # 2: CKA CIs keep the full-sample orientation; no CI for a nan point (D-099)
 N_BOOT_ABLATION = 200
 
 DELTA_B_FILE = "delta_b_cells.csv.gz"

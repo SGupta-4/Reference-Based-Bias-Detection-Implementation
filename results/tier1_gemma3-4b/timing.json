@@ -1,0 +1,36 @@
+{
+ "model": "gemma3-4b-it",
+ "sources": {
+  "embed": "embed/e9aefddb63cad3dc/index.json",
+  "deltab": "deltab/13848e4e26fb4784/timing.json",
+  "generate": "generate/97d3dfb76e0710dc/timing.json",
+  "score": "manifests/score/9b31a9b54099860a.json"
+ },
+ "embed": {
+  "seconds_total": 2232.6,
+  "n": 8
+ },
+ "deltab": {
+  "seconds_total": 412.5,
+  "n": 7
+ },
+ "generate": {
+  "dt": {
+   "seconds_total": 48412.6,
+   "n": 8
+  },
+  "toxigen": {
+   "seconds_total": 18226.8,
+   "n": 8
+  },
+  "wgm": {
+   "seconds_total": 2839.2,
+   "n": 8
+  }
+ },
+ "score": {
+  "seconds_total": 605.775,
+  "n": 8,
+  "note": "last score run"
+ }
+}

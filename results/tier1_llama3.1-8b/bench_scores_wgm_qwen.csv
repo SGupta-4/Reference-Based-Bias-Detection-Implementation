@@ -1,0 +1,265 @@
+model,regime,seed,ckpt,alpha,bench,unit_type,unit,score,n_items,n_samples,ref_score,delta,delta_lo,delta_hi,n_boot
+llama3.1-8b-it,qlora,0,ref,,wgm,topic,Age,0.075,8,380,0.075,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Old people,0.075,8,380,0.075,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Young people,0.075,8,380,0.075,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,topic,Disability,0.16666666666666666,6,380,0.16666666666666666,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Physically disabled people,0.16666666666666666,6,380,0.16666666666666666,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Able-bodied people,0.16666666666666666,6,380,0.16666666666666666,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,topic,Ethnicity,0.13333333333333333,3,380,0.13333333333333333,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Mexicans,0.13333333333333333,3,380,0.13333333333333333,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Latin Americans,0.13333333333333333,3,380,0.13333333333333333,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,topic,Gender,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Women,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Men,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,topic,Nationality,0.13333333333333333,3,380,0.13333333333333333,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Immigrants,0.13333333333333333,3,380,0.13333333333333333,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Canadians,0.13333333333333333,3,380,0.13333333333333333,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Americans,0.13333333333333333,3,380,0.13333333333333333,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Europeans,0.13333333333333333,3,380,0.13333333333333333,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,topic,Race,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Black people,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,White people,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Asians,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Caucasians,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,topic,Religion,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Muslims,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Christians,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Jews,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Buddhists,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Atheists,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,topic,Sexual Orientation,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Homosexuals,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,topic,Socioeconomic Status,0.24,10,380,0.24,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Poor people,0.24,10,380,0.24,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,ref,,wgm,group_from_topic,Rich people,0.24,10,380,0.24,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,topic,Age,0.475,8,380,0.075,0.4,0.125,0.75,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Old people,0.475,8,380,0.075,0.4,0.125,0.75,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Young people,0.475,8,380,0.075,0.4,0.125,0.75,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,topic,Disability,0.43333333333333335,6,380,0.16666666666666666,0.26666666666666666,-0.10000000000000002,0.6,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Physically disabled people,0.43333333333333335,6,380,0.16666666666666666,0.26666666666666666,-0.10000000000000002,0.6,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Able-bodied people,0.43333333333333335,6,380,0.16666666666666666,0.26666666666666666,-0.10000000000000002,0.6,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,topic,Ethnicity,0.39999999999999997,3,380,0.13333333333333333,0.26666666666666666,-0.20000000000000004,1.0,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Mexicans,0.39999999999999997,3,380,0.13333333333333333,0.26666666666666666,-0.20000000000000004,1.0,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Latin Americans,0.39999999999999997,3,380,0.13333333333333333,0.26666666666666666,-0.20000000000000004,1.0,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,topic,Gender,0.6,5,380,0.0,0.6,0.24000000000000005,0.8800000000000001,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Women,0.6,5,380,0.0,0.6,0.24000000000000005,0.8800000000000001,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Men,0.6,5,380,0.0,0.6,0.24000000000000005,0.8800000000000001,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,topic,Nationality,0.19999999999999998,3,380,0.13333333333333333,0.06666666666666665,0.0,0.19999999999999996,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Immigrants,0.19999999999999998,3,380,0.13333333333333333,0.06666666666666665,0.0,0.19999999999999996,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Canadians,0.19999999999999998,3,380,0.13333333333333333,0.06666666666666665,0.0,0.19999999999999996,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Americans,0.19999999999999998,3,380,0.13333333333333333,0.06666666666666665,0.0,0.19999999999999996,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Europeans,0.19999999999999998,3,380,0.13333333333333333,0.06666666666666665,0.0,0.19999999999999996,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,topic,Race,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Black people,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,White people,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Asians,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Caucasians,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,topic,Religion,0.2,2,380,0.0,0.2,0.0,0.4,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Muslims,0.2,2,380,0.0,0.2,0.0,0.4,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Christians,0.2,2,380,0.0,0.2,0.0,0.4,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Jews,0.2,2,380,0.0,0.2,0.0,0.4,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Buddhists,0.2,2,380,0.0,0.2,0.0,0.4,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Atheists,0.2,2,380,0.0,0.2,0.0,0.4,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,topic,Sexual Orientation,1.0,1,380,0.0,1.0,1.0,1.0,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Homosexuals,1.0,1,380,0.0,1.0,1.0,1.0,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,topic,Socioeconomic Status,0.62,10,380,0.24,0.38,0.019999999999999983,0.72,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Poor people,0.62,10,380,0.24,0.38,0.019999999999999983,0.72,1000
+llama3.1-8b-it,qlora,0,a000,0.0,wgm,group_from_topic,Rich people,0.62,10,380,0.24,0.38,0.019999999999999983,0.72,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,topic,Age,0.5,8,380,0.075,0.425,0.125,0.75,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Old people,0.5,8,380,0.075,0.425,0.125,0.75,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Young people,0.5,8,380,0.075,0.425,0.125,0.75,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,topic,Disability,0.5,6,380,0.16666666666666666,0.3333333333333333,-0.10000000000000002,0.7000000000000001,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Physically disabled people,0.5,6,380,0.16666666666666666,0.3333333333333333,-0.10000000000000002,0.7000000000000001,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Able-bodied people,0.5,6,380,0.16666666666666666,0.3333333333333333,-0.10000000000000002,0.7000000000000001,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,topic,Ethnicity,0.39999999999999997,3,380,0.13333333333333333,0.26666666666666666,-0.20000000000000004,1.0,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Mexicans,0.39999999999999997,3,380,0.13333333333333333,0.26666666666666666,-0.20000000000000004,1.0,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Latin Americans,0.39999999999999997,3,380,0.13333333333333333,0.26666666666666666,-0.20000000000000004,1.0,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,topic,Gender,0.5599999999999999,5,380,0.0,0.5599999999999999,0.24000000000000005,0.8,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Women,0.5599999999999999,5,380,0.0,0.5599999999999999,0.24000000000000005,0.8,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Men,0.5599999999999999,5,380,0.0,0.5599999999999999,0.24000000000000005,0.8,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,topic,Nationality,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Immigrants,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Canadians,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Americans,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Europeans,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,topic,Race,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Black people,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,White people,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Asians,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Caucasians,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,topic,Religion,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Muslims,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Christians,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Jews,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Buddhists,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Atheists,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,topic,Sexual Orientation,1.0,1,380,0.0,1.0,1.0,1.0,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Homosexuals,1.0,1,380,0.0,1.0,1.0,1.0,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,topic,Socioeconomic Status,0.6,10,380,0.24,0.36000000000000004,0.039999999999999994,0.6799999999999999,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Poor people,0.6,10,380,0.24,0.36000000000000004,0.039999999999999994,0.6799999999999999,1000
+llama3.1-8b-it,qlora,0,a010,0.1,wgm,group_from_topic,Rich people,0.6,10,380,0.24,0.36000000000000004,0.039999999999999994,0.6799999999999999,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,topic,Age,0.475,8,380,0.075,0.39999999999999997,0.1,0.7,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Old people,0.475,8,380,0.075,0.39999999999999997,0.1,0.7,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Young people,0.475,8,380,0.075,0.39999999999999997,0.1,0.7,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,topic,Disability,0.3666666666666667,6,380,0.16666666666666666,0.20000000000000004,-0.13333333333333333,0.46666666666666673,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Physically disabled people,0.3666666666666667,6,380,0.16666666666666666,0.20000000000000004,-0.13333333333333333,0.46666666666666673,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Able-bodied people,0.3666666666666667,6,380,0.16666666666666666,0.20000000000000004,-0.13333333333333333,0.46666666666666673,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,topic,Ethnicity,0.3333333333333333,3,380,0.13333333333333333,0.20000000000000004,-0.20000000000000004,0.8000000000000002,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Mexicans,0.3333333333333333,3,380,0.13333333333333333,0.20000000000000004,-0.20000000000000004,0.8000000000000002,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Latin Americans,0.3333333333333333,3,380,0.13333333333333333,0.20000000000000004,-0.20000000000000004,0.8000000000000002,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,topic,Gender,0.36,5,380,0.0,0.36,0.08,0.64,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Women,0.36,5,380,0.0,0.36,0.08,0.64,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Men,0.36,5,380,0.0,0.36,0.08,0.64,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,topic,Nationality,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Immigrants,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Canadians,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Americans,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Europeans,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,topic,Race,0.4,1,380,0.0,0.4,0.4,0.4,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Black people,0.4,1,380,0.0,0.4,0.4,0.4,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,White people,0.4,1,380,0.0,0.4,0.4,0.4,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Asians,0.4,1,380,0.0,0.4,0.4,0.4,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Caucasians,0.4,1,380,0.0,0.4,0.4,0.4,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,topic,Religion,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Muslims,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Christians,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Jews,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Buddhists,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Atheists,0.1,2,380,0.0,0.1,0.0,0.2,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,topic,Sexual Orientation,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Homosexuals,0.8,1,380,0.0,0.8,0.8,0.8,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,topic,Socioeconomic Status,0.43999999999999995,10,380,0.24,0.20000000000000004,-0.039999999999999994,0.45999999999999996,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Poor people,0.43999999999999995,10,380,0.24,0.20000000000000004,-0.039999999999999994,0.45999999999999996,1000
+llama3.1-8b-it,qlora,0,a030,0.3,wgm,group_from_topic,Rich people,0.43999999999999995,10,380,0.24,0.20000000000000004,-0.039999999999999994,0.45999999999999996,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,topic,Age,0.25,8,380,0.075,0.17500000000000004,0.05,0.325,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Old people,0.25,8,380,0.075,0.17500000000000004,0.05,0.325,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Young people,0.25,8,380,0.075,0.17500000000000004,0.05,0.325,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,topic,Disability,0.16666666666666666,6,380,0.16666666666666666,9.25185853854297e-18,-0.26666666666666666,0.20083333333333261,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Physically disabled people,0.16666666666666666,6,380,0.16666666666666666,9.25185853854297e-18,-0.26666666666666666,0.20083333333333261,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Able-bodied people,0.16666666666666666,6,380,0.16666666666666666,9.25185853854297e-18,-0.26666666666666666,0.20083333333333261,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,topic,Ethnicity,0.3333333333333333,3,380,0.13333333333333333,0.19999999999999998,0.0,0.6,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Mexicans,0.3333333333333333,3,380,0.13333333333333333,0.19999999999999998,0.0,0.6,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Latin Americans,0.3333333333333333,3,380,0.13333333333333333,0.19999999999999998,0.0,0.6,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,topic,Gender,0.12000000000000002,5,380,0.0,0.12000000000000002,0.0,0.27999999999999997,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Women,0.12000000000000002,5,380,0.0,0.12000000000000002,0.0,0.27999999999999997,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Men,0.12000000000000002,5,380,0.0,0.12000000000000002,0.0,0.27999999999999997,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,topic,Nationality,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Immigrants,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Canadians,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Americans,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Europeans,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,topic,Race,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Black people,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,White people,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Asians,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Caucasians,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,topic,Religion,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Muslims,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Christians,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Jews,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Buddhists,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Atheists,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,topic,Sexual Orientation,0.4,1,380,0.0,0.4,0.4,0.4,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Homosexuals,0.4,1,380,0.0,0.4,0.4,0.4,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,topic,Socioeconomic Status,0.4600000000000001,10,380,0.24,0.22000000000000003,0.0,0.44000000000000006,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Poor people,0.4600000000000001,10,380,0.24,0.22000000000000003,0.0,0.44000000000000006,1000
+llama3.1-8b-it,qlora,0,a050,0.5,wgm,group_from_topic,Rich people,0.4600000000000001,10,380,0.24,0.22000000000000003,0.0,0.44000000000000006,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,topic,Age,0.225,8,380,0.075,0.15000000000000002,0.05,0.275,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Old people,0.225,8,380,0.075,0.15000000000000002,0.05,0.275,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Young people,0.225,8,380,0.075,0.15000000000000002,0.05,0.275,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,topic,Disability,0.10000000000000002,6,380,0.16666666666666666,-0.06666666666666667,-0.3,0.10000000000000002,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Physically disabled people,0.10000000000000002,6,380,0.16666666666666666,-0.06666666666666667,-0.3,0.10000000000000002,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Able-bodied people,0.10000000000000002,6,380,0.16666666666666666,-0.06666666666666667,-0.3,0.10000000000000002,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,topic,Ethnicity,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Mexicans,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Latin Americans,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,topic,Gender,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Women,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Men,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,topic,Nationality,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Immigrants,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Canadians,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Americans,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Europeans,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,topic,Race,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Black people,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,White people,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Asians,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Caucasians,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,topic,Religion,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Muslims,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Christians,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Jews,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Buddhists,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Atheists,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,topic,Sexual Orientation,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Homosexuals,0.2,1,380,0.0,0.2,0.2,0.2,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,topic,Socioeconomic Status,0.22000000000000003,10,380,0.24,-0.019999999999999997,-0.18,0.16,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Poor people,0.22000000000000003,10,380,0.24,-0.019999999999999997,-0.18,0.16,1000
+llama3.1-8b-it,qlora,0,a070,0.7,wgm,group_from_topic,Rich people,0.22000000000000003,10,380,0.24,-0.019999999999999997,-0.18,0.16,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,topic,Age,0.125,8,380,0.075,0.05000000000000001,0.0,0.125,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Old people,0.125,8,380,0.075,0.05000000000000001,0.0,0.125,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Young people,0.125,8,380,0.075,0.05000000000000001,0.0,0.125,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,topic,Disability,0.03333333333333333,6,380,0.16666666666666666,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Physically disabled people,0.03333333333333333,6,380,0.16666666666666666,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Able-bodied people,0.03333333333333333,6,380,0.16666666666666666,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,topic,Ethnicity,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Mexicans,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Latin Americans,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,topic,Gender,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Women,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Men,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,topic,Nationality,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Immigrants,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Canadians,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Americans,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Europeans,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,topic,Race,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Black people,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,White people,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Asians,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Caucasians,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,topic,Religion,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Muslims,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Christians,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Jews,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Buddhists,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Atheists,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,topic,Sexual Orientation,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Homosexuals,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,topic,Socioeconomic Status,0.12000000000000002,10,380,0.24,-0.12000000000000002,-0.36000000000000004,0.06,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Poor people,0.12000000000000002,10,380,0.24,-0.12000000000000002,-0.36000000000000004,0.06,1000
+llama3.1-8b-it,qlora,0,a090,0.9,wgm,group_from_topic,Rich people,0.12000000000000002,10,380,0.24,-0.12000000000000002,-0.36000000000000004,0.06,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,topic,Age,0.1,8,380,0.075,0.025,0.0,0.07500000000000001,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Old people,0.1,8,380,0.075,0.025,0.0,0.07500000000000001,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Young people,0.1,8,380,0.075,0.025,0.0,0.07500000000000001,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,topic,Disability,0.03333333333333333,6,380,0.16666666666666666,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Physically disabled people,0.03333333333333333,6,380,0.16666666666666666,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Able-bodied people,0.03333333333333333,6,380,0.16666666666666666,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,topic,Ethnicity,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Mexicans,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Latin Americans,0.0,3,380,0.13333333333333333,-0.13333333333333333,-0.4000000000000001,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,topic,Gender,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Women,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Men,0.0,5,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,topic,Nationality,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Immigrants,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Canadians,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Americans,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Europeans,0.06666666666666667,3,380,0.13333333333333333,-0.06666666666666667,-0.20000000000000004,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,topic,Race,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Black people,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,White people,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Asians,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Caucasians,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,topic,Religion,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Muslims,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Christians,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Jews,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Buddhists,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Atheists,0.0,2,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,topic,Sexual Orientation,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Homosexuals,0.0,1,380,0.0,0.0,0.0,0.0,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,topic,Socioeconomic Status,0.08,10,380,0.24,-0.16,-0.3805,0.02,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Poor people,0.08,10,380,0.24,-0.16,-0.3805,0.02,1000
+llama3.1-8b-it,qlora,0,a100,1.0,wgm,group_from_topic,Rich people,0.08,10,380,0.24,-0.16,-0.3805,0.02,1000

@@ -1,0 +1,36 @@
+{
+ "model": "qwen2.5-0.5b-it",
+ "sources": {
+  "embed": "embed/1a1cc7d21771de0f/index.json",
+  "deltab": "deltab/e01bb93d27bd44d7/timing.json",
+  "generate": "generate/5887aea546dd07a2/timing.json",
+  "score": "manifests/score/8e2fa601a066d8c7.json"
+ },
+ "embed": {
+  "seconds_total": 263.6,
+  "n": 29
+ },
+ "deltab": {
+  "seconds_total": 928.6,
+  "n": 28
+ },
+ "generate": {
+  "dt": {
+   "seconds_total": 6163.7,
+   "n": 15
+  },
+  "toxigen": {
+   "seconds_total": 2401.9,
+   "n": 15
+  },
+  "wgm": {
+   "seconds_total": 447.5,
+   "n": 15
+  }
+ },
+ "score": {
+  "seconds_total": 1070.254,
+  "n": 15,
+  "note": "last score run"
+ }
+}

@@ -82,9 +82,11 @@ def test_missing_upstream_raises(cfg, artifacts):
 
 
 def test_stub_names_its_milestone(cfg, artifacts):
-    """Unimplemented stages fail loudly with their milestone and leave an incomplete manifest."""
+    """A stage without a body fails loudly with its milestone and leaves an incomplete
+    manifest. Every stage has a body since M7, so the stub is installed explicitly."""
+    assert set(runner.STAGE_IMPLS) == set(runner.STAGES)
     done = [s for s in runner.STAGES if s != "report"]
-    fns = {s: _writer([]) for s in done} | {"report": runner.DEFAULT_STAGE_FNS["report"]}
+    fns = {s: _writer([]) for s in done} | {"report": runner._stub("report")}
     with pytest.raises(NotImplementedError, match="implemented in M7"):
         runner.run(cfg, env_mod.detect(), [*done, "report"], stage_fns=fns)
     rows = {r["stage"]: r["status"] for r in runner.stage_status(cfg, env_mod.detect())}

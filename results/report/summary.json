@@ -1,0 +1,79 @@
+{
+ "tiers": [
+  {
+   "tier": 1,
+   "settings": 9,
+   "c1": "0/9",
+   "c2": "0/8",
+   "c3": "1/6",
+   "significant_positive": "gemma3-4b-it/qlora-s0 wgm; gemma3-4b-it/qlora-s0 dt; gemma3-4b-it/qlora-s0 toxigen; llama3.1-8b-it/qlora-s0 wgm; llama3.1-8b-it/qlora-s0 dt",
+   "verdict": "refuted"
+  },
+  {
+   "tier": 2,
+   "settings": 12,
+   "c1": "6/12",
+   "c2": "6/11",
+   "c3": "5/8",
+   "significant_positive": "llama3.2-1b-it/full-s0 wgm; llama3.2-1b-it/full-s0 dt; llama3.2-1b-it/full-s0 toxigen; llama3.2-1b-it/lora-s0 wgm; llama3.2-1b-it/lora-s0 toxigen",
+   "verdict": "refuted"
+  }
+ ],
+ "secondary": [
+  {
+   "id": "S1",
+   "holds": "1/6",
+   "outcome": "fails"
+  },
+  {
+   "id": "S2",
+   "holds": "14/19",
+   "outcome": "holds"
+  },
+  {
+   "id": "S3",
+   "holds": "3/19",
+   "outcome": "fails"
+  },
+  {
+   "id": "S4",
+   "holds": "6/14",
+   "outcome": "mixed"
+  },
+  {
+   "id": "S5",
+   "holds": "3/19",
+   "outcome": "fails"
+  },
+  {
+   "id": "S6",
+   "holds": "1/2",
+   "outcome": "mixed"
+  },
+  {
+   "id": "S7",
+   "holds": "5/19",
+   "outcome": "fails"
+  }
+ ],
+ "figures": [
+  "figures/f_r1_scatter_wgm.png",
+  "figures/f_r1_scatter_dt.png",
+  "figures/f_r1_scatter_toxigen.png",
+  "figures/f_r2_thresholds_wgm.png",
+  "figures/f_r2_thresholds_dt.png",
+  "figures/f_r2_thresholds_toxigen.png",
+  "figures/f_r3_anchors_wgm.png",
+  "figures/f_r3_anchors_dt.png",
+  "figures/f_r3_anchors_toxigen.png",
+  "figures/f_r4_seeds_qwen2.5-0.5b-it_full.png",
+  "figures/f_r5_roc.png"
+ ],
+ "timing_runs": [
+  "tier1_gemma3-4b",
+  "tier1_llama3.1-8b",
+  "tier1_mistral-7b",
+  "tier2_llama3.2-1b",
+  "tier2_qwen2.5-0.5b"
+ ]
+}

@@ -2081,3 +2081,204 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: GPU ≤ 1.5 h on 2× T4 (one load of the 8B base in NF4 ≈ 5.5 GB, 3 checkpoints). Disk: 3 embedding files plus a restore of the two Llama-8B adapters.
 - Paper deviation: no. The paper does not report quantised extraction; this measures our D-004 choice.
 - Revisit-if: |ΔB_fp16 − ΔB_nf4| is comparable to the h − u contrast (then D-004 needs a superseding entry and the Tier 1 rows are reported both ways).
+
+## D-099 Bootstrap CIs: no CI for an undefined point; undirected methods resample in their full-sample orientation (amends D-027)
+- Date: 2026-10-27
+- Context:
+  - D-027 defines CKA's point estimates as |r| and max(AUC, 1 − AUC) (T7). It does not say how their CIs are formed.
+  - The first M6 run folded every bootstrap resample. Its CIs could not cross 0.5 (AUC) or 0 (r), so near-chance CKA rows read as CIs excluding chance (B-039).
+  - It also reported CIs for AUCs that are undefined on the full data (a class < 5 rows).
+- Options considered:
+  - A: fold each resample (as before).
+  - B: fix the orientation (and the sign of r) on the full sample, then resample unfolded.
+  - C: report CKA without CIs.
+- Choice: B, plus no CI (nan, `n_valid` 0) whenever the full-sample statistic is undefined. Applies to `summarize` (r and AUC CIs) and `paired_auc_difference` (C3). Point estimates are unchanged. `ANALYSIS_SCHEMA` = 2.
+- Why: B is the CI of the statistic the point estimate actually reports (the detector in the direction the data chose). A CI should not exist for a number that does not.
+- Tradeoff accepted: the orientation choice itself is not resampled, so B is slightly optimistic when the orientation is close to a coin flip. Those rows already have CIs spanning 0.5.
+- Cost impact: CPU only. Fewer resamples for undefined rows (skipped).
+- Paper deviation: no (the paper gives no CI procedure for T7).
+- Revisit-if: a reviewer of the results prefers C for CKA.
+
+## D-100 NF4 probe outcome: D-004 stays; NF4 is reported as a Llama-3.1-8B sensitivity row (resolves D-098's Revisit-if)
+- Date: 2026-10-28
+- Context:
+  - `m6_nf4.ipynb` at `c6558ab`, session `20261026T190001Z` (0.42 GPU session-h):
+    - Llama-3.1-8B `ref`, `a100`, `a000` re-extracted on the NF4 base (embed 528 s, peak ≤ 7.9 GiB per T4), plus `deltab`;
+    - the train stage reused the Tier 1 endpoints (same train keys);
+    - synced to the store at `results/m6_nf4_llama3.1-8b` (`07fde867`).
+  - `nf4.csv` (first M6 analysis, session `20261026T214321Z`; unchanged by D-099), primary cell, 24 groups:
+
+    | Method | ckpt | mean ΔB fp16 | mean ΔB NF4 | mean \|diff\| | r over groups |
+    |---|---|---|---|---|---|
+    | RR | a100 | 0.0436 | 0.0386 | 0.0050 | 0.995 |
+    | RR | a000 | 0.0676 | 0.0515 | 0.0162 | 0.997 |
+    | SEAT | a000 | 0.00346 | 0.00310 | 0.00036 | 0.988 |
+    | Procrustes | a000 | −0.00012 | −0.00006 | 0.00013 | 0.977 |
+    | CKA drift | a000 | 0.0042 | 0.0058 | 0.0016 | 0.950 |
+
+    - h − u (RR): fp16 +0.024, NF4 +0.013. The sign is the same for every method.
+  - D-098's Revisit-if is triggered: RR's precision shift at a000 (0.016) is about ⅔ of the fp16 h − u contrast. Changing D-004 is the user's call.
+- Options considered:
+  - A: keep D-004 (fp16 base for every checkpoint, identical for ref and audited) and report NF4 as a sensitivity row for Llama-3.1-8B.
+  - B: supersede D-004, re-extract every Tier 1 model on NF4 and report both (≈ 3 GPU-h).
+- Choice: A (user, 2026-10-28).
+- Why:
+  - The precision choice changes RR's level, not its direction or group ordering (r ≥ 0.995). Llama-8B's h − u stays positive, i.e. it still disagrees with all three benchmarks (D-094, D-096).
+  - SEAT, Procrustes and CKA barely move.
+  - Within each precision, ref and audited are extracted identically, which is what ΔB needs (D-004).
+- Tradeoff accepted: RR magnitudes for QLoRA models are precision-dependent at roughly ±0.016. The results state this, and NF4 numbers are not available for Mistral or Gemma.
+- Cost impact: none further. 0.42 GPU session-h spent on the probe.
+- Paper deviation: no (the paper does not state its extraction precision `[unspecified in paper]`).
+- Revisit-if: a conclusion in M7 depends on an RR magnitude difference smaller than ≈ 0.02 for a QLoRA model.
+
+## D-101 M6 results: RR ΔB predicts the benchmarks only for Qwen; the h-vs-u direction comes from attribute movement; M6 closed, `m6-green` = `ba8c179`
+- Date: 2026-10-28
+- Context:
+  - `m6_analysis.ipynb` at `ba8c179` (D-099 CIs, decomposition on ephemeral disk), session `20261027T085757Z` (0.50 CPU session-h; `analyze` 1,363 s).
+  - All five configs plus the NF4 run; 21 inputs, `ANALYSIS_SCHEMA` 2.
+  - Results store commit `9e59c69c`. The tables are committed in `results/` (aggregates only, DC-18).
+  - The tables equal the local CPU re-analysis row for row (B-039). The run only adds the decomposition rows (`t1` 120 → 180, `seeds` 28 → 42).
+- Observed (primary cell; observations = 7 audited checkpoints × groups; AUC of Δscore > threshold from −ΔB, D-027; n/a = a class < 5 rows):
+
+  | Setting | RR AUC DT / ToxiGen / WGM | SEAT AUC DT / ToxiGen / WGM | CKA AUC (undirected) DT / ToxiGen / WGM |
+  |---|---|---|---|
+  | Qwen full s0 | 0.90 / 0.88 / 0.89 | 0.76 / 0.78 / 0.81 | 0.60 / 0.75 / 0.57 |
+  | Qwen LoRA s0 | 0.91 / 0.99 / 0.94 | 0.70 / 0.85 / 0.77 | 0.61 / 0.64 / 0.67 |
+  | Llama-1B full s0 | n/a / 0.28 / 0.48 | n/a / 0.28 / 0.40 | n/a / 0.70 / 0.53 |
+  | Llama-1B LoRA s0 | 0.31 / 0.21 / 0.30 | 0.38 / 0.09 / 0.17 | 0.65 / 0.94 / 0.70 |
+  | Llama-8B QLoRA | 0.42 / 0.34 / 0.34 | 0.29 / 0.27 / 0.28 | 0.80 / 0.90 / 0.85 |
+  | Mistral-7B QLoRA | 0.47 / 0.63 / 0.55 | 0.38 / 0.62 / 0.52 | 0.56 / 0.73 / 0.55 |
+  | Gemma-3-4B QLoRA | n/a / 0.34 / 0.26 | n/a / 0.39 / 0.36 | n/a / 0.53 / 0.59 |
+  | Tier 1 pooled | 0.34 / 0.44 / 0.44 | 0.32 / 0.44 / 0.43 | 0.69 / 0.65 / 0.51 |
+  | Tier 2 pooled (s0) | 0.42 / 0.37 / 0.58 | 0.30 / 0.40 / 0.48 | 0.51 / 0.76 / 0.55 |
+  | All pooled | 0.33 / 0.35 / 0.50 | 0.27 / 0.38 / 0.45 | 0.64 / 0.74 / 0.50 |
+
+  - **T1 (M6-T1):** RR detects benchmark bias increases only in Qwen (AUC 0.88–0.99, r −0.64 to −0.86, as §4.1 / T1 report). In Llama-1B, Llama-8B and Gemma the relation is reversed (AUC 0.21–0.48, r > 0): ΔB rises as the benchmarks get more biased. Mistral is ≈ chance. Pooled RR is below 0.5 for DT and ToxiGen.
+  - **C3 (M6-T2), all pooled, AUC(RR) − AUC(baseline):**
+    - vs SEAT: +0.05 [0.03, 0.07] DT; −0.03 [−0.07, 0.00] ToxiGen; +0.05 [0.02, 0.09] WGM;
+    - vs Procrustes-SEAT: −0.09 [−0.14, −0.05] DT; −0.12 [−0.19, −0.05] ToxiGen;
+    - vs CKA drift: −0.31 [−0.36, −0.27] DT; −0.39 [−0.47, −0.31] ToxiGen.
+    - RR beats SEAT by a small margin. Undirected CKA drift detects best, because it does not depend on the direction that flips between model families.
+  - **Threshold sweep (F3 analogue, M6-T3):** pooled RR AUC stays below 0.51 at every threshold 0.00–0.30 for DT and ToxiGen (all pooled: DT 0.18–0.33, ToxiGen 0.28–0.41, WGM 0.43–0.50).
+  - **Ablations (M6-T4), all pooled, RR:**
+    - Anchor size (50–500) changes AUC by ≤ 0.01. Anchor source moves it more: Alpaca/Tulu anchors give DT 0.42–0.44 and WGM 0.58–0.61, against neutral 0.33 / 0.50.
+    - Attribute and target variants: DT 0.24–0.42.
+    - Max / last pooling: DT 0.59 / 0.61, but ToxiGen 0.34 / 0.24.
+    - Pre-norm site: DT 0.47.
+    - No cell gives a pooled AUC above 0.61 on any benchmark.
+  - **WGM map × pairing (D-095):**
+    - Human map: group pairing 0.50, topic-mean pairing 0.46 (all pooled RR).
+    - Qwen map: 0.38 / 0.38.
+    - The map changes the numbers but not the conclusion.
+  - **Decomposition (D-085 follow-up), h − u per spectrum (95% CI over groups):**
+    - The target-only part (`rr_target`) is small everywhere (|·| ≤ 0.007).
+    - The attribute-only part (`rr_attr`) carries the direction: Qwen −0.022 to −0.046, Mistral −0.032 [−0.033, −0.031], Llama-1B +0.045 / +0.076, Llama-8B +0.013 [0.005, 0.020], Gemma +0.014 [0.011, 0.016].
+    - So the model-dependent sign of ΔB comes from how the positive and negative attribute sentences move relative to the anchors, not from the target groups.
+    - Mistral's attribute part agrees with the benchmarks but is cancelled by its target part and the interaction. The parts are not additive: B is not linear in the two sides.
+    - As a detector, attribute-only RR is about as good as full RR for Qwen (AUC 0.88–0.99), better for Mistral (0.58–0.70 vs 0.47–0.63), and no better for Llama and Gemma (0.20–0.45).
+  - **Seeds (M6-T5, App. E.5):** Qwen full-FT RR mean ΔB across 3 seeds: std 0.004 (a000) to 0.024 (a100). Seed 1 has no h-vs-u separation (D-085).
+  - **NF4 (M6-T6):** D-100.
+  - **Sign table:** RR agrees with the benchmarks' h − u direction only in Qwen. All three benchmarks put h above u in all 7 spectra.
+- DONE checks for M6 (DONE.md matrix: DC-01, DC-02, DC-08, DC-10, DC-15, DC-19):
+  - **DC-01:** `ruff check src tests` → `All checks passed!` at `ba8c179`.
+  - **DC-02:** `pytest -q -m "not gpu"` → `194 passed, 13 deselected`.
+  - **DC-08:** `tests/test_stats.py` passes (AUC == 1.0 on separated data, |AUC − 0.5| < 0.05 on 10k random points, Pearson == scipy), plus the two D-099 tests.
+  - **DC-10:** the second `analyze` call logged `cache hit: analysis` (`dc10_cache_hit: true`) in both Kaggle runs.
+  - **DC-15:** docs in the same commits (D-097–D-101, B-038, B-039, FLOW, ARCHITECTURE, ROLLBACK).
+  - **DC-19:** `grep -rn "PLACEHOLDER(M6)" tests` gives no output.
+  - Also DC-18: `tests/test_leakage.py` → `3 passed` on Kaggle and locally with `results/` present.
+- Choice:
+  - M6 is closed. `m6-green` → `ba8c179`, the code that produced every M6 table. The user pushes the tag (ROLLBACK).
+  - The results are reported as they are: a partial replication. RR ΔB detects benchmark bias in Qwen, as the paper reports, and is anti-correlated with it in the Llama-family and Gemma endpoints.
+  - The decomposition locates the cause in the attribute sentences' movement.
+- Why: every M6 DONE check passes with recorded output. The numbers are consistent across two independent Kaggle runs and a local CPU run.
+- Tradeoff accepted:
+  - The DT AUC is undefined for Gemma (no Δscore > 0.1) and for Llama-1B full FT (4 negatives); their r is reported.
+  - Pooled settings mix model families whose directions differ.
+- Cost impact: 0.42 GPU + 1.11 CPU session-h (PLAN §8).
+- Paper deviation: the results deviate from §4.1 / T1 for 5 of 7 spectra (recorded, not tuned). Our harmful split lacks the paper's synthetic half (D-010), and Tier 1 trains 1 epoch (D-042).
+- Revisit-if: M8 (the authors' sets or code) changes the attribute sentences, which the decomposition implicates.
+
+## D-102 M7 report design: one CPU pass from `results/` aggregates; paper values transcribed; verdict rules as pre-registered, with three interpretations
+- Date: 2026-10-28
+- Context:
+  - PLAN M7 asks for `results/REPORT.md` with R1–R7, F-R1–F-R5, the §1.2 verdict and the deviations.
+  - Every input except wall-clock is already an aggregate in `results/` (M4–M6, D-101).
+  - The paper's comparison numbers live only in the PDF.
+  - §1.2 leaves three things open: the order of the tier rules when both could apply, the outcome rule for S1–S7, and what "≈ 0.003" means for S6.
+- Options considered:
+  - Report: (A) a hand-written report; (B) a generated report keyed on input hashes, as `analyze` is (D-097).
+  - R6: (A) transcribe the timings from the D entries; (B) collect them from the stage logs in the store.
+  - Paper values: (A) hard-code them in the tables; (B) one resource file.
+- Choice: B for all three.
+  - **Report:** `cli report` (`analysis.report.build_report`) writes `results/REPORT.md`, `results/report/*.csv` and `results/figures/f_r*.png`.
+    - `report/manifest.json` = sha256 of the M6 tables, run inputs, `timing.json` files and DECISION.md, plus the paper-values hash and tiers. An unchanged re-run logs `cache hit: report`.
+    - The runner `report` stage calls the same function for one config, reading the M6 tables from its `analyze` stage dir.
+  - **Paper values:** `resources/paper_values.json`, transcribed from the PDF text: T1 (r, stars, AUC, MAE per benchmark × model × regime), T3 minutes, T5a/b, T6, T7, E.5 and the abstract's 15/18.
+    - Tier 1 (our QLoRA) is set against the paper's **LoRA** column.
+    - T5–T7 are shown next to our Llama-3.1-8B rows. The paper's "Llama" is Llama-3.1-8B-Instruct (App. C).
+  - **R6:** `cli collect-timing` reads, for one model, from the private store restored to ephemeral disk:
+    - the embedding sidecars' `stats.seconds` (`restore --include "*.json"`, a new `HFStore.download_dir(include=...)`);
+    - `deltab` and `generate` `timing.json`;
+    - the last `score` manifest's seconds.
+    - It writes `results/<run>/timing.json` (numbers only). R6 shows minutes per checkpoint and the benchmark/ours ratio.
+    - Scoring is a lower bound: the last score run reused DT/ToxiGen labels (D-096).
+  - **Verdict interpretations:**
+    1. Refutation is checked before confirmation: a tier with a significant positive r (n ≥ 50) is refuted even if C1/C2/C3 reach 2/3.
+    2. S1–S7 use the tier rule's thirds over the testable settings: ≥ 2/3 holds, ≤ 1/3 fails, else mixed.
+    3. S6 "ΔB std ≈ 0.003" holds per endpoint when the mean per-group across-seed std is ≤ 2 × 0.003. C2 and S2–S7 skip degenerate settings (§1.2).
+  - **Deviations section:** every D entry (not superseded) whose "Paper deviation" starts with "yes", parsed from DECISION.md.
+  - **Figures:** matplotlib Agg; categorical slots in fixed order, validated with the dataviz validator (adjacent CVD ΔE ≥ 9.1). The light slots below 3:1 contrast are relieved by the table view (R1–R5). The α ramp is one hue.
+- Why:
+  - Generated, cached outputs cannot drift from the numbers, and they re-run in seconds on CPU.
+  - The verdict is computed by the rules registered before the results existed.
+- Tradeoff accepted:
+  - The paper values are a manual transcription. A test checks their ranges and that T5's population std reproduces the paper's 0.030.
+  - The three interpretations above are ours `[unspecified in PLAN §1.2]`.
+- Cost impact: CPU only. Local report ≈ 20 s; the Kaggle notebook ≈ 20–30 min, mostly the install.
+- Paper deviation: no (reporting).
+- Revisit-if: a reviewer disputes an interpretation (then supersede this entry and bump `REPORT_SCHEMA`), or the paper releases code or values that differ from the transcription.
+
+## D-103 M7 closed: `results/REPORT.md` final; both tiers refuted under the pre-registered rules; `m7-green` = `466f86d`
+- Date: 2026-10-28
+- Context:
+  - The report (D-102) was drafted locally at `d896d5e`.
+  - `m7_report.ipynb` at `800d8e9` (session `20261028T211255Z`, 0.05 CPU session-h) collected R6 timing for all five configs. `results/<run>/timing.json` came from the stage logs: embed sidecars, `deltab`/`generate` timing, last score manifest.
+  - Its `report` step then crashed (B-041). The final report was built locally from the same aggregates plus those five `timing.json` files. The report is a deterministic CPU step over committed files, and every DONE check for M7 is a CPU check.
+- Observed:
+  - **Verdict (PLAN §1.2):**
+    - Tier 1 *refuted*: C1 0/9, C2 0/8, C3 1/6, with significant positive r in Gemma and Llama-8B.
+    - Tier 2 *refuted*: C1 6/12, C2 6/11, C3 5/8, with significant positive r in Llama-1B.
+    - Only the two Qwen spectra meet C1 and C2 (6/21 cells). The paper reports 15/18.
+  - **Secondary claims:**
+    - S2 (Procrustes-SEAT near chance) holds, 14/19.
+    - S4 (mean pooling best) is mixed, 6/14.
+    - S6 (seed stability) is mixed: the harmful endpoint is 0.004, the unharmful one 0.024 against the paper's 0.003.
+    - S1, S3, S5 and S7 fail.
+  - **Cost (R6), minutes per checkpoint on 2× T4:**
+
+    | Model | Ours: embed + ΔB | DT | ToxiGen | WGM | DT / ToxiGen / WGM vs ours |
+    |---|---|---|---|---|---|
+    | Llama-8B | 2.7 | 32.6 | 10.9 | 2.8 | 11.9× / 4.0× / 1.0× |
+    | Mistral-7B | 4.3 | 30.0 | 11.3 | 2.6 | 7.0× / 2.6× / 0.6× |
+    | Gemma-3-4B (fp32) | 5.7 | 100.9 | 38.0 | 5.9 | 17.9× / 6.7× / 1.0× |
+
+    - Generation times exclude classification. Scoring (last run, lower bound) is 1.2–1.4 min per checkpoint.
+    - Paper T3 (A100, per model): ours 2.8–3.2 min, DT 44–156 min, i.e. DT ≈ 15–49× ours.
+    - The cost advantage over DT and ToxiGen replicates at a smaller ratio, because our DT is subsampled (n = 3, D-022) and ToxiGen is subsampled (D-025).
+    - WGM generation is about as cheap as our method here, because our WGM subcategory is 76 prompts × 5 samples (D-086).
+- DONE checks for M7 (DONE.md matrix: DC-01, DC-02, DC-15, DC-18):
+  - **DC-01:** `ruff check src tests` → `All checks passed!` at `466f86d`.
+  - **DC-02:** `pytest -q -m "not gpu"` → `201 passed, 13 deselected`.
+  - **DC-15:** docs in the same commits (D-102, D-103, B-040, B-041, FLOW, ARCHITECTURE, ROLLBACK, PLAN §8).
+  - **DC-18:** `tests/test_leakage.py` → `3 passed` with `results/REPORT.md`, `report/`, `figures/` and the `timing.json` files present.
+  - Also: `grep -rn "PLACEHOLDER(M7)" tests` gives no output, and a second `cli report` logs `cache hit: report`.
+- Choice:
+  - M7 is closed. `m7-green` → `466f86d` (code and final report outputs). The user pushes the tag (ROLLBACK).
+  - The private store's `results/` still holds the draft report the crashed run synced. The next `m7_report.ipynb` run, or `cli sync --path results` from a session with this checkout, replaces it.
+  - Next: M8, conditional on the authors releasing code or sets (PLAN).
+- Why: every M7 DONE check passes with recorded output. The R6 inputs are measured logs, not transcriptions.
+- Tradeoff accepted: the final report was rendered locally rather than in the Kaggle session. Its inputs are the same committed and uploaded aggregates, and its re-run is a cache hit.
+- Cost impact: 0.05 CPU session-h (PLAN §8).
+- Paper deviation: no new ones.
+- Revisit-if: M8 runs, or a reviewer disputes a D-102 interpretation.

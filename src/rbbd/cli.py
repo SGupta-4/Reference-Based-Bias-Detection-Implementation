@@ -79,6 +79,9 @@ def _build_parser() -> argparse.ArgumentParser:
     rs.add_argument(
         "--path", required=True, help="path relative to the artifact root, e.g. train/<slug>"
     )
+    rs.add_argument(
+        "--include", nargs="*", default=None, help='file patterns, e.g. "*.json" (default: all)'
+    )
 
     dg = sub.add_parser(
         "diagnose-deltab", help="B-030 diagnostics from cached embeddings (CPU, aggregates only)"
@@ -122,6 +125,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
     dd = sub.add_parser("decompose-deltab", help="target-only / attribute-only RR ΔB (CPU)")
     dd.add_argument("--config", type=Path, required=True)
+
+    rp = sub.add_parser("report", help="M7 results/REPORT.md, tables and figures (CPU)")
+    rp.add_argument("--results", type=Path, default=Path("results"))
+    rp.add_argument("--out", type=Path, default=None, help="default: --results")
+    rp.add_argument("--force", action="store_true")
+
+    ct = sub.add_parser("collect-timing", help="R6 timing for one config -> results/<run>/")
+    ct.add_argument("--config", type=Path, required=True)
 
     c = sub.add_parser("compare-embeddings", help="compare two configs' cached ref embeddings")
     c.add_argument("--a", type=Path, required=True, help="config whose embeddings are tested")
@@ -222,7 +233,7 @@ def _cmd_sync(args: argparse.Namespace) -> int:
 def _cmd_restore(args: argparse.Namespace) -> int:
     cfg = config_mod.load(args.config)
     env = env_mod.detect(cfg.get("paths.artifacts"))
-    local = _open_store(cfg).download_dir(args.path, env.artifacts_root)
+    local = _open_store(cfg).download_dir(args.path, env.artifacts_root, include=args.include)
     n = sum(1 for p in local.rglob("*") if p.is_file()) if local.exists() else 0
     print(json.dumps({"path": args.path, "files": n}))
     return 0
@@ -303,6 +314,37 @@ def _cmd_decompose(args: argparse.Namespace) -> int:
     out = results_dir(cfg, env.artifacts_root) / "delta_b_decomposition.csv.gz"
     _write_csv(out, rows)
     print(json.dumps({"rows": len(rows), "out": str(out)}))
+    return 0
+
+
+def _cmd_report(args: argparse.Namespace) -> int:
+    # M7 (D-102): reads results/m6/ + results/<run>/ aggregates; keyed on their hashes.
+    from rbbd.analysis.report import build_report
+
+    summary = build_report(
+        args.results,
+        args.out,
+        tiers=_tiers(DEFAULT_BASE.parent),
+        decision_md=DEFAULT_BASE.parent.parent / "DECISION.md",
+        force=args.force,
+    )
+    print(json.dumps(summary, indent=1, default=str))
+    return 0
+
+
+def _cmd_collect_timing(args: argparse.Namespace) -> int:
+    # R6 (D-102): restore manifests/, embed/, deltab/, generate/ and the embedding sidecars
+    # (`restore --path embeddings/<slug> --include "*.json"`) first; numbers only are written.
+    from rbbd.analysis.timing import collect
+    from rbbd.metrics.delta_b import results_dir
+
+    cfg = config_mod.load(args.config)
+    env = env_mod.detect(cfg.get("paths.artifacts"))
+    t = collect(env.artifacts_root, cfg["models"][0]["slug"], runner.stage_run_keys(cfg))
+    out = results_dir(cfg, env.artifacts_root) / "timing.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(t, indent=1))
+    print(json.dumps({k: v for k, v in t.items() if k != "sources"}))
     return 0
 
 
@@ -452,6 +494,8 @@ def main(argv: list[str] | None = None) -> int:
         "analyze": _cmd_analyze,
         "rescore-wgm": _cmd_rescore_wgm,
         "decompose-deltab": _cmd_decompose,
+        "report": _cmd_report,
+        "collect-timing": _cmd_collect_timing,
         "generate-one": _cmd_generate_one,
         "score-wildguard": _cmd_score_wildguard,
         "topic-map": _cmd_topic_map,

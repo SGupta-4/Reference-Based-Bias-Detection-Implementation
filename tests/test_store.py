@@ -117,3 +117,15 @@ def test_download_dir_restores_a_subtree(tmp_path):
     assert not (root / "env").exists()
     with pytest.raises(store_mod.StoreError, match="relative"):
         store.download_dir("../x", root)
+
+
+def test_download_dir_include_restores_only_matching_files(tmp_path):
+    """`restore --include "*.json"` brings back the embedding sidecars, not the tensors (D-102)."""
+    remote = tmp_path / "remote"
+    (remote / "embeddings/m/base/ref").mkdir(parents=True)
+    (remote / "embeddings/m/base/ref/k.json").write_text("{}")
+    (remote / "embeddings/m/base/ref/k.safetensors").write_bytes(b"t")
+    store = store_mod.open_store(REPO, api=FakeApi(remote))
+    local = store.download_dir("embeddings/m", tmp_path / "a", include=["*.json"])
+    assert (local / "base/ref/k.json").exists()
+    assert not (local / "base/ref/k.safetensors").exists()

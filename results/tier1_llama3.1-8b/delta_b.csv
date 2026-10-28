@@ -1,0 +1,769 @@
+model,regime,seed,ckpt,alpha,group,topic,method,cell,anchor_source,n_anchors,anchor_seed,attr_variant,target_variant,pooling,layer_site,B_ref,B_aud,delta_b
+llama3.1-8b-it,qlora,0,ref,,Homosexuals,Sexual Orientation,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1697624421678669,-0.1697624421678669,0.0
+llama3.1-8b-it,qlora,0,ref,,Muslims,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.02953949868054657,-0.02953949868054657,0.0
+llama3.1-8b-it,qlora,0,ref,,Christians,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.032914019735899164,-0.032914019735899164,0.0
+llama3.1-8b-it,qlora,0,ref,,Jews,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0350639137315694,-0.0350639137315694,0.0
+llama3.1-8b-it,qlora,0,ref,,Buddhists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,0.06509344216179337,0.06509344216179337,0.0
+llama3.1-8b-it,qlora,0,ref,,Atheists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08543608347490071,-0.08543608347490071,0.0
+llama3.1-8b-it,qlora,0,ref,,Black people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.17652744128152037,-0.17652744128152037,0.0
+llama3.1-8b-it,qlora,0,ref,,White people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.18325383894483205,-0.18325383894483205,0.0
+llama3.1-8b-it,qlora,0,ref,,Asians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14220860671365843,-0.14220860671365843,0.0
+llama3.1-8b-it,qlora,0,ref,,Caucasians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12181972962899298,-0.12181972962899298,0.0
+llama3.1-8b-it,qlora,0,ref,,Mexicans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0414765017727379,-0.0414765017727379,0.0
+llama3.1-8b-it,qlora,0,ref,,Latin Americans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.07995124517324377,-0.07995124517324377,0.0
+llama3.1-8b-it,qlora,0,ref,,Women,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1065457784643657,-0.1065457784643657,0.0
+llama3.1-8b-it,qlora,0,ref,,Men,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10647354184470798,-0.10647354184470798,0.0
+llama3.1-8b-it,qlora,0,ref,,Old people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16758511005598403,-0.16758511005598403,0.0
+llama3.1-8b-it,qlora,0,ref,,Young people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12320440038159294,-0.12320440038159294,0.0
+llama3.1-8b-it,qlora,0,ref,,Physically disabled people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14172030817533998,-0.14172030817533998,0.0
+llama3.1-8b-it,qlora,0,ref,,Able-bodied people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16171183535018457,-0.16171183535018457,0.0
+llama3.1-8b-it,qlora,0,ref,,Poor people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1760375072393927,-0.1760375072393927,0.0
+llama3.1-8b-it,qlora,0,ref,,Rich people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14947203106919227,-0.14947203106919227,0.0
+llama3.1-8b-it,qlora,0,ref,,Immigrants,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.06186620652071264,-0.06186620652071264,0.0
+llama3.1-8b-it,qlora,0,ref,,Canadians,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10867394801769961,-0.10867394801769961,0.0
+llama3.1-8b-it,qlora,0,ref,,Americans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08321248891664837,-0.08321248891664837,0.0
+llama3.1-8b-it,qlora,0,ref,,Europeans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12925797748351534,-0.12925797748351534,0.0
+llama3.1-8b-it,qlora,0,ref,,Homosexuals,Sexual Orientation,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.021788046453735936,0.0
+llama3.1-8b-it,qlora,0,ref,,Muslims,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0028237654350360877,0.0
+llama3.1-8b-it,qlora,0,ref,,Christians,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.0007913605890792841,0.0
+llama3.1-8b-it,qlora,0,ref,,Jews,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.008402432261458186,0.0
+llama3.1-8b-it,qlora,0,ref,,Buddhists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.0061542540507674,0.0
+llama3.1-8b-it,qlora,0,ref,,Atheists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.012998360315391587,0.0
+llama3.1-8b-it,qlora,0,ref,,Black people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.013395859637781567,0.0
+llama3.1-8b-it,qlora,0,ref,,White people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.01665315236244776,0.0
+llama3.1-8b-it,qlora,0,ref,,Asians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,-0.0025411043898663265,0.0
+llama3.1-8b-it,qlora,0,ref,,Caucasians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.014142289322945137,0.0
+llama3.1-8b-it,qlora,0,ref,,Mexicans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0036421099561324633,0.0
+llama3.1-8b-it,qlora,0,ref,,Latin Americans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.002173210328474384,0.0
+llama3.1-8b-it,qlora,0,ref,,Women,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.001408041552274799,0.0
+llama3.1-8b-it,qlora,0,ref,,Men,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.004994725824479697,0.0
+llama3.1-8b-it,qlora,0,ref,,Old people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.010252438177221974,0.0
+llama3.1-8b-it,qlora,0,ref,,Young people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.004051395524229413,0.0
+llama3.1-8b-it,qlora,0,ref,,Physically disabled people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.0018312450939703307,0.0
+llama3.1-8b-it,qlora,0,ref,,Able-bodied people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.00589644916316052,0.0
+llama3.1-8b-it,qlora,0,ref,,Poor people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.01696432452590063,0.0
+llama3.1-8b-it,qlora,0,ref,,Rich people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.007082342621046751,0.0
+llama3.1-8b-it,qlora,0,ref,,Immigrants,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.0026526407169563714,0.0
+llama3.1-8b-it,qlora,0,ref,,Canadians,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.002731204997358583,0.0
+llama3.1-8b-it,qlora,0,ref,,Americans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.004818582011280021,0.0
+llama3.1-8b-it,qlora,0,ref,,Europeans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.007894544519651762,0.0
+llama3.1-8b-it,qlora,0,ref,,Homosexuals,Sexual Orientation,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.021788046453735936,0.0
+llama3.1-8b-it,qlora,0,ref,,Muslims,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0028237654350360877,0.0
+llama3.1-8b-it,qlora,0,ref,,Christians,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.0007913605890792841,0.0
+llama3.1-8b-it,qlora,0,ref,,Jews,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.008402432261458186,0.0
+llama3.1-8b-it,qlora,0,ref,,Buddhists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.0061542540507674,0.0
+llama3.1-8b-it,qlora,0,ref,,Atheists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.012998360315391587,0.0
+llama3.1-8b-it,qlora,0,ref,,Black people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.013395859637781567,0.0
+llama3.1-8b-it,qlora,0,ref,,White people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.01665315236244776,0.0
+llama3.1-8b-it,qlora,0,ref,,Asians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,-0.0025411043898663265,0.0
+llama3.1-8b-it,qlora,0,ref,,Caucasians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.014142289322945137,0.0
+llama3.1-8b-it,qlora,0,ref,,Mexicans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0036421099561324633,0.0
+llama3.1-8b-it,qlora,0,ref,,Latin Americans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.002173210328474384,0.0
+llama3.1-8b-it,qlora,0,ref,,Women,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.001408041552274799,0.0
+llama3.1-8b-it,qlora,0,ref,,Men,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.004994725824479697,0.0
+llama3.1-8b-it,qlora,0,ref,,Old people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.010252438177221974,0.0
+llama3.1-8b-it,qlora,0,ref,,Young people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.004051395524229413,0.0
+llama3.1-8b-it,qlora,0,ref,,Physically disabled people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.0018312450939703307,0.0
+llama3.1-8b-it,qlora,0,ref,,Able-bodied people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.00589644916316052,0.0
+llama3.1-8b-it,qlora,0,ref,,Poor people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.01696432452590063,0.0
+llama3.1-8b-it,qlora,0,ref,,Rich people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.007082342621046751,0.0
+llama3.1-8b-it,qlora,0,ref,,Immigrants,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.0026526407169563714,0.0
+llama3.1-8b-it,qlora,0,ref,,Canadians,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.002731204997358583,0.0
+llama3.1-8b-it,qlora,0,ref,,Americans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.004818582011280021,0.0
+llama3.1-8b-it,qlora,0,ref,,Europeans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.007894544519651762,0.0
+llama3.1-8b-it,qlora,0,ref,,Homosexuals,Sexual Orientation,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Muslims,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Christians,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Jews,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Buddhists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Atheists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Black people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,White people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Asians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Caucasians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Mexicans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Latin Americans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Women,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Men,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Old people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Young people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Physically disabled people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Able-bodied people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Poor people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Rich people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Immigrants,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Canadians,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Americans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,ref,,Europeans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0
+llama3.1-8b-it,qlora,0,a100,1.0,Homosexuals,Sexual Orientation,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1697624421678669,-0.11017102666288688,0.059591415504980025
+llama3.1-8b-it,qlora,0,a100,1.0,Muslims,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.02953949868054657,-0.005221355837354145,0.024318142843192427
+llama3.1-8b-it,qlora,0,a100,1.0,Christians,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.032914019735899164,-0.006724883232452187,0.026189136503446977
+llama3.1-8b-it,qlora,0,a100,1.0,Jews,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0350639137315694,-0.010050987886691138,0.02501292584487826
+llama3.1-8b-it,qlora,0,a100,1.0,Buddhists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,0.06509344216179337,0.066379369809656,0.0012859276478626308
+llama3.1-8b-it,qlora,0,a100,1.0,Atheists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08543608347490071,-0.05430565726179598,0.03113042621310473
+llama3.1-8b-it,qlora,0,a100,1.0,Black people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.17652744128152037,-0.11650976649472117,0.0600176747867992
+llama3.1-8b-it,qlora,0,a100,1.0,White people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.18325383894483205,-0.12413782132840566,0.05911601761642639
+llama3.1-8b-it,qlora,0,a100,1.0,Asians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14220860671365843,-0.08253692446850806,0.05967168224515036
+llama3.1-8b-it,qlora,0,a100,1.0,Caucasians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12181972962899298,-0.06660415376397905,0.05521557586501394
+llama3.1-8b-it,qlora,0,a100,1.0,Mexicans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0414765017727379,-0.011858699082530077,0.029617802690207824
+llama3.1-8b-it,qlora,0,a100,1.0,Latin Americans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.07995124517324377,-0.03928284076357608,0.040668404409667694
+llama3.1-8b-it,qlora,0,a100,1.0,Women,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1065457784643657,-0.05767992215901369,0.048865856305352014
+llama3.1-8b-it,qlora,0,a100,1.0,Men,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10647354184470798,-0.061265580891912835,0.04520796095279514
+llama3.1-8b-it,qlora,0,a100,1.0,Old people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16758511005598403,-0.10727871727645859,0.060306392779525445
+llama3.1-8b-it,qlora,0,a100,1.0,Young people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12320440038159294,-0.07067768125815295,0.052526719123439994
+llama3.1-8b-it,qlora,0,a100,1.0,Physically disabled people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14172030817533998,-0.08759699884158297,0.054123309333757016
+llama3.1-8b-it,qlora,0,a100,1.0,Able-bodied people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16171183535018457,-0.10452320804300863,0.05718862730717594
+llama3.1-8b-it,qlora,0,a100,1.0,Poor people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1760375072393927,-0.11859922661549202,0.05743828062390069
+llama3.1-8b-it,qlora,0,a100,1.0,Rich people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14947203106919227,-0.1070983461593083,0.04237368490988397
+llama3.1-8b-it,qlora,0,a100,1.0,Immigrants,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.06186620652071264,-0.02999723482674356,0.03186897169396908
+llama3.1-8b-it,qlora,0,a100,1.0,Canadians,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10867394801769961,-0.06666763740142449,0.04200631061627512
+llama3.1-8b-it,qlora,0,a100,1.0,Americans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08321248891664837,-0.05410255840458512,0.029109930512063252
+llama3.1-8b-it,qlora,0,a100,1.0,Europeans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12925797748351534,-0.0761466157884703,0.05311136169504503
+llama3.1-8b-it,qlora,0,a100,1.0,Homosexuals,Sexual Orientation,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.01812211386790524,0.0036659325858306967
+llama3.1-8b-it,qlora,0,a100,1.0,Muslims,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0013165390347743512,0.0015072264002617365
+llama3.1-8b-it,qlora,0,a100,1.0,Christians,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.002467493721795666,0.001676133132716382
+llama3.1-8b-it,qlora,0,a100,1.0,Jews,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.006122301166278737,0.0022801310951794497
+llama3.1-8b-it,qlora,0,a100,1.0,Buddhists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.007405715585277777,0.0012514615345103767
+llama3.1-8b-it,qlora,0,a100,1.0,Atheists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.009850030833497597,0.00314832948189399
+llama3.1-8b-it,qlora,0,a100,1.0,Black people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.010581747848032078,0.002814111789749489
+llama3.1-8b-it,qlora,0,a100,1.0,White people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.014200452359077069,0.0024527000033706912
+llama3.1-8b-it,qlora,0,a100,1.0,Asians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,8.430936362921601e-05,0.0026254137534955425
+llama3.1-8b-it,qlora,0,a100,1.0,Caucasians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.010767622917783803,0.0033746664051613334
+llama3.1-8b-it,qlora,0,a100,1.0,Mexicans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0021061601884833792,0.001535949767649084
+llama3.1-8b-it,qlora,0,a100,1.0,Latin Americans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.00409952558028607,0.0019263152518116857
+llama3.1-8b-it,qlora,0,a100,1.0,Women,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0032086784850207106,0.0018006369327459115
+llama3.1-8b-it,qlora,0,a100,1.0,Men,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.003090153055976672,0.0019045727685030253
+llama3.1-8b-it,qlora,0,a100,1.0,Old people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.00786534357338996,0.0023870946038320132
+llama3.1-8b-it,qlora,0,a100,1.0,Young people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.005484925366352609,0.001433529842123196
+llama3.1-8b-it,qlora,0,a100,1.0,Physically disabled people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.0003402918615548268,0.0014909532324155039
+llama3.1-8b-it,qlora,0,a100,1.0,Able-bodied people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.003999934288189755,0.0018965148749707644
+llama3.1-8b-it,qlora,0,a100,1.0,Poor people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.014736446700095171,0.00222787782580546
+llama3.1-8b-it,qlora,0,a100,1.0,Rich people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.005642311871928876,0.0014400307491178746
+llama3.1-8b-it,qlora,0,a100,1.0,Immigrants,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.0041908308659624515,0.00153819014900608
+llama3.1-8b-it,qlora,0,a100,1.0,Canadians,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.001070453223702883,0.0016607517736557
+llama3.1-8b-it,qlora,0,a100,1.0,Americans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.003385248471267084,0.0014333335400129373
+llama3.1-8b-it,qlora,0,a100,1.0,Europeans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.005226891873782515,0.0026676526458692474
+llama3.1-8b-it,qlora,0,a100,1.0,Homosexuals,Sexual Orientation,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.020892296770066866,0.0008957496836690705
+llama3.1-8b-it,qlora,0,a100,1.0,Muslims,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0034922935647929785,-0.0006685281297568908
+llama3.1-8b-it,qlora,0,a100,1.0,Christians,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.00020942736177620653,-0.0005819332273030776
+llama3.1-8b-it,qlora,0,a100,1.0,Jews,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.00826806486697867,0.00013436739447951658
+llama3.1-8b-it,qlora,0,a100,1.0,Buddhists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.00522064743345916,-0.0009336066173082401
+llama3.1-8b-it,qlora,0,a100,1.0,Atheists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.012742906101126465,0.0002554542142651217
+llama3.1-8b-it,qlora,0,a100,1.0,Black people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.013142623064955967,0.0002532365728255999
+llama3.1-8b-it,qlora,0,a100,1.0,White people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.01645139473669205,0.00020175762575571146
+llama3.1-8b-it,qlora,0,a100,1.0,Asians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,-0.0023359937190753355,0.000205110670790991
+llama3.1-8b-it,qlora,0,a100,1.0,Caucasians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.013256483733923807,0.0008858055890213299
+llama3.1-8b-it,qlora,0,a100,1.0,Mexicans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0038298059444484434,-0.00018769598831598015
+llama3.1-8b-it,qlora,0,a100,1.0,Latin Americans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.001789178025802407,-0.00038403230267197697
+llama3.1-8b-it,qlora,0,a100,1.0,Women,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0011717692426135495,-0.0002362723096612496
+llama3.1-8b-it,qlora,0,a100,1.0,Men,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.005183283791967821,-0.00018855796748812326
+llama3.1-8b-it,qlora,0,a100,1.0,Old people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.010128136805876979,0.00012430137134499496
+llama3.1-8b-it,qlora,0,a100,1.0,Young people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.0034519675163912898,-0.0005994280078381229
+llama3.1-8b-it,qlora,0,a100,1.0,Physically disabled people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.0024553870377739973,-0.0006241419438036667
+llama3.1-8b-it,qlora,0,a100,1.0,Able-bodied people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.006178913681200655,-0.0002824645180401356
+llama3.1-8b-it,qlora,0,a100,1.0,Poor people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.016923573078487703,4.0751447412928216e-05
+llama3.1-8b-it,qlora,0,a100,1.0,Rich people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.007585401539511347,-0.0005030589184645967
+llama3.1-8b-it,qlora,0,a100,1.0,Immigrants,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.0022051604388967447,-0.00044748027805962664
+llama3.1-8b-it,qlora,0,a100,1.0,Canadians,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.003052935285638978,-0.0003217302882803949
+llama3.1-8b-it,qlora,0,a100,1.0,Americans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.005237747492525804,-0.0004191654812457828
+llama3.1-8b-it,qlora,0,a100,1.0,Europeans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.007511993780321382,0.0003825507393303805
+llama3.1-8b-it,qlora,0,a100,1.0,Homosexuals,Sexual Orientation,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0026085155647370684
+llama3.1-8b-it,qlora,0,a100,1.0,Muslims,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0014069292293371616
+llama3.1-8b-it,qlora,0,a100,1.0,Christians,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0017530811597301632
+llama3.1-8b-it,qlora,0,a100,1.0,Jews,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002039295029491295
+llama3.1-8b-it,qlora,0,a100,1.0,Buddhists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.001986519996755809
+llama3.1-8b-it,qlora,0,a100,1.0,Atheists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002449258672566068
+llama3.1-8b-it,qlora,0,a100,1.0,Black people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002026465625909357
+llama3.1-8b-it,qlora,0,a100,1.0,White people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0017998493022158835
+llama3.1-8b-it,qlora,0,a100,1.0,Asians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003685719277938815
+llama3.1-8b-it,qlora,0,a100,1.0,Caucasians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002715336679271818
+llama3.1-8b-it,qlora,0,a100,1.0,Mexicans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002221861453152507
+llama3.1-8b-it,qlora,0,a100,1.0,Latin Americans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0019093743027714938
+llama3.1-8b-it,qlora,0,a100,1.0,Women,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0020973812555817872
+llama3.1-8b-it,qlora,0,a100,1.0,Men,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0023590685398298117
+llama3.1-8b-it,qlora,0,a100,1.0,Old people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0020512902092332252
+llama3.1-8b-it,qlora,0,a100,1.0,Young people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0017491014162567264
+llama3.1-8b-it,qlora,0,a100,1.0,Physically disabled people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002074254028086031
+llama3.1-8b-it,qlora,0,a100,1.0,Able-bodied people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0018718221873458285
+llama3.1-8b-it,qlora,0,a100,1.0,Poor people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.001631342519548662
+llama3.1-8b-it,qlora,0,a100,1.0,Rich people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0020463028224073643
+llama3.1-8b-it,qlora,0,a100,1.0,Immigrants,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0014293664411938467
+llama3.1-8b-it,qlora,0,a100,1.0,Canadians,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0016690837004327275
+llama3.1-8b-it,qlora,0,a100,1.0,Americans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002431462612155433
+llama3.1-8b-it,qlora,0,a100,1.0,Europeans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002464945293715104
+llama3.1-8b-it,qlora,0,a090,0.9,Homosexuals,Sexual Orientation,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1697624421678669,-0.10690144698861723,0.06286099517924967
+llama3.1-8b-it,qlora,0,a090,0.9,Muslims,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.02953949868054657,-0.005045063922904849,0.024494434757641723
+llama3.1-8b-it,qlora,0,a090,0.9,Christians,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.032914019735899164,-0.006548424287246588,0.026365595448652576
+llama3.1-8b-it,qlora,0,a090,0.9,Jews,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0350639137315694,-0.010281142372084606,0.02478277135948479
+llama3.1-8b-it,qlora,0,a090,0.9,Buddhists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,0.06509344216179337,0.06451877758206953,-0.0005746645797238409
+llama3.1-8b-it,qlora,0,a090,0.9,Atheists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08543608347490071,-0.05319515747666298,0.03224092599823773
+llama3.1-8b-it,qlora,0,a090,0.9,Black people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.17652744128152037,-0.11263170824893656,0.0638957330325838
+llama3.1-8b-it,qlora,0,a090,0.9,White people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.18325383894483205,-0.12030555004285316,0.06294828890197889
+llama3.1-8b-it,qlora,0,a090,0.9,Asians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14220860671365843,-0.07869064792083855,0.06351795879281988
+llama3.1-8b-it,qlora,0,a090,0.9,Caucasians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12181972962899298,-0.06456495591476091,0.05725477371423207
+llama3.1-8b-it,qlora,0,a090,0.9,Mexicans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0414765017727379,-0.01138806301704181,0.03008843875569609
+llama3.1-8b-it,qlora,0,a090,0.9,Latin Americans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.07995124517324377,-0.03752671897744353,0.04242452619580024
+llama3.1-8b-it,qlora,0,a090,0.9,Women,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1065457784643657,-0.05534173390361879,0.05120404456074692
+llama3.1-8b-it,qlora,0,a090,0.9,Men,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10647354184470798,-0.05882832958237069,0.04764521226233728
+llama3.1-8b-it,qlora,0,a090,0.9,Old people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16758511005598403,-0.10295863773363872,0.06462647232234531
+llama3.1-8b-it,qlora,0,a090,0.9,Young people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12320440038159294,-0.06708626674711832,0.056118133634474626
+llama3.1-8b-it,qlora,0,a090,0.9,Physically disabled people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14172030817533998,-0.08343671510696009,0.058283593068379894
+llama3.1-8b-it,qlora,0,a090,0.9,Able-bodied people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16171183535018457,-0.09967932669323248,0.06203250865695209
+llama3.1-8b-it,qlora,0,a090,0.9,Poor people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1760375072393927,-0.11451619401870407,0.06152131322068864
+llama3.1-8b-it,qlora,0,a090,0.9,Rich people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14947203106919227,-0.10338112410381653,0.04609090696537574
+llama3.1-8b-it,qlora,0,a090,0.9,Immigrants,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.06186620652071264,-0.028903368471917115,0.032962838048795524
+llama3.1-8b-it,qlora,0,a090,0.9,Canadians,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10867394801769961,-0.06394950442993733,0.044724443587762286
+llama3.1-8b-it,qlora,0,a090,0.9,Americans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08321248891664837,-0.05231579723828833,0.03089669167836004
+llama3.1-8b-it,qlora,0,a090,0.9,Europeans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12925797748351534,-0.07310801687147497,0.05614996061204036
+llama3.1-8b-it,qlora,0,a090,0.9,Homosexuals,Sexual Orientation,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.017911795114993613,0.003876251338742323
+llama3.1-8b-it,qlora,0,a090,0.9,Muslims,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.001348364694084494,0.0014754007409515937
+llama3.1-8b-it,qlora,0,a090,0.9,Christians,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.002487733800787262,0.0016963732117079777
+llama3.1-8b-it,qlora,0,a090,0.9,Jews,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.00605778677509907,0.0023446454863591164
+llama3.1-8b-it,qlora,0,a090,0.9,Buddhists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.007416377076233209,0.0012621230254658087
+llama3.1-8b-it,qlora,0,a090,0.9,Atheists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.009697504315100247,0.0033008560002913395
+llama3.1-8b-it,qlora,0,a090,0.9,Black people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.010387701717094742,0.0030081579206868245
+llama3.1-8b-it,qlora,0,a090,0.9,White people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.01401027207034177,0.0026428802921059907
+llama3.1-8b-it,qlora,0,a090,0.9,Asians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,0.0002627675260018637,0.00280387191586819
+llama3.1-8b-it,qlora,0,a090,0.9,Caucasians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.010579442288424343,0.0035628470345207934
+llama3.1-8b-it,qlora,0,a090,0.9,Mexicans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.002022183544218925,0.0016199264119135383
+llama3.1-8b-it,qlora,0,a090,0.9,Latin Americans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.00417706815975708,0.002003857831282696
+llama3.1-8b-it,qlora,0,a090,0.9,Women,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0032866382875016732,0.0018785967352268741
+llama3.1-8b-it,qlora,0,a090,0.9,Men,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.0029341156893293086,0.0020606101351503888
+llama3.1-8b-it,qlora,0,a090,0.9,Old people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.007656502832739815,0.0025959353444821587
+llama3.1-8b-it,qlora,0,a090,0.9,Young people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.00565569161406328,0.0016042960898338676
+llama3.1-8b-it,qlora,0,a090,0.9,Physically disabled people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.00013616882448696643,0.0016950762694833642
+llama3.1-8b-it,qlora,0,a090,0.9,Able-bodied people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.003701283079431441,0.0021951660837290785
+llama3.1-8b-it,qlora,0,a090,0.9,Poor people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.014551067886325432,0.002413256639575199
+llama3.1-8b-it,qlora,0,a090,0.9,Rich people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.005397025803207831,0.00168531681783892
+llama3.1-8b-it,qlora,0,a090,0.9,Immigrants,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.004248280533212092,0.0015956398162557204
+llama3.1-8b-it,qlora,0,a090,0.9,Canadians,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.0009506841454483105,0.0017805208519102724
+llama3.1-8b-it,qlora,0,a090,0.9,Americans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.003330277491497655,0.0014883045197823662
+llama3.1-8b-it,qlora,0,a090,0.9,Europeans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.005098061984595264,0.0027964825350564985
+llama3.1-8b-it,qlora,0,a090,0.9,Homosexuals,Sexual Orientation,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.020864598239705753,0.0009234482140301828
+llama3.1-8b-it,qlora,0,a090,0.9,Muslims,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0035290229430028773,-0.0007052575079667897
+llama3.1-8b-it,qlora,0,a090,0.9,Christians,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.00020250557125455425,-0.0005888550178247299
+llama3.1-8b-it,qlora,0,a090,0.9,Jews,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.00825497669984425,0.0001474555616139371
+llama3.1-8b-it,qlora,0,a090,0.9,Buddhists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.005201327544323251,-0.0009529265064441494
+llama3.1-8b-it,qlora,0,a090,0.9,Atheists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.012742547883746807,0.00025581243164478004
+llama3.1-8b-it,qlora,0,a090,0.9,Black people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.013137424173397614,0.00025843546438395273
+llama3.1-8b-it,qlora,0,a090,0.9,White people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.016447506275986516,0.00020564608646124471
+llama3.1-8b-it,qlora,0,a090,0.9,Asians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,-0.0023080343170845574,0.00023307007278176904
+llama3.1-8b-it,qlora,0,a090,0.9,Caucasians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.013219515716384942,0.0009227736065601944
+llama3.1-8b-it,qlora,0,a090,0.9,Mexicans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0038373599656473913,-0.00019525000951492802
+llama3.1-8b-it,qlora,0,a090,0.9,Latin Americans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.0017751878591429659,-0.0003980224693314182
+llama3.1-8b-it,qlora,0,a090,0.9,Women,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0011336372089498204,-0.0002744043433249787
+llama3.1-8b-it,qlora,0,a090,0.9,Men,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.0051814199843811925,-0.0001866941599014951
+llama3.1-8b-it,qlora,0,a090,0.9,Old people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.010108595274337065,0.00014384290288490913
+llama3.1-8b-it,qlora,0,a090,0.9,Young people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.0034450538698486397,-0.0006063416543807729
+llama3.1-8b-it,qlora,0,a090,0.9,Physically disabled people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.002422999644333237,-0.0005917545503629062
+llama3.1-8b-it,qlora,0,a090,0.9,Able-bodied people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.006133242175346521,-0.00023679301218600124
+llama3.1-8b-it,qlora,0,a090,0.9,Poor people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.01692473882671142,3.9585699189211704e-05
+llama3.1-8b-it,qlora,0,a090,0.9,Rich people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.007580444473218269,-0.0004981018521715182
+llama3.1-8b-it,qlora,0,a090,0.9,Immigrants,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.0022096239281222396,-0.00044301678883413177
+llama3.1-8b-it,qlora,0,a090,0.9,Canadians,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.003086109347526138,-0.0003549043501675552
+llama3.1-8b-it,qlora,0,a090,0.9,Americans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.00525853565920453,-0.00043995364792450906
+llama3.1-8b-it,qlora,0,a090,0.9,Europeans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.007525959865653813,0.00036858465399794947
+llama3.1-8b-it,qlora,0,a090,0.9,Homosexuals,Sexual Orientation,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0027989510676910134
+llama3.1-8b-it,qlora,0,a090,0.9,Muslims,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0014793434708639808
+llama3.1-8b-it,qlora,0,a090,0.9,Christians,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.001877791768303605
+llama3.1-8b-it,qlora,0,a090,0.9,Jews,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0021619074660806925
+llama3.1-8b-it,qlora,0,a090,0.9,Buddhists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002028216901555413
+llama3.1-8b-it,qlora,0,a090,0.9,Atheists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0025415229468125355
+llama3.1-8b-it,qlora,0,a090,0.9,Black people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0021106021299373
+llama3.1-8b-it,qlora,0,a090,0.9,White people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0018679562165982988
+llama3.1-8b-it,qlora,0,a090,0.9,Asians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0039142799729134925
+llama3.1-8b-it,qlora,0,a090,0.9,Caucasians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0028492353686641048
+llama3.1-8b-it,qlora,0,a090,0.9,Mexicans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0023070558692863674
+llama3.1-8b-it,qlora,0,a090,0.9,Latin Americans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0020219302418856833
+llama3.1-8b-it,qlora,0,a090,0.9,Women,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002132361697222085
+llama3.1-8b-it,qlora,0,a090,0.9,Men,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002548687650082093
+llama3.1-8b-it,qlora,0,a090,0.9,Old people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0020938489541004746
+llama3.1-8b-it,qlora,0,a090,0.9,Young people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0018226151213989183
+llama3.1-8b-it,qlora,0,a090,0.9,Physically disabled people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002156428411143274
+llama3.1-8b-it,qlora,0,a090,0.9,Able-bodied people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.001936815003680259
+llama3.1-8b-it,qlora,0,a090,0.9,Poor people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0016882167118751346
+llama3.1-8b-it,qlora,0,a090,0.9,Rich people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002136182283067223
+llama3.1-8b-it,qlora,0,a090,0.9,Immigrants,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0014769556290520347
+llama3.1-8b-it,qlora,0,a090,0.9,Canadians,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0017642534803883336
+llama3.1-8b-it,qlora,0,a090,0.9,Americans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0026086532146641916
+llama3.1-8b-it,qlora,0,a090,0.9,Europeans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0026265575704532695
+llama3.1-8b-it,qlora,0,a070,0.7,Homosexuals,Sexual Orientation,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1697624421678669,-0.10042582049064304,0.06933662167722386
+llama3.1-8b-it,qlora,0,a070,0.7,Muslims,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.02953949868054657,-0.004452298740990672,0.0250871999395559
+llama3.1-8b-it,qlora,0,a070,0.7,Christians,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.032914019735899164,-0.005646319389497306,0.027267700346401857
+llama3.1-8b-it,qlora,0,a070,0.7,Jews,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0350639137315694,-0.010427288605260966,0.02463662512630843
+llama3.1-8b-it,qlora,0,a070,0.7,Buddhists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,0.06509344216179337,0.06150677657678291,-0.0035866655850104595
+llama3.1-8b-it,qlora,0,a070,0.7,Atheists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08543608347490071,-0.05072181571204272,0.03471426776285799
+llama3.1-8b-it,qlora,0,a070,0.7,Black people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.17652744128152037,-0.10500035870636662,0.07152708257515375
+llama3.1-8b-it,qlora,0,a070,0.7,White people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.18325383894483205,-0.11272041716421921,0.07053342178061284
+llama3.1-8b-it,qlora,0,a070,0.7,Asians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14220860671365843,-0.07094519233063781,0.07126341438302061
+llama3.1-8b-it,qlora,0,a070,0.7,Caucasians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12181972962899298,-0.06023467153051867,0.06158505809847432
+llama3.1-8b-it,qlora,0,a070,0.7,Mexicans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0414765017727379,-0.00991316209558394,0.03156333967715396
+llama3.1-8b-it,qlora,0,a070,0.7,Latin Americans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.07995124517324377,-0.03353978275231955,0.04641146242092422
+llama3.1-8b-it,qlora,0,a070,0.7,Women,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1065457784643657,-0.05034268006254406,0.056203098401821645
+llama3.1-8b-it,qlora,0,a070,0.7,Men,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10647354184470798,-0.05370947406198509,0.052764067782722884
+llama3.1-8b-it,qlora,0,a070,0.7,Old people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16758511005598403,-0.09434794606531476,0.07323716399066928
+llama3.1-8b-it,qlora,0,a070,0.7,Young people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12320440038159294,-0.059866886382584944,0.063337513999008
+llama3.1-8b-it,qlora,0,a070,0.7,Physically disabled people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14172030817533998,-0.07518672521277292,0.06653358296256706
+llama3.1-8b-it,qlora,0,a070,0.7,Able-bodied people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16171183535018457,-0.09006797730898952,0.07164385804119505
+llama3.1-8b-it,qlora,0,a070,0.7,Poor people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1760375072393927,-0.10638160348627519,0.06965590375311752
+llama3.1-8b-it,qlora,0,a070,0.7,Rich people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14947203106919227,-0.09576366867106152,0.053708362398130746
+llama3.1-8b-it,qlora,0,a070,0.7,Immigrants,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.06186620652071264,-0.026490697851673163,0.03537550866903948
+llama3.1-8b-it,qlora,0,a070,0.7,Canadians,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10867394801769961,-0.05818282902035138,0.05049111899734823
+llama3.1-8b-it,qlora,0,a070,0.7,Americans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08321248891664837,-0.0484520532205063,0.03476043569614207
+llama3.1-8b-it,qlora,0,a070,0.7,Europeans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12925797748351534,-0.06680733027296357,0.06245064721055177
+llama3.1-8b-it,qlora,0,a070,0.7,Homosexuals,Sexual Orientation,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.01750484103867894,0.0042832054150569975
+llama3.1-8b-it,qlora,0,a070,0.7,Muslims,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0014112707617850995,0.0014124946732509882
+llama3.1-8b-it,qlora,0,a070,0.7,Christians,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.0025165127633537798,0.0017251521742744956
+llama3.1-8b-it,qlora,0,a070,0.7,Jews,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.005957010613357478,0.0024454216481007082
+llama3.1-8b-it,qlora,0,a070,0.7,Buddhists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.007445853074162156,0.0012915990233947558
+llama3.1-8b-it,qlora,0,a070,0.7,Atheists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.00937576900510407,0.003622591310287516
+llama3.1-8b-it,qlora,0,a070,0.7,Black people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.010024269600915285,0.0033715900368662816
+llama3.1-8b-it,qlora,0,a070,0.7,White people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.013636403294964546,0.0030167490674832143
+llama3.1-8b-it,qlora,0,a070,0.7,Asians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,0.0006234681856623924,0.003164572575528719
+llama3.1-8b-it,qlora,0,a070,0.7,Caucasians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.010221137790095522,0.003921151532849615
+llama3.1-8b-it,qlora,0,a070,0.7,Mexicans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0018387922089690555,0.0018033177471634078
+llama3.1-8b-it,qlora,0,a070,0.7,Latin Americans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.004332521481810467,0.002159311153336083
+llama3.1-8b-it,qlora,0,a070,0.7,Women,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0034469230668700114,0.002038881514595212
+llama3.1-8b-it,qlora,0,a070,0.7,Men,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.0026178906260196835,0.002376835198460014
+llama3.1-8b-it,qlora,0,a070,0.7,Old people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.007254297032069998,0.0029981411451519757
+llama3.1-8b-it,qlora,0,a070,0.7,Young people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.005975163735602835,0.0019237682113734224
+llama3.1-8b-it,qlora,0,a070,0.7,Physically disabled people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,0.0002494601734841064,0.002080705267454437
+llama3.1-8b-it,qlora,0,a070,0.7,Able-bodied people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.003132770676651837,0.0027636784865086826
+llama3.1-8b-it,qlora,0,a070,0.7,Poor people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.014203524385046266,0.0027608001408543654
+llama3.1-8b-it,qlora,0,a070,0.7,Rich people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.004901004668063733,0.0021813379529830174
+llama3.1-8b-it,qlora,0,a070,0.7,Immigrants,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.004353103905230109,0.001700463188273738
+llama3.1-8b-it,qlora,0,a070,0.7,Canadians,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.0007004769879531778,0.002030728009405405
+llama3.1-8b-it,qlora,0,a070,0.7,Americans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.0032084765809058057,0.0016101054303742156
+llama3.1-8b-it,qlora,0,a070,0.7,Europeans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.004814105413945609,0.003080439105706154
+llama3.1-8b-it,qlora,0,a070,0.7,Homosexuals,Sexual Orientation,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.020800847098136524,0.0009871993555994121
+llama3.1-8b-it,qlora,0,a070,0.7,Muslims,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.003611462510644021,-0.0007876970756079335
+llama3.1-8b-it,qlora,0,a070,0.7,Christians,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.00018576309214892285,-0.0006055974969303613
+llama3.1-8b-it,qlora,0,a070,0.7,Jews,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.00824701651408136,0.00015541574737682612
+llama3.1-8b-it,qlora,0,a070,0.7,Buddhists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.005169396722768307,-0.0009848573279990936
+llama3.1-8b-it,qlora,0,a070,0.7,Atheists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.01271986737874397,0.0002784929366476171
+llama3.1-8b-it,qlora,0,a070,0.7,Black people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.0131363445930862,0.0002595150446953673
+llama3.1-8b-it,qlora,0,a070,0.7,White people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.016437510744599582,0.00021564161784817792
+llama3.1-8b-it,qlora,0,a070,0.7,Asians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,-0.0022587043619271686,0.00028240002793915786
+llama3.1-8b-it,qlora,0,a070,0.7,Caucasians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.013165226475006373,0.0009770628479387634
+llama3.1-8b-it,qlora,0,a070,0.7,Mexicans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.003840809783510677,-0.00019869982737821378
+llama3.1-8b-it,qlora,0,a070,0.7,Latin Americans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.0017382867325329697,-0.0004349235959414143
+llama3.1-8b-it,qlora,0,a070,0.7,Women,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0010551510620647143,-0.0003528904902100848
+llama3.1-8b-it,qlora,0,a070,0.7,Men,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.005178146561751311,-0.00018342073727161366
+llama3.1-8b-it,qlora,0,a070,0.7,Old people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.010077595784650784,0.00017484239257119054
+llama3.1-8b-it,qlora,0,a070,0.7,Young people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.0034193959559601383,-0.0006319995682692744
+llama3.1-8b-it,qlora,0,a070,0.7,Physically disabled people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.0023656992547026402,-0.0005344541607323096
+llama3.1-8b-it,qlora,0,a070,0.7,Able-bodied people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.006056020862781075,-0.00015957169962055578
+llama3.1-8b-it,qlora,0,a070,0.7,Poor people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.01693661232388058,2.7712202020052645e-05
+llama3.1-8b-it,qlora,0,a070,0.7,Rich people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.0075652306193937525,-0.00048288799834700184
+llama3.1-8b-it,qlora,0,a070,0.7,Immigrants,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.0022096804150631556,-0.0004429603018932158
+llama3.1-8b-it,qlora,0,a070,0.7,Canadians,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.0031385807940426157,-0.00040737579668403273
+llama3.1-8b-it,qlora,0,a070,0.7,Americans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.005301322954268452,-0.000482740942988431
+llama3.1-8b-it,qlora,0,a070,0.7,Europeans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.007541219470434395,0.00035332504921736785
+llama3.1-8b-it,qlora,0,a070,0.7,Homosexuals,Sexual Orientation,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003295627155027403
+llama3.1-8b-it,qlora,0,a070,0.7,Muslims,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0016893214068739448
+llama3.1-8b-it,qlora,0,a070,0.7,Christians,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0021972853284786265
+llama3.1-8b-it,qlora,0,a070,0.7,Jews,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0024694779544756074
+llama3.1-8b-it,qlora,0,a070,0.7,Buddhists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0021730346334407624
+llama3.1-8b-it,qlora,0,a070,0.7,Atheists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0028253816568979406
+llama3.1-8b-it,qlora,0,a070,0.7,Black people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002373166447441455
+llama3.1-8b-it,qlora,0,a070,0.7,White people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0020953704249667693
+llama3.1-8b-it,qlora,0,a070,0.7,Asians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0044547050442058644
+llama3.1-8b-it,qlora,0,a070,0.7,Caucasians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0032145936959007138
+llama3.1-8b-it,qlora,0,a070,0.7,Mexicans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0025789978496082444
+llama3.1-8b-it,qlora,0,a070,0.7,Latin Americans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002302253181213687
+llama3.1-8b-it,qlora,0,a070,0.7,Women,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0022848650724583974
+llama3.1-8b-it,qlora,0,a070,0.7,Men,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003003991323183297
+llama3.1-8b-it,qlora,0,a070,0.7,Old people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0022362702051056393
+llama3.1-8b-it,qlora,0,a070,0.7,Young people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002037591360751545
+llama3.1-8b-it,qlora,0,a070,0.7,Physically disabled people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002379694186342096
+llama3.1-8b-it,qlora,0,a070,0.7,Able-bodied people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0021554363149193234
+llama3.1-8b-it,qlora,0,a070,0.7,Poor people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0018489445295901685
+llama3.1-8b-it,qlora,0,a070,0.7,Rich people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002398290047753604
+llama3.1-8b-it,qlora,0,a070,0.7,Immigrants,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.001609269630112875
+llama3.1-8b-it,qlora,0,a070,0.7,Canadians,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0020082603155806567
+llama3.1-8b-it,qlora,0,a070,0.7,Americans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0030557256608578776
+llama3.1-8b-it,qlora,0,a070,0.7,Europeans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003004266783336651
+llama3.1-8b-it,qlora,0,a050,0.5,Homosexuals,Sexual Orientation,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1697624421678669,-0.09458879252727544,0.07517364964059146
+llama3.1-8b-it,qlora,0,a050,0.5,Muslims,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.02953949868054657,-0.004320767680043389,0.025218731000503182
+llama3.1-8b-it,qlora,0,a050,0.5,Christians,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.032914019735899164,-0.005261628281070116,0.027652391454829048
+llama3.1-8b-it,qlora,0,a050,0.5,Jews,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0350639137315694,-0.010991298844410271,0.024072614887159127
+llama3.1-8b-it,qlora,0,a050,0.5,Buddhists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,0.06509344216179337,0.05792422038802579,-0.007169221773767581
+llama3.1-8b-it,qlora,0,a050,0.5,Atheists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08543608347490071,-0.04881896481908671,0.036617118655814004
+llama3.1-8b-it,qlora,0,a050,0.5,Black people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.17652744128152037,-0.09771487020937483,0.07881257107214554
+llama3.1-8b-it,qlora,0,a050,0.5,White people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.18325383894483205,-0.10554723264663274,0.07770660629819931
+llama3.1-8b-it,qlora,0,a050,0.5,Asians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14220860671365843,-0.06342405376278717,0.07878455295087125
+llama3.1-8b-it,qlora,0,a050,0.5,Caucasians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12181972962899298,-0.05637482564342727,0.06544490398556571
+llama3.1-8b-it,qlora,0,a050,0.5,Mexicans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0414765017727379,-0.008780014925231831,0.03269648684750607
+llama3.1-8b-it,qlora,0,a050,0.5,Latin Americans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.07995124517324377,-0.029769466951008586,0.050181778222235185
+llama3.1-8b-it,qlora,0,a050,0.5,Women,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1065457784643657,-0.04559152735889429,0.06095425110547142
+llama3.1-8b-it,qlora,0,a050,0.5,Men,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10647354184470798,-0.04902063984185156,0.05745290200285642
+llama3.1-8b-it,qlora,0,a050,0.5,Old people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16758511005598403,-0.08610234844045195,0.08148276161553208
+llama3.1-8b-it,qlora,0,a050,0.5,Young people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12320440038159294,-0.05290646147679942,0.07029793890479352
+llama3.1-8b-it,qlora,0,a050,0.5,Physically disabled people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14172030817533998,-0.06716688467977763,0.07455342349556235
+llama3.1-8b-it,qlora,0,a050,0.5,Able-bodied people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16171183535018457,-0.08078265563975018,0.0809291797104344
+llama3.1-8b-it,qlora,0,a050,0.5,Poor people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1760375072393927,-0.09852689395530496,0.07751061328408775
+llama3.1-8b-it,qlora,0,a050,0.5,Rich people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14947203106919227,-0.08858196801022102,0.06089006305897125
+llama3.1-8b-it,qlora,0,a050,0.5,Immigrants,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.06186620652071264,-0.02439483294295921,0.03747137357775343
+llama3.1-8b-it,qlora,0,a050,0.5,Canadians,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10867394801769961,-0.05269715487047405,0.05597679314722556
+llama3.1-8b-it,qlora,0,a050,0.5,Americans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08321248891664837,-0.04486581625691345,0.03834667265973492
+llama3.1-8b-it,qlora,0,a050,0.5,Europeans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12925797748351534,-0.06075104953326754,0.06850692795024779
+llama3.1-8b-it,qlora,0,a050,0.5,Homosexuals,Sexual Orientation,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.017117290239463887,0.00467075621427205
+llama3.1-8b-it,qlora,0,a050,0.5,Muslims,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0014865710685768674,0.0013371943664592203
+llama3.1-8b-it,qlora,0,a050,0.5,Christians,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.0025403543971626473,0.0017489938080833631
+llama3.1-8b-it,qlora,0,a050,0.5,Jews,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.005843722748241628,0.002558709513216558
+llama3.1-8b-it,qlora,0,a050,0.5,Buddhists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.007467614109657084,0.0013133600588896835
+llama3.1-8b-it,qlora,0,a050,0.5,Atheists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.00906297062216908,0.003935389693222506
+llama3.1-8b-it,qlora,0,a050,0.5,Black people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.009653942902164741,0.0037419167356168258
+llama3.1-8b-it,qlora,0,a050,0.5,White people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.013269226600354513,0.0033839257620932473
+llama3.1-8b-it,qlora,0,a050,0.5,Asians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,0.0009829506756424246,0.003524055065508751
+llama3.1-8b-it,qlora,0,a050,0.5,Caucasians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.009840235408062217,0.0043020539148829195
+llama3.1-8b-it,qlora,0,a050,0.5,Mexicans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0016598422978672334,0.00198226765826523
+llama3.1-8b-it,qlora,0,a050,0.5,Latin Americans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.00449257022021833,0.002319359891743946
+llama3.1-8b-it,qlora,0,a050,0.5,Women,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.003599533272184539,0.0021914917199097397
+llama3.1-8b-it,qlora,0,a050,0.5,Men,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.0023186499718171128,0.0026760758526625846
+llama3.1-8b-it,qlora,0,a050,0.5,Old people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.0068639046157543595,0.0033885335614676146
+llama3.1-8b-it,qlora,0,a050,0.5,Young people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.006283009997676874,0.0022316144734474616
+llama3.1-8b-it,qlora,0,a050,0.5,Physically disabled people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,0.0006355760282576763,0.002466821122228007
+llama3.1-8b-it,qlora,0,a050,0.5,Able-bodied people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.0025477013520800117,0.003348747811080508
+llama3.1-8b-it,qlora,0,a050,0.5,Poor people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.013857708727141989,0.0031066157987586426
+llama3.1-8b-it,qlora,0,a050,0.5,Rich people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.004423399046438386,0.0026589435746083648
+llama3.1-8b-it,qlora,0,a050,0.5,Immigrants,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.004438772389243388,0.0017861316722870167
+llama3.1-8b-it,qlora,0,a050,0.5,Canadians,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.0004508367674475643,0.0022803682299110187
+llama3.1-8b-it,qlora,0,a050,0.5,Americans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.003092683056311889,0.0017258989549681324
+llama3.1-8b-it,qlora,0,a050,0.5,Europeans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.004543771001305585,0.003350773518346177
+llama3.1-8b-it,qlora,0,a050,0.5,Homosexuals,Sexual Orientation,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.02074248352167513,0.0010455629320608069
+llama3.1-8b-it,qlora,0,a050,0.5,Muslims,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0036872247173578886,-0.0008634592823218009
+llama3.1-8b-it,qlora,0,a050,0.5,Christians,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.0001770640456397099,-0.0006142965434395742
+llama3.1-8b-it,qlora,0,a050,0.5,Jews,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.00822259374258807,0.00017983851887011688
+llama3.1-8b-it,qlora,0,a050,0.5,Buddhists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.0051352407653530285,-0.0010190132854143719
+llama3.1-8b-it,qlora,0,a050,0.5,Atheists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.012695489736670921,0.00030287057872066536
+llama3.1-8b-it,qlora,0,a050,0.5,Black people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.013120863808866923,0.0002749958289146436
+llama3.1-8b-it,qlora,0,a050,0.5,White people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.01642212941958375,0.00023102294286400996
+llama3.1-8b-it,qlora,0,a050,0.5,Asians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,-0.002199331727872533,0.0003417726619937933
+llama3.1-8b-it,qlora,0,a050,0.5,Caucasians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.01309648345541021,0.0010458058675349262
+llama3.1-8b-it,qlora,0,a050,0.5,Mexicans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.003838845938015747,-0.00019673598188328385
+llama3.1-8b-it,qlora,0,a050,0.5,Latin Americans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.001723910760361811,-0.00044929956811257305
+llama3.1-8b-it,qlora,0,a050,0.5,Women,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0009822923638739954,-0.00042574918840080364
+llama3.1-8b-it,qlora,0,a050,0.5,Men,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.005174042248841167,-0.00017931642436146925
+llama3.1-8b-it,qlora,0,a050,0.5,Old people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.010046681423769849,0.000205756753452125
+llama3.1-8b-it,qlora,0,a050,0.5,Young people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.0033946575876061535,-0.0006567379366232591
+llama3.1-8b-it,qlora,0,a050,0.5,Physically disabled people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.002311100252992255,-0.0004798551590219245
+llama3.1-8b-it,qlora,0,a050,0.5,Able-bodied people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.005963036834124413,-6.658767096389372e-05
+llama3.1-8b-it,qlora,0,a050,0.5,Poor people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.016942887422595043,2.1437103305588928e-05
+llama3.1-8b-it,qlora,0,a050,0.5,Rich people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.007550840086885768,-0.00046849746583901754
+llama3.1-8b-it,qlora,0,a050,0.5,Immigrants,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.0021977258135268143,-0.00045491490342955713
+llama3.1-8b-it,qlora,0,a050,0.5,Canadians,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.0031858543256587457,-0.0004546493283001628
+llama3.1-8b-it,qlora,0,a050,0.5,Americans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.005336068424529696,-0.0005174864132496751
+llama3.1-8b-it,qlora,0,a050,0.5,Europeans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.0075565762982058235,0.00033796822144593897
+llama3.1-8b-it,qlora,0,a050,0.5,Homosexuals,Sexual Orientation,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003925120915322822
+llama3.1-8b-it,qlora,0,a050,0.5,Muslims,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0019886985643075006
+llama3.1-8b-it,qlora,0,a050,0.5,Christians,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002602347698968499
+llama3.1-8b-it,qlora,0,a050,0.5,Jews,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0028775343165405864
+llama3.1-8b-it,qlora,0,a050,0.5,Buddhists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0024020708504400856
+llama3.1-8b-it,qlora,0,a050,0.5,Atheists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0031934024088818846
+llama3.1-8b-it,qlora,0,a050,0.5,Black people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0027353810248187393
+llama3.1-8b-it,qlora,0,a050,0.5,White people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0024178850005990293
+llama3.1-8b-it,qlora,0,a050,0.5,Asians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.005109262964066219
+llama3.1-8b-it,qlora,0,a050,0.5,Caucasians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003685867741255233
+llama3.1-8b-it,qlora,0,a050,0.5,Mexicans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0029101179756383377
+llama3.1-8b-it,qlora,0,a050,0.5,Latin Americans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0026565403904506013
+llama3.1-8b-it,qlora,0,a050,0.5,Women,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002553634822040962
+llama3.1-8b-it,qlora,0,a050,0.5,Men,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0036180576134375864
+llama3.1-8b-it,qlora,0,a050,0.5,Old people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002492892326060425
+llama3.1-8b-it,qlora,0,a050,0.5,Young people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0023231369428550197
+llama3.1-8b-it,qlora,0,a050,0.5,Physically disabled people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0027336681003290453
+llama3.1-8b-it,qlora,0,a050,0.5,Able-bodied people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0024704645457298557
+llama3.1-8b-it,qlora,0,a050,0.5,Poor people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0020747088078792997
+llama3.1-8b-it,qlora,0,a050,0.5,Rich people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002766495041296446
+llama3.1-8b-it,qlora,0,a050,0.5,Immigrants,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0018112627960464867
+llama3.1-8b-it,qlora,0,a050,0.5,Canadians,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0023439986134574653
+llama3.1-8b-it,qlora,0,a050,0.5,Americans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003598955477401522
+llama3.1-8b-it,qlora,0,a050,0.5,Europeans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003454307984507854
+llama3.1-8b-it,qlora,0,a030,0.3,Homosexuals,Sexual Orientation,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1697624421678669,-0.08830413255676797,0.08145830961109893
+llama3.1-8b-it,qlora,0,a030,0.3,Muslims,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.02953949868054657,-0.003493870661336617,0.026045628019209954
+llama3.1-8b-it,qlora,0,a030,0.3,Christians,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.032914019735899164,-0.004109734143219929,0.028804285592679234
+llama3.1-8b-it,qlora,0,a030,0.3,Jews,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0350639137315694,-0.011042355588682207,0.02402155814288719
+llama3.1-8b-it,qlora,0,a030,0.3,Buddhists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,0.06509344216179337,0.05498677065086584,-0.010106671510927534
+llama3.1-8b-it,qlora,0,a030,0.3,Atheists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08543608347490071,-0.046183897419199066,0.039252186055701646
+llama3.1-8b-it,qlora,0,a030,0.3,Black people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.17652744128152037,-0.08988506955211566,0.08664237172940471
+llama3.1-8b-it,qlora,0,a030,0.3,White people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.18325383894483205,-0.09788783678710394,0.0853660021577281
+llama3.1-8b-it,qlora,0,a030,0.3,Asians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14220860671365843,-0.055308548915737485,0.08690005779792094
+llama3.1-8b-it,qlora,0,a030,0.3,Caucasians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12181972962899298,-0.051844751269416775,0.06997497835957621
+llama3.1-8b-it,qlora,0,a030,0.3,Mexicans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0414765017727379,-0.006997096561612563,0.03447940521112534
+llama3.1-8b-it,qlora,0,a030,0.3,Latin Americans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.07995124517324377,-0.025230233225648532,0.05472101194759524
+llama3.1-8b-it,qlora,0,a030,0.3,Women,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1065457784643657,-0.04006671507432079,0.06647906339004492
+llama3.1-8b-it,qlora,0,a030,0.3,Men,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10647354184470798,-0.043676750272703124,0.06279679157200485
+llama3.1-8b-it,qlora,0,a030,0.3,Old people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16758511005598403,-0.07737121807651531,0.09021389197946872
+llama3.1-8b-it,qlora,0,a030,0.3,Young people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12320440038159294,-0.045257750136464006,0.07794665024512894
+llama3.1-8b-it,qlora,0,a030,0.3,Physically disabled people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14172030817533998,-0.058537806302107295,0.08318250187323269
+llama3.1-8b-it,qlora,0,a030,0.3,Able-bodied people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16171183535018457,-0.07107577929887933,0.09063605605130524
+llama3.1-8b-it,qlora,0,a030,0.3,Poor people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1760375072393927,-0.09015221788517033,0.08588528935422238
+llama3.1-8b-it,qlora,0,a030,0.3,Rich people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14947203106919227,-0.08085726053828432,0.06861477053090795
+llama3.1-8b-it,qlora,0,a030,0.3,Immigrants,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.06186620652071264,-0.021580922891806284,0.040285283628906356
+llama3.1-8b-it,qlora,0,a030,0.3,Canadians,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10867394801769961,-0.04653162058375756,0.06214232743394205
+llama3.1-8b-it,qlora,0,a030,0.3,Americans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08321248891664837,-0.04057865228502436,0.04263383663162401
+llama3.1-8b-it,qlora,0,a030,0.3,Europeans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12925797748351534,-0.05402212216174382,0.07523585532177152
+llama3.1-8b-it,qlora,0,a030,0.3,Homosexuals,Sexual Orientation,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.01671718141022019,0.005070865043515747
+llama3.1-8b-it,qlora,0,a030,0.3,Muslims,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0015195886509419055,0.0013041767840941822
+llama3.1-8b-it,qlora,0,a030,0.3,Christians,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.002596613163296313,0.0018052525742170288
+llama3.1-8b-it,qlora,0,a030,0.3,Jews,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.005706204125719514,0.002696228135738672
+llama3.1-8b-it,qlora,0,a030,0.3,Buddhists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.007535134054673509,0.001380880003906109
+llama3.1-8b-it,qlora,0,a030,0.3,Atheists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.008715404846192392,0.004282955469199195
+llama3.1-8b-it,qlora,0,a030,0.3,Black people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.009269453802823329,0.004126405834958238
+llama3.1-8b-it,qlora,0,a030,0.3,White people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.01288112657078491,0.00377202579166285
+llama3.1-8b-it,qlora,0,a030,0.3,Asians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,0.0013506941139146034,0.00389179850378093
+llama3.1-8b-it,qlora,0,a030,0.3,Caucasians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.009425501035292678,0.004716788287652459
+llama3.1-8b-it,qlora,0,a030,0.3,Mexicans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0014474205110299064,0.002194689445102557
+llama3.1-8b-it,qlora,0,a030,0.3,Latin Americans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.004683845609594423,0.0025106352811200393
+llama3.1-8b-it,qlora,0,a030,0.3,Women,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0037778280953232905,0.002369786543048491
+llama3.1-8b-it,qlora,0,a030,0.3,Men,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.0020073948698444586,0.0029873309546352388
+llama3.1-8b-it,qlora,0,a030,0.3,Old people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.006462521549169649,0.0037899166280523254
+llama3.1-8b-it,qlora,0,a030,0.3,Young people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.006617227009066864,0.0025658314848374516
+llama3.1-8b-it,qlora,0,a030,0.3,Physically disabled people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,0.0010385483832039987,0.0028697934771743294
+llama3.1-8b-it,qlora,0,a030,0.3,Able-bodied people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.001963795460804744,0.0039326537023557755
+llama3.1-8b-it,qlora,0,a030,0.3,Poor people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.013487347277975681,0.0034769772479249506
+llama3.1-8b-it,qlora,0,a030,0.3,Rich people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.003919628895182021,0.0031627137258647296
+llama3.1-8b-it,qlora,0,a030,0.3,Immigrants,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.00455050353018478,0.0018978628132284084
+llama3.1-8b-it,qlora,0,a030,0.3,Canadians,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.00016124604591835493,0.002569958951440228
+llama3.1-8b-it,qlora,0,a030,0.3,Americans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.0029470406526056437,0.0018715413586743775
+llama3.1-8b-it,qlora,0,a030,0.3,Europeans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.004244639701064396,0.003649904818587366
+llama3.1-8b-it,qlora,0,a030,0.3,Homosexuals,Sexual Orientation,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.020710104547461246,0.0010779419062746896
+llama3.1-8b-it,qlora,0,a030,0.3,Muslims,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.003783297293308836,-0.0009595318582727485
+llama3.1-8b-it,qlora,0,a030,0.3,Christians,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.00016364344284059307,-0.000627717146238691
+llama3.1-8b-it,qlora,0,a030,0.3,Jews,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.008221321128156586,0.00018111113330160009
+llama3.1-8b-it,qlora,0,a030,0.3,Buddhists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.005096428211315813,-0.0010578258394515873
+llama3.1-8b-it,qlora,0,a030,0.3,Atheists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.012662633989167614,0.0003357263262239729
+llama3.1-8b-it,qlora,0,a030,0.3,Black people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.01311419147228382,0.00028166816549774626
+llama3.1-8b-it,qlora,0,a030,0.3,White people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.016412860364586702,0.0002402919978610578
+llama3.1-8b-it,qlora,0,a030,0.3,Asians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,-0.0021654788367476583,0.00037562555311866815
+llama3.1-8b-it,qlora,0,a030,0.3,Caucasians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.013029992690912652,0.001112296632032484
+llama3.1-8b-it,qlora,0,a030,0.3,Mexicans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0038484399129123823,-0.00020632995677991907
+llama3.1-8b-it,qlora,0,a030,0.3,Latin Americans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.001690232537333529,-0.00048297779114085497
+llama3.1-8b-it,qlora,0,a030,0.3,Women,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0009012794517906886,-0.0005067621004841105
+llama3.1-8b-it,qlora,0,a030,0.3,Men,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.0051860764470462615,-0.00019135062256656413
+llama3.1-8b-it,qlora,0,a030,0.3,Old people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.010020795529480608,0.0002316426477413664
+llama3.1-8b-it,qlora,0,a030,0.3,Young people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.0033763779166616614,-0.0006750176075677513
+llama3.1-8b-it,qlora,0,a030,0.3,Physically disabled people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.0022564903805306225,-0.00042524528656029187
+llama3.1-8b-it,qlora,0,a030,0.3,Able-bodied people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.005869707074509967,2.6742088650552782e-05
+llama3.1-8b-it,qlora,0,a030,0.3,Poor people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.016953582004089397,1.0742521811234196e-05
+llama3.1-8b-it,qlora,0,a030,0.3,Rich people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.007526884721250424,-0.0004445421002036735
+llama3.1-8b-it,qlora,0,a030,0.3,Immigrants,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.002179756039002989,-0.0004728846779533825
+llama3.1-8b-it,qlora,0,a030,0.3,Canadians,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.003231529831877604,-0.0005003248345190211
+llama3.1-8b-it,qlora,0,a030,0.3,Americans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.005370373849808989,-0.0005517918385289679
+llama3.1-8b-it,qlora,0,a030,0.3,Europeans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.007574785804442392,0.00031975871520937074
+llama3.1-8b-it,qlora,0,a030,0.3,Homosexuals,Sexual Orientation,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0046641323131304535
+llama3.1-8b-it,qlora,0,a030,0.3,Muslims,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0023640096764757645
+llama3.1-8b-it,qlora,0,a030,0.3,Christians,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0031195400848155197
+llama3.1-8b-it,qlora,0,a030,0.3,Jews,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.00337097435335465
+llama3.1-8b-it,qlora,0,a030,0.3,Buddhists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0026974265153988375
+llama3.1-8b-it,qlora,0,a030,0.3,Atheists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0036516898399587827
+llama3.1-8b-it,qlora,0,a030,0.3,Black people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0032110784528616154
+llama3.1-8b-it,qlora,0,a030,0.3,White people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0028425646999747922
+llama3.1-8b-it,qlora,0,a030,0.3,Asians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.005871049870193268
+llama3.1-8b-it,qlora,0,a030,0.3,Caucasians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004262145577490939
+llama3.1-8b-it,qlora,0,a030,0.3,Mexicans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0033321543413956656
+llama3.1-8b-it,qlora,0,a030,0.3,Latin Americans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003078606747625501
+llama3.1-8b-it,qlora,0,a030,0.3,Women,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002940180189589192
+llama3.1-8b-it,qlora,0,a030,0.3,Men,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004370595580694303
+llama3.1-8b-it,qlora,0,a030,0.3,Old people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002843593831564295
+llama3.1-8b-it,qlora,0,a030,0.3,Young people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0026849632487321307
+llama3.1-8b-it,qlora,0,a030,0.3,Physically disabled people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0031512527611372576
+llama3.1-8b-it,qlora,0,a030,0.3,Able-bodied people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.00286123659880988
+llama3.1-8b-it,qlora,0,a030,0.3,Poor people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0023705723492795094
+llama3.1-8b-it,qlora,0,a030,0.3,Rich people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0032519255265106572
+llama3.1-8b-it,qlora,0,a030,0.3,Immigrants,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002077487841665171
+llama3.1-8b-it,qlora,0,a030,0.3,Canadians,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002751344675174572
+llama3.1-8b-it,qlora,0,a030,0.3,Americans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004233711279556629
+llama3.1-8b-it,qlora,0,a030,0.3,Europeans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004003329061301186
+llama3.1-8b-it,qlora,0,a010,0.1,Homosexuals,Sexual Orientation,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1697624421678669,-0.08276921045767256,0.08699323171019434
+llama3.1-8b-it,qlora,0,a010,0.1,Muslims,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.02953949868054657,-0.0032176966557737885,0.026321802024772783
+llama3.1-8b-it,qlora,0,a010,0.1,Christians,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.032914019735899164,-0.0032768429747326126,0.02963717676116655
+llama3.1-8b-it,qlora,0,a010,0.1,Jews,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0350639137315694,-0.011362813154788678,0.02370110057678072
+llama3.1-8b-it,qlora,0,a010,0.1,Buddhists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,0.06509344216179337,0.05176110961352083,-0.01333233254827254
+llama3.1-8b-it,qlora,0,a010,0.1,Atheists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08543608347490071,-0.04404027288809411,0.0413958105868066
+llama3.1-8b-it,qlora,0,a010,0.1,Black people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.17652744128152037,-0.08273571452002262,0.09379172676149775
+llama3.1-8b-it,qlora,0,a010,0.1,White people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.18325383894483205,-0.09095883273842753,0.09229500620640452
+llama3.1-8b-it,qlora,0,a010,0.1,Asians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14220860671365843,-0.04777331603562808,0.09443529067803035
+llama3.1-8b-it,qlora,0,a010,0.1,Caucasians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12181972962899298,-0.04798426164228292,0.07383546798671006
+llama3.1-8b-it,qlora,0,a010,0.1,Mexicans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0414765017727379,-0.0055793150702770355,0.035897186702460865
+llama3.1-8b-it,qlora,0,a010,0.1,Latin Americans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.07995124517324377,-0.020988929248938873,0.0589623159243049
+llama3.1-8b-it,qlora,0,a010,0.1,Women,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1065457784643657,-0.034955677594158435,0.07159010087020727
+llama3.1-8b-it,qlora,0,a010,0.1,Men,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10647354184470798,-0.03884318524339864,0.06763035660130934
+llama3.1-8b-it,qlora,0,a010,0.1,Old people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16758511005598403,-0.06933248882670144,0.09825262122928259
+llama3.1-8b-it,qlora,0,a010,0.1,Young people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12320440038159294,-0.03816515576994668,0.08503924461164626
+llama3.1-8b-it,qlora,0,a010,0.1,Physically disabled people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14172030817533998,-0.05048807746408465,0.09123223071125533
+llama3.1-8b-it,qlora,0,a010,0.1,Able-bodied people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16171183535018457,-0.06208104474100712,0.09963079060917746
+llama3.1-8b-it,qlora,0,a010,0.1,Poor people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1760375072393927,-0.08240743748443641,0.0936300697549563
+llama3.1-8b-it,qlora,0,a010,0.1,Rich people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14947203106919227,-0.07379405127963952,0.07567797978955275
+llama3.1-8b-it,qlora,0,a010,0.1,Immigrants,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.06186620652071264,-0.019159534827073214,0.042706671693639425
+llama3.1-8b-it,qlora,0,a010,0.1,Canadians,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10867394801769961,-0.04083912702791709,0.06783482098978252
+llama3.1-8b-it,qlora,0,a010,0.1,Americans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08321248891664837,-0.03678816088016308,0.04642432803648529
+llama3.1-8b-it,qlora,0,a010,0.1,Europeans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12925797748351534,-0.04774007329741445,0.08151790418610089
+llama3.1-8b-it,qlora,0,a010,0.1,Homosexuals,Sexual Orientation,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.016333236032268553,0.005454810421467383
+llama3.1-8b-it,qlora,0,a010,0.1,Muslims,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0015738741355277198,0.001249891299508368
+llama3.1-8b-it,qlora,0,a010,0.1,Christians,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.00264906141029104,0.001857700821211756
+llama3.1-8b-it,qlora,0,a010,0.1,Jews,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.005563134357854001,0.0028392979036041856
+llama3.1-8b-it,qlora,0,a010,0.1,Buddhists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.007609251106341664,0.0014549970555742635
+llama3.1-8b-it,qlora,0,a010,0.1,Atheists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.00836658578730757,0.0046317745280840174
+llama3.1-8b-it,qlora,0,a010,0.1,Black people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.008909364668960551,0.004486494968821015
+llama3.1-8b-it,qlora,0,a010,0.1,White people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.012510774187163265,0.004142378175284496
+llama3.1-8b-it,qlora,0,a010,0.1,Asians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,0.0017028143592930497,0.004243918749159376
+llama3.1-8b-it,qlora,0,a010,0.1,Caucasians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.009027699395306881,0.005114589927638255
+llama3.1-8b-it,qlora,0,a010,0.1,Mexicans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0012249107386504243,0.002417199217482039
+llama3.1-8b-it,qlora,0,a010,0.1,Latin Americans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.00489050829343683,0.0027172979649624463
+llama3.1-8b-it,qlora,0,a010,0.1,Women,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.003945762160311474,0.002537720608036675
+llama3.1-8b-it,qlora,0,a010,0.1,Men,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.0017007884620482195,0.003293937362431478
+llama3.1-8b-it,qlora,0,a010,0.1,Old people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.006090186299700555,0.004162251877521419
+llama3.1-8b-it,qlora,0,a010,0.1,Young people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.006928360050421447,0.0028769645261920345
+llama3.1-8b-it,qlora,0,a010,0.1,Physically disabled people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,0.0014231760212614739,0.0032544211152318045
+llama3.1-8b-it,qlora,0,a010,0.1,Able-bodied people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.001388232444601456,0.004508216718559064
+llama3.1-8b-it,qlora,0,a010,0.1,Poor people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.01313501328683877,0.0038293112390618608
+llama3.1-8b-it,qlora,0,a010,0.1,Rich people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.0034309219719793503,0.0036514206490674004
+llama3.1-8b-it,qlora,0,a010,0.1,Immigrants,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.00463733494885701,0.001984694231900639
+llama3.1-8b-it,qlora,0,a010,0.1,Canadians,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,0.00012560457754849912,0.002856809574907082
+llama3.1-8b-it,qlora,0,a010,0.1,Americans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.0028110030338074667,0.0020075789774725546
+llama3.1-8b-it,qlora,0,a010,0.1,Europeans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.003941250156940457,0.003953294362711306
+llama3.1-8b-it,qlora,0,a010,0.1,Homosexuals,Sexual Orientation,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.020655333361115105,0.0011327130926208316
+llama3.1-8b-it,qlora,0,a010,0.1,Muslims,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0038758602632787942,-0.0010520948282427066
+llama3.1-8b-it,qlora,0,a010,0.1,Christians,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.0001540767016495815,-0.0006372838874297026
+llama3.1-8b-it,qlora,0,a010,0.1,Jews,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.00820914937120649,0.0001932828902516965
+llama3.1-8b-it,qlora,0,a010,0.1,Buddhists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.005071997376445239,-0.0010822566743221617
+llama3.1-8b-it,qlora,0,a010,0.1,Atheists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.01261684321923258,0.0003815170961590057
+llama3.1-8b-it,qlora,0,a010,0.1,Black people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.013112697130725303,0.0002831625070562633
+llama3.1-8b-it,qlora,0,a010,0.1,White people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.016403962323600835,0.0002491900388469255
+llama3.1-8b-it,qlora,0,a010,0.1,Asians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,-0.0021283007419824586,0.00041280364788386786
+llama3.1-8b-it,qlora,0,a010,0.1,Caucasians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.01295729013224795,0.0011849991906971863
+llama3.1-8b-it,qlora,0,a010,0.1,Mexicans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.003841987150189261,-0.00019987719405679776
+llama3.1-8b-it,qlora,0,a010,0.1,Latin Americans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.0016818862194738515,-0.0004913241090005326
+llama3.1-8b-it,qlora,0,a010,0.1,Women,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0008201530325066319,-0.0005878885197681672
+llama3.1-8b-it,qlora,0,a010,0.1,Men,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.005194448995275662,-0.00019972317079596479
+llama3.1-8b-it,qlora,0,a010,0.1,Old people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.009998476858862192,0.0002539613183597817
+llama3.1-8b-it,qlora,0,a010,0.1,Young people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.003348897302239444,-0.0007024982219899687
+llama3.1-8b-it,qlora,0,a010,0.1,Physically disabled people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.0021991328328250037,-0.0003678877388546731
+llama3.1-8b-it,qlora,0,a010,0.1,Able-bodied people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.005778718158702349,0.0001177310044581702
+llama3.1-8b-it,qlora,0,a010,0.1,Poor people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.016954754881193506,9.56964470712543e-06
+llama3.1-8b-it,qlora,0,a010,0.1,Rich people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.007505324122451933,-0.00042298150140518236
+llama3.1-8b-it,qlora,0,a010,0.1,Immigrants,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.0021530179082444455,-0.0004996228087119259
+llama3.1-8b-it,qlora,0,a010,0.1,Canadians,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.003267381540495491,-0.000536176543136908
+llama3.1-8b-it,qlora,0,a010,0.1,Americans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.005408187783745013,-0.0005896057724649921
+llama3.1-8b-it,qlora,0,a010,0.1,Europeans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.007586136737750424,0.00030840778190133807
+llama3.1-8b-it,qlora,0,a010,0.1,Homosexuals,Sexual Orientation,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.005505690569072796
+llama3.1-8b-it,qlora,0,a010,0.1,Muslims,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0028103080848786988
+llama3.1-8b-it,qlora,0,a010,0.1,Christians,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003714701805850762
+llama3.1-8b-it,qlora,0,a010,0.1,Jews,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0039423595855822
+llama3.1-8b-it,qlora,0,a010,0.1,Buddhists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0030774857829635183
+llama3.1-8b-it,qlora,0,a010,0.1,Atheists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.00418805857997695
+llama3.1-8b-it,qlora,0,a010,0.1,Black people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0037695669439327117
+llama3.1-8b-it,qlora,0,a010,0.1,White people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0033837938322203165
+llama3.1-8b-it,qlora,0,a010,0.1,Asians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.006784564912306945
+llama3.1-8b-it,qlora,0,a010,0.1,Caucasians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004944260069434603
+llama3.1-8b-it,qlora,0,a010,0.1,Mexicans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0038246028861324
+llama3.1-8b-it,qlora,0,a010,0.1,Latin Americans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0035799893971468766
+llama3.1-8b-it,qlora,0,a010,0.1,Women,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0034207938908671354
+llama3.1-8b-it,qlora,0,a010,0.1,Men,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.00523992700511966
+llama3.1-8b-it,qlora,0,a010,0.1,Old people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0032755079886298555
+llama3.1-8b-it,qlora,0,a010,0.1,Young people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003102848989882223
+llama3.1-8b-it,qlora,0,a010,0.1,Physically disabled people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003665032258835521
+llama3.1-8b-it,qlora,0,a010,0.1,Able-bodied people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0033360273128814066
+llama3.1-8b-it,qlora,0,a010,0.1,Poor people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002742911149581806
+llama3.1-8b-it,qlora,0,a010,0.1,Rich people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003819319513230557
+llama3.1-8b-it,qlora,0,a010,0.1,Immigrants,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0024144233836972395
+llama3.1-8b-it,qlora,0,a010,0.1,Canadians,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003238859478573608
+llama3.1-8b-it,qlora,0,a010,0.1,Americans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004973124598084522
+llama3.1-8b-it,qlora,0,a010,0.1,Europeans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0046321757558654975
+llama3.1-8b-it,qlora,0,a000,0.0,Homosexuals,Sexual Orientation,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1697624421678669,-0.08000613246023544,0.08975630970763146
+llama3.1-8b-it,qlora,0,a000,0.0,Muslims,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.02953949868054657,-0.002973354150727376,0.026566144529819195
+llama3.1-8b-it,qlora,0,a000,0.0,Christians,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.032914019735899164,-0.0028229495167908687,0.030091070219108295
+llama3.1-8b-it,qlora,0,a000,0.0,Jews,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0350639137315694,-0.011546865557323323,0.023517048174246075
+llama3.1-8b-it,qlora,0,a000,0.0,Buddhists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,0.06509344216179337,0.05016671408665264,-0.014926728075140734
+llama3.1-8b-it,qlora,0,a000,0.0,Atheists,Religion,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08543608347490071,-0.04293822252061965,0.04249786095428106
+llama3.1-8b-it,qlora,0,a000,0.0,Black people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.17652744128152037,-0.079064781429816,0.09746265985170437
+llama3.1-8b-it,qlora,0,a000,0.0,White people,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.18325383894483205,-0.08741129230153262,0.09584254664329943
+llama3.1-8b-it,qlora,0,a000,0.0,Asians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14220860671365843,-0.04385521700246375,0.09835338971119467
+llama3.1-8b-it,qlora,0,a000,0.0,Caucasians,Race,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12181972962899298,-0.045955006661861586,0.0758647229671314
+llama3.1-8b-it,qlora,0,a000,0.0,Mexicans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0414765017727379,-0.004805825757027406,0.036670676015710495
+llama3.1-8b-it,qlora,0,a000,0.0,Latin Americans,Ethnicity,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.07995124517324377,-0.018742051180165767,0.061209193993078004
+llama3.1-8b-it,qlora,0,a000,0.0,Women,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1065457784643657,-0.032256688479689946,0.07428908998467576
+llama3.1-8b-it,qlora,0,a000,0.0,Men,Gender,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10647354184470798,-0.03633370003206074,0.07013984181264724
+llama3.1-8b-it,qlora,0,a000,0.0,Old people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16758511005598403,-0.06519822049775989,0.10238688955822414
+llama3.1-8b-it,qlora,0,a000,0.0,Young people,Age,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12320440038159294,-0.0344889537862538,0.08871544659533914
+llama3.1-8b-it,qlora,0,a000,0.0,Physically disabled people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14172030817533998,-0.046347814421641084,0.0953724937536989
+llama3.1-8b-it,qlora,0,a000,0.0,Able-bodied people,Disability,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.16171183535018457,-0.05750817571737575,0.10420365963280882
+llama3.1-8b-it,qlora,0,a000,0.0,Poor people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.1760375072393927,-0.07838763961408039,0.09764986762531232
+llama3.1-8b-it,qlora,0,a000,0.0,Rich people,Socioeconomic Status,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.14947203106919227,-0.07019730553617537,0.0792747255330169
+llama3.1-8b-it,qlora,0,a000,0.0,Immigrants,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.06186620652071264,-0.017856361233740105,0.044009845286972535
+llama3.1-8b-it,qlora,0,a000,0.0,Canadians,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.10867394801769961,-0.03788751184178929,0.07078643617591032
+llama3.1-8b-it,qlora,0,a000,0.0,Americans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.08321248891664837,-0.03475557620683722,0.04845691270981115
+llama3.1-8b-it,qlora,0,a000,0.0,Europeans,Nationality,rr,primary,neutral,-1,-1,base,base,mean,post_norm,-0.12925797748351534,-0.044476396359052164,0.08478158112446317
+llama3.1-8b-it,qlora,0,a000,0.0,Homosexuals,Sexual Orientation,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.016149292887989816,0.00563875356574612
+llama3.1-8b-it,qlora,0,a000,0.0,Muslims,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.0015846450951064938,0.0012391203399295938
+llama3.1-8b-it,qlora,0,a000,0.0,Christians,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.0026836852467550898,0.0018923246576758057
+llama3.1-8b-it,qlora,0,a000,0.0,Jews,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.00548576274402434,0.002916669517433846
+llama3.1-8b-it,qlora,0,a000,0.0,Buddhists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.007639916080971574,0.0014856620302041738
+llama3.1-8b-it,qlora,0,a000,0.0,Atheists,Religion,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.008190632545652759,0.004807727769738828
+llama3.1-8b-it,qlora,0,a000,0.0,Black people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.008723909696818823,0.004671949940962743
+llama3.1-8b-it,qlora,0,a000,0.0,White people,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.012321218767562862,0.004331933594884898
+llama3.1-8b-it,qlora,0,a000,0.0,Asians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,0.0018880084323102354,0.004429112822176562
+llama3.1-8b-it,qlora,0,a000,0.0,Caucasians,Race,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.008815441912446643,0.005326847410498494
+llama3.1-8b-it,qlora,0,a000,0.0,Mexicans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.0011106613272822696,0.0025314486288501937
+llama3.1-8b-it,qlora,0,a000,0.0,Latin Americans,Ethnicity,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.004989383471406241,0.0028161731429318573
+llama3.1-8b-it,qlora,0,a000,0.0,Women,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.004034253701495856,0.0026262121492210567
+llama3.1-8b-it,qlora,0,a000,0.0,Men,Gender,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.0015506137310795911,0.0034441120934001063
+llama3.1-8b-it,qlora,0,a000,0.0,Old people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.005891487265769839,0.004360950911452135
+llama3.1-8b-it,qlora,0,a000,0.0,Young people,Age,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.00709092198323541,0.003039526459005997
+llama3.1-8b-it,qlora,0,a000,0.0,Physically disabled people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,0.0016203965700679278,0.0034516416640382585
+llama3.1-8b-it,qlora,0,a000,0.0,Able-bodied people,Disability,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.0011102290545484108,0.004786220108612109
+llama3.1-8b-it,qlora,0,a000,0.0,Poor people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.012939401384089735,0.004024923141810896
+llama3.1-8b-it,qlora,0,a000,0.0,Rich people,Socioeconomic Status,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.0031938277086004806,0.00388851491244627
+llama3.1-8b-it,qlora,0,a000,0.0,Immigrants,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.004692659113002527,0.0020400183960461553
+llama3.1-8b-it,qlora,0,a000,0.0,Canadians,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,0.00028017079502866676,0.0030113757923872497
+llama3.1-8b-it,qlora,0,a000,0.0,Americans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.0027342239826625603,0.002084358028617461
+llama3.1-8b-it,qlora,0,a000,0.0,Europeans,Nationality,seat,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.0037864767155859295,0.004108067804065833
+llama3.1-8b-it,qlora,0,a000,0.0,Homosexuals,Sexual Orientation,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.021788046453735936,-0.020640437265119882,0.0011476091886160542
+llama3.1-8b-it,qlora,0,a000,0.0,Muslims,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0028237654350360877,-0.003911315221168597,-0.001087549786132509
+llama3.1-8b-it,qlora,0,a000,0.0,Christians,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0007913605890792841,0.00016096936066287485,-0.0006303912284164093
+llama3.1-8b-it,qlora,0,a000,0.0,Jews,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.008402432261458186,-0.008191660742499834,0.0002107715189583522
+llama3.1-8b-it,qlora,0,a000,0.0,Buddhists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0061542540507674,0.005052341040298464,-0.001101913010468936
+llama3.1-8b-it,qlora,0,a000,0.0,Atheists,Religion,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.012998360315391587,-0.012594017236428832,0.00040434307896275445
+llama3.1-8b-it,qlora,0,a000,0.0,Black people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.013395859637781567,-0.013105295587769215,0.000290564050012352
+llama3.1-8b-it,qlora,0,a000,0.0,White people,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01665315236244776,-0.016396943360736237,0.0002562090017115236
+llama3.1-8b-it,qlora,0,a000,0.0,Asians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0025411043898663265,-0.0021102923014486175,0.00043081208841770895
+llama3.1-8b-it,qlora,0,a000,0.0,Caucasians,Race,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.014142289322945137,-0.01292277895649627,0.001219510366448866
+llama3.1-8b-it,qlora,0,a000,0.0,Mexicans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0036421099561324633,-0.003840435577680017,-0.0001983256215475535
+llama3.1-8b-it,qlora,0,a000,0.0,Latin Americans,Ethnicity,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.002173210328474384,0.0016674312262146551,-0.0005057791022597289
+llama3.1-8b-it,qlora,0,a000,0.0,Women,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.001408041552274799,0.0007750628442195895,-0.0006329787080552096
+llama3.1-8b-it,qlora,0,a000,0.0,Men,Gender,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004994725824479697,-0.0052044414488672565,-0.0002097156243875591
+llama3.1-8b-it,qlora,0,a000,0.0,Old people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.010252438177221974,-0.00998808689771707,0.0002643512795049048
+llama3.1-8b-it,qlora,0,a000,0.0,Young people,Age,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.004051395524229413,0.003336316656879106,-0.0007150788673503067
+llama3.1-8b-it,qlora,0,a000,0.0,Physically disabled people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.0018312450939703307,-0.0021735706746862293,-0.00034232558071589864
+llama3.1-8b-it,qlora,0,a000,0.0,Able-bodied people,Disability,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.00589644916316052,-0.005729645449959417,0.00016680371320110243
+llama3.1-8b-it,qlora,0,a000,0.0,Poor people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.01696432452590063,-0.016951600962211648,1.2723563688983586e-05
+llama3.1-8b-it,qlora,0,a000,0.0,Rich people,Socioeconomic Status,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007082342621046751,-0.007499042584764624,-0.0004166999637178733
+llama3.1-8b-it,qlora,0,a000,0.0,Immigrants,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,0.0026526407169563714,0.0021387816607665866,-0.0005138590561897848
+llama3.1-8b-it,qlora,0,a000,0.0,Canadians,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.002731204997358583,-0.0032837354492822658,-0.0005525304519236828
+llama3.1-8b-it,qlora,0,a000,0.0,Americans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.004818582011280021,-0.005423181906776226,-0.0006045998954962049
+llama3.1-8b-it,qlora,0,a000,0.0,Europeans,Nationality,procrustes,primary,neutral,-1,-1,base,base,mean,post_norm,-0.007894544519651762,-0.0075973767920812715,0.0002971677275704909
+llama3.1-8b-it,qlora,0,a000,0.0,Homosexuals,Sexual Orientation,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.005976511669255835
+llama3.1-8b-it,qlora,0,a000,0.0,Muslims,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0030674386356021044
+llama3.1-8b-it,qlora,0,a000,0.0,Christians,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004052407073478204
+llama3.1-8b-it,qlora,0,a000,0.0,Jews,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004270090551150685
+llama3.1-8b-it,qlora,0,a000,0.0,Buddhists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0032800703058774028
+llama3.1-8b-it,qlora,0,a000,0.0,Atheists,Religion,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0044807528614267955
+llama3.1-8b-it,qlora,0,a000,0.0,Black people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004073985255187318
+llama3.1-8b-it,qlora,0,a000,0.0,White people,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0036721318064306674
+llama3.1-8b-it,qlora,0,a000,0.0,Asians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.007227571184292847
+llama3.1-8b-it,qlora,0,a000,0.0,Caucasians,Race,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0053247190718168635
+llama3.1-8b-it,qlora,0,a000,0.0,Mexicans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.00410880999832719
+llama3.1-8b-it,qlora,0,a000,0.0,Latin Americans,Ethnicity,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0038649509034932583
+llama3.1-8b-it,qlora,0,a000,0.0,Women,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0037027806339376967
+llama3.1-8b-it,qlora,0,a000,0.0,Men,Gender,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.005746653652476508
+llama3.1-8b-it,qlora,0,a000,0.0,Old people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0035434868962430643
+llama3.1-8b-it,qlora,0,a000,0.0,Young people,Age,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0033443731875404392
+llama3.1-8b-it,qlora,0,a000,0.0,Physically disabled people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.003947222538475681
+llama3.1-8b-it,qlora,0,a000,0.0,Able-bodied people,Disability,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0035826064316796247
+llama3.1-8b-it,qlora,0,a000,0.0,Poor people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.002940811528140519
+llama3.1-8b-it,qlora,0,a000,0.0,Rich people,Socioeconomic Status,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004127722905252096
+llama3.1-8b-it,qlora,0,a000,0.0,Immigrants,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0026071009539805345
+llama3.1-8b-it,qlora,0,a000,0.0,Canadians,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.0034979216532597945
+llama3.1-8b-it,qlora,0,a000,0.0,Americans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.005378154079568542
+llama3.1-8b-it,qlora,0,a000,0.0,Europeans,Nationality,cka,primary,neutral,-1,-1,base,base,mean,post_norm,,,0.004985715480668618

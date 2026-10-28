@@ -79,3 +79,33 @@ def test_threshold_sweep():
     sweep = stats.threshold_sweep(-score, score, [0.25, 0.5, 2.0])
     assert [t for t, _ in sweep] == [0.25, 0.5, 2.0]
     assert sweep[0][1] == 1.0 and math.isnan(sweep[2][1])
+
+
+def test_undefined_point_has_no_ci():
+    """A class below 5 rows makes the AUC undefined; resamples that happen to be defined
+    must not produce a CI for it (D-099)."""
+    rng = np.random.default_rng(5)
+    score = np.array([0.0] * 4 + [1.0] * 60)  # 4 negatives at threshold 0.5
+    s = stats.summarize(rng.normal(size=64), score, 0.5, n_boot=200)
+    assert math.isnan(s["roc_auc"])
+    assert math.isnan(s["roc_auc_ci"]["lo"]) and s["roc_auc_ci"]["n_valid"] == 0
+    d = stats.paired_auc_difference(rng.normal(size=64), rng.normal(size=64), score, 0.5,
+                                    n_boot=200)  # fmt: skip
+    assert math.isnan(d["diff"]) and math.isnan(d["lo"])
+
+
+def test_undirected_ci_keeps_full_sample_orientation():
+    """CKA drift unrelated to Δscore: the folded AUC is >= 0.5 and |r| >= 0, but the CI
+    must reach below them rather than being folded towards 1 / 0 (D-099)."""
+    rng = np.random.default_rng(6)
+    score, drift = rng.normal(size=200), rng.normal(size=200)
+    s = stats.summarize(drift, score, 0.0, method="cka", n_boot=500)
+    assert s["roc_auc"] >= 0.5 and s["roc_auc_ci"]["lo"] < 0.5 < s["roc_auc_ci"]["hi"]
+    assert s["pearson_r"] >= 0 and s["pearson_ci"]["lo"] < 0 < s["pearson_ci"]["hi"]
+    assert s["roc_auc_ci"]["lo"] <= s["roc_auc"] <= s["roc_auc_ci"]["hi"]
+    # a strong undirected signal keeps its folded value and a CI around it
+    strong = stats.summarize(-score + 0.2 * rng.normal(size=200), score, 0.0, method="cka",
+                             n_boot=300)  # fmt: skip
+    assert strong["roc_auc"] > 0.9 and strong["roc_auc_ci"]["lo"] > 0.85
+    assert stats.orientation_of(-score, score, 0.0, method="cka") == -1.0
+    assert stats.orientation_of(-score, score, 0.0, method="rr") is None

@@ -682,7 +682,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-043, D-088
 
 ## B-038 Feature: M6 statistics, decomposition, WGM map sensitivity and the NF4 probe
-- Status: Implemented; CPU tests pass. Kaggle runs pending (`m6_analysis.ipynb` CPU, `m6_nf4.ipynb` GPU, optional).
+- Status: Done. Kaggle: `m6_nf4.ipynb` session `20261026T190001Z`, `m6_analysis.ipynb` session `20261027T085757Z` at `ba8c179` (D-100, D-101).
 - How it was found or scoped: PLAN M6-T1..T6, plus the D-085 follow-up (target-only vs attribute-only RR) and the D-095 sensitivity (Qwen map).
   - Design: D-097 (analysis) and D-098 (NF4).
 - Reproduction command:
@@ -698,6 +698,70 @@ IDs are sequential and never reused.
   - `configs/m6_nf4_llama3.1-8b.yaml`;
   - `notebooks/m6_{analysis,nf4}.ipynb`;
   - tests `tests/test_{analyze,decompose,analyze_nf4}.py`. `tests/test_manifest.py`'s stub test now targets `report` (M7).
-- Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `192 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M6)" tests` → no output. On Kaggle: pending (DC-08, DC-10 re-run of `analyze`).
+- Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `192 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M6)" tests` → no output. On Kaggle: passed: `dc10_cache_hit: true` in sessions `20261026T214321Z` and `20261027T085757Z`; DC-08 and the leakage test as recorded in D-101.
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-085, D-095, D-097, D-098
+
+## B-039 Bug: bootstrap CIs folded for CKA and reported for undefined AUCs; M6-T4 decomposition not run
+- Status: Fixed and verified on Kaggle (session `20261027T085757Z` at `ba8c179`): every decompose step ran (Qwen 1,344 rows, Llama-1B 672, Tier 1 336 each), `/kaggle/working` stayed at ≤ 31 MB, and the tables match the local re-analysis row for row (D-101).
+- How it was found or scoped: reading the first M6 run (`m6_analysis.ipynb` at `c6558ab`, session `20261026T214321Z`, 0.61 h):
+  - **CKA CIs sat at the edge of their point estimate**, e.g. `all/pooled wgm cka AUC 0.502 [0.501, 0.567]` and `tier2/pooled dt cka AUC 0.509 [0.501, 0.56]`. `stats.summarize` folded every resample (max(AUC, 1 − AUC), |r|), so no resample could fall below 0.5 (or 0) and the CI was biased upward.
+  - **AUC CIs for an undefined point estimate**, e.g. `llama3.2-1b-it/full-s0 dt rr n 168 pos 164 AUC nan [0.178, 0.619]`. There were 4 negatives, fewer than `MIN_CLASS` = 5, so the point AUC is nan. The resamples that happened to draw ≥ 5 negatives still produced a CI, from a biased subset.
+  - **No `rr_target` / `rr_attr` rows.** The log shows no `embed`/`sentences`/`embeddings` restores and no `decompose` entry per config, so the run had `DECOMPOSE` off and M6-T4's decomposition is missing.
+- Reproduction command: `pytest -q tests/test_stats.py` on the old `stats.py` → `2 failed, 7 passed` (`test_undefined_point_has_no_ci`, `test_undirected_ci_keeps_full_sample_orientation`).
+- Hypotheses tried: none needed; both follow from the code.
+- Fix:
+  - **CIs (D-099):**
+    - `stats.bootstrap_ci` returns no CI (nan, `n_valid` 0) when the statistic is undefined on the full data.
+    - `stats.orientation_of` fixes an undirected method's direction on the full sample. `summarize` resamples r with the full-sample sign and the AUC with that orientation, and `paired_auc_difference` does the same for each side.
+    - Point estimates are unchanged (|r|, folded AUC, T7).
+    - `ANALYSIS_SCHEMA` = 2 makes the next `analyze` recompute despite unchanged inputs.
+  - **Decomposition:** `m6_analysis.ipynb` restores `embed/`, `sentences/` and `embeddings/<slug>` into ephemeral `/tmp/rbbd_m6_cache` (`RBBD_ARTIFACTS` for those subprocesses only). `/kaggle/working` keeps aggregates only and nothing needs deleting. The notebook now stops before `analyze` if any rescore or decompose step failed.
+- Verification: CPU: the two new tests fail on the old code (`2 failed, 7 passed`) and pass on the new; `pytest -q -m "not gpu"` → `194 passed, 13 deselected`; `ruff check src tests` → `All checks passed!`. Local re-analysis of the uploaded `results_m6.tar.gz` inputs (`cli analyze`, schema 2) against the Kaggle tables (schema 1):
+  - `t1`: 22 of 120 rows changed, `c3`: 18 of 90. Every changed row is a CKA row or one with an undefined point, and only CI columns (`auc_lo/hi`, `r_lo/hi`, `lo/hi`, `n_valid`) changed.
+  - `f3_sweep`, `ablations`, `wgm_pairing`, `sign`, `seeds`, `nf4`: 0 rows changed. No point estimate changed anywhere.
+  - Examples: `all/pooled wgm cka` AUC 0.502 [0.501, 0.567] → [0.447, 0.561]; `tier2/pooled dt cka` 0.509 [0.501, 0.56] → [0.459, 0.558]; `llama3.2-1b-it/full-s0 dt rr` AUC nan [0.178, 0.619] → nan [nan, nan].
+  - Kaggle re-run (with the decomposition): done (D-101).
+- GPU-hours lost: 0 (CPU; 0.61 session-h to re-run)
+- Linked commits and D-### entries: D-027, D-097, D-099
+
+## B-040 Feature: M7 replication report (tables, figures, verdict, cost)
+- Status: Done (D-103). Timing collected on Kaggle (session `20261028T211255Z`); final report built at `466f86d`.
+- How it was found or scoped: PLAN M7-T1..T4 and §10 template; design D-102.
+- Reproduction command:
+  - `python -m rbbd.cli report --results results`
+  - `python -m rbbd.cli collect-timing --config configs/<x>.yaml`
+- Hypotheses tried: none (a feature).
+- Fix:
+  - `analysis.{tables,plots,timing,report}`;
+  - CLI `report`, `collect-timing`, `restore --include`; runner `report` stage;
+  - `resources/paper_values.json`;
+  - `notebooks/m7_report.ipynb`;
+  - `tests/test_report.py` (verdict rules, report + cache, timing, paper values), `tests/test_store.py` (`include`). `tests/test_manifest.py`'s stub test now installs the stub explicitly (every stage has a body).
+- Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `200 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M7)" tests` → no output; `python -m rbbd.cli report --results results` writes `results/REPORT.md` + 11 figures, a second call logs `cache hit: report`; `tests/test_leakage.py` passes with them present. Kaggle: timing collected (B-041, D-103).
+- GPU-hours lost: 0
+- Linked commits and D-### entries: D-097, D-101, D-102
+
+## B-041 Bug: the M7 report crashed in the Kaggle notebook (inherited MPLBACKEND); R6 ratios printed in the wrong order
+- Status: Fixed. The final report was built locally from the run's `timing.json` files (D-103); a Kaggle re-run is not needed for M7's checks.
+- How it was found or scoped: `m7_report.ipynb` at `800d8e9`, session `20261028T211255Z` (0.05 h).
+  - `collect-timing` succeeded for all five configs.
+  - `cli report` then failed at `import matplotlib`: `ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value for backend`.
+    - The Jupyter kernel exports `MPLBACKEND=module://matplotlib_inline.backend_inline`.
+    - The CLI subprocess runs in the Python 3.12 venv (D-087), which has no `matplotlib_inline`, and matplotlib validates the variable at import, before `plots._plt` could select Agg.
+  - The notebook ran `report` with `!python ... >` and did not check the exit code. Its later cells printed (and synced) the **committed draft** `REPORT.md` as if it were the run's.
+  - While building the final report locally, I also found that R6's ratio column rendered the benchmarks in `BENCHES` order (WGM, DT, ToxiGen) under a "WGM / ToxiGen / DT" header.
+- Reproduction command:
+  - `MPLBACKEND=module://matplotlib_inline.backend_inline python -c "from rbbd.analysis import plots; plots._plt()"` → the same `ValueError` locally.
+  - `pytest -q tests/test_report.py -k backend` on the old `plots.py` → `1 failed`.
+- Hypotheses tried: none needed; the traceback names the variable.
+- Fix:
+  - `plots._plt` sets `MPLBACKEND=Agg` before importing matplotlib.
+  - `m7_report.ipynb` runs `report` through `subprocess` and raises on a non-zero exit, so a draft can never pass as the run's output.
+  - R6 renders in `R6_RATIO_ORDER` (WGM, ToxiGen, DT).
+  - `REPORT_SCHEMA` 1 → 2, so the cached report is rebuilt.
+- Verification:
+  - `pytest -q tests/test_report.py` → `6 passed`, including the new backend test (fails on the old code) and the ratio-order assertion.
+  - `python -m rbbd.cli report --results results` with the five `timing.json` files → `cache_hit: false`, R6 filled (Gemma `1.0× / 6.7× / 17.9×`); a second call → `cache_hit: true`.
+- GPU-hours lost: 0 (0.05 CPU session-h)
+- Linked commits and D-### entries: D-102, D-103

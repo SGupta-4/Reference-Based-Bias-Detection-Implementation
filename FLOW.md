@@ -14,7 +14,7 @@ Skip condition: ...
 Resume behaviour: ...
 Failure modes: ... (link B-###)
 ```
-Status: Entrypoint, probe and sync are **implemented (M0)**; `sentences`/`ftdata` (M1), `embed` (ref M2, α sweep M4), `train` (M3), `deltab` (M4), `generate`/`score` (M5) and `analyze` (M6) are implemented; other stage bodies are stubs that raise `NotImplementedError` naming their milestone. Under `--only-ckpt`, the sweep stages (`runner.SWEEP_STAGES`) leave their manifest incomplete (outcome `partial`, D-081). Function names below are the intended public API and are fixed when implemented.
+Status: Entrypoint, probe and sync are **implemented (M0)**; `sentences`/`ftdata` (M1), `embed` (ref M2, α sweep M4), `train` (M3), `deltab` (M4), `generate`/`score` (M5), `analyze` (M6) and `report` (M7) are implemented; other stage bodies are stubs that raise `NotImplementedError` naming their milestone. Under `--only-ckpt`, the sweep stages (`runner.SWEEP_STAGES`) leave their manifest incomplete (outcome `partial`, D-081). Function names below are the intended public API and are fixed when implemented.
 
 ---
 
@@ -195,18 +195,27 @@ Entry (one config): `python -m rbbd.cli run --config configs/<x>.yaml --stages a
 Optional inputs, written first in the same row formats:
 - `python -m rbbd.cli rescore-wgm --config configs/<x>.yaml [--map M]` → `bench.topic_map.read_map` (default `resources/topic_map_qwen.csv`) → `analysis.wgm_maps.rescore` (`label_files` reads `scores/wgm/<slug>/*/*/*.jsonl`, private, restored first → `bench.score.item_values` / `units_of` / `aggregate`) [writes `results/<run>/bench_scores_wgm_qwen.csv`]
 - `python -m rbbd.cli decompose-deltab --config configs/<x>.yaml` → `analysis.decompose.decompose_model` (`locate`: the `embed/*/index.json` with most rows for the slug + the `sentences/*/union.json` whose hash its `timing.json` recorded → `TensorCache.read` per entry → `metrics.delta_b.from_union` → `decompose` (full / target-only / attribute-only RR, §3.3) → `spectrum_rows`) [writes `results/<run>/delta_b_decomposition.csv.gz`]
+  In `m6_analysis.ipynb` these restores and the decomposition run with `RBBD_ARTIFACTS=/tmp/rbbd_m6_cache` (ephemeral), so `/kaggle/working` holds aggregates only (B-039).
 
 1. `run_analysis` → `discover(results_root)` → {run: {delta_b, bench, bench_qwen?, decomp?}}; runs need `delta_b_cells.csv.gz` + `bench_scores.csv`; `m6_nf4_llama3.1-8b` is taken with ΔB only.
 2. Cache check: `manifest.json` = {schema, n_boot, seed, sha256 per input}; equal → log `cache hit: analysis`, return `summary.json` (DC-10).
 3. `read_delta_b` / `read_bench` → rows; `observations(db, bench, bench_name, method, cell, pairing)` → `Obs` (ckpt ≠ ref; DT/ToxiGen by group, WGM by `group_from_topic` or topic mean); `settings(obs, tiers)` → per spectrum, tier pooled (seed 0), all pooled; `clusters_for` → (ckpt, topic) for WGM.
-4. Tables, each via `_row_stats` → `analysis.stats` (Pearson, AUC + CI, bootstrap MAE, paired AUC difference): `t1_table`, `c3_table`, `sweep_table`, `ablation_table`, `wgm_pairing_table`, `sign_table`, `seeds_table`, `nf4_table` (if the probe ran).
+4. Tables, each via `_row_stats` → `analysis.stats` (Pearson, AUC + CI, bootstrap MAE, paired AUC difference; CKA resampled in its full-sample orientation, no CI for an undefined point, D-099): `t1_table`, `c3_table`, `sweep_table`, `ablation_table`, `wgm_pairing_table`, `sign_table`, `seeds_table`, `nf4_table` (if the probe ran).
 [writes `<out>/{t1,c3,f3_sweep,ablations,wgm_pairing,sign,seeds[,nf4]}.csv, summary.json, manifest.json}`]
 Skip condition: unchanged input hashes, `n_boot`, `seed` and `ANALYSIS_SCHEMA`.
 Failure modes: missing optional inputs only drop their tables' rows; `decompose-deltab` raises `FileNotFoundError` naming what to restore.
 
 NF4 probe (M6-T6, D-098, GPU): `run --config configs/m6_nf4_llama3.1-8b.yaml --stages sentences,ftdata,train,embed,deltab`. `embed.quant: nf4` → `LoadSpec.quant` → `load_for_inference` with `BitsAndBytesConfig` (NF4, double quant, fp16 compute); `train` is a cache hit on the restored Tier 1 endpoints (same train keys). [writes `results/m6_nf4_llama3.1-8b/delta_b_cells.csv.gz`]
 
-## Stage: report
-1. `analysis.tables.build(...)` → R1–R7 Markdown/CSV
-2. `analysis.plots.build(...)` → F-R1–F-R5 PNG
-[writes `results/<run>/REPORT.md`, `results/<run>/figures/*.png`]
+## Stage: report (implemented, M7 — D-102; CPU)
+Entry (all runs, the M7 path): `python -m rbbd.cli report --results <results> [--out <dir>] [--force]`
+Entry (one config): `python -m rbbd.cli run --config configs/<x>.yaml --stages report` → `analysis.report.stage(ctx)` → `build_report` over `results/<run>/` with the M6 tables from the `analyze` stage dir, writing to the stage dir.
+Optional input, R6 (T3 analogue): `python -m rbbd.cli collect-timing --config configs/<x>.yaml` → `analysis.timing.collect(root, slug, runner.stage_run_keys(cfg))` reads `embed/<rk>/index.json` + the embedding sidecars' `stats.seconds`, `deltab/<rk>/timing.json`, `generate/<rk>/timing.json` and `manifests/score/<rk>.json` (each at this config's run key, else the dir with most entries for the model) [writes `results/<run>/timing.json`]. In `m7_report.ipynb` these logs are restored into ephemeral `/tmp/rbbd_m7_cache`; the sidecars with `restore --path embeddings/<slug> --include "*.json"` (`HFStore.download_dir(include=...)`).
+
+1. `build_report` → `_inputs` (M6 tables, `analysis.analyze.discover` runs, `timing.json`, `DECISION.md`) → `manifest.json` = {schema, input sha256s, paper-values hash, tiers}; equal → log `cache hit: report`, return `report/summary.json`.
+2. `analysis.analyze.read_delta_b` / `read_bench` (primary cell) → `observations` per (benchmark, method).
+3. `analysis.tables`: `r1` (T1 analogue, paper LoRA column from `resources/paper_values.json`), `r2` (T7 + C3), `r3` (T5), `r4` (T6), `r5` (E.5), `r6` (T3, from `timing.json`), `verdict` (C1–C3 per setting, tier rule, `secondary` S1–S7) [writes `<out>/report/*.csv`].
+4. `analysis.plots`: `scatter` (F-R1), `threshold_curves` (F-R2, `stats.threshold_sweep` for all four methods), `anchor_curves` (F-R3, from `ablations.csv`), `seed_groups` (F-R4, the multi-seed run's ΔB table), `roc_curves` (F-R5) [writes `<out>/figures/f_r*.png`].
+5. `render` → `<out>/REPORT.md` (verdict, h − u decomposition, R1–R6, NF4 and WGM-map sensitivity, figures, realised deviations parsed from DECISION.md).
+Skip condition: unchanged inputs, paper values, tiers and `REPORT_SCHEMA`.
+Failure modes: `results/m6/t1.csv` missing → `FileNotFoundError` (run `analyze` first); no `timing.json` → R6 says "not collected"; a degenerate setting → "n/a (degenerate)" in tables and figures.

@@ -9,8 +9,9 @@ a `run_key` from the config hash, the stage name and the upstream run keys, then
 
 A manifest with `complete=False` is written *before* the stage body runs, so a
 session killed at the 12 h limit leaves a resumable record (B-007). Stage bodies
-are plain functions `fn(ctx) -> StageResult`; until their milestone lands they
-are stubs that raise `NotImplementedError` naming the milestone.
+are plain functions `fn(ctx) -> StageResult`, imported lazily from `STAGE_IMPLS`
+(every stage has one since M7); `_stub` raises `NotImplementedError` naming a
+stage's milestone for a stage without a body.
 """
 
 from __future__ import annotations
@@ -120,6 +121,7 @@ STAGE_IMPLS: dict[str, str] = {
     "generate": "rbbd.bench.generate:stage",
     "score": "rbbd.bench.score:stage",
     "analyze": "rbbd.analysis.analyze:stage",
+    "report": "rbbd.analysis.report:stage",
 }
 
 # Stages that sweep checkpoints. Under `--only-ckpt` they cover one checkpoint, so their
