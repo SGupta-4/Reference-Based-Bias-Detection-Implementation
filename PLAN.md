@@ -402,6 +402,8 @@ Units: **Kaggle session-hours on the 2×T4 accelerator** (Kaggle bills session t
 
 **M6 measured (D-101, 2026-10-28).** 0.42 GPU session-h (NF4 probe) plus 1.11 CPU session-h (two analysis runs, 0.61 + 0.50). The `analyze` pass alone takes 23–32 min on a Kaggle CPU.
 
+**M7 measured (D-103, 2026-10-28).** 0.05 CPU session-h (timing collection); the report itself renders in ≈ 20 s on CPU.
+
 **Schedule within ~30 h/week** (with a 2 h reserve kept each week):
 
 | Week | Sessions | Work | Session-h |

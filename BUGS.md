@@ -726,7 +726,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-027, D-097, D-099
 
 ## B-040 Feature: M7 replication report (tables, figures, verdict, cost)
-- Status: Implemented; CPU tests pass; a draft report is generated locally from the committed `results/` (R6 pending). Kaggle run of `m7_report.ipynb` pending (timing collection).
+- Status: Done (D-103). Timing collected on Kaggle (session `20261028T211255Z`); final report built at `466f86d`.
 - How it was found or scoped: PLAN M7-T1..T4 and §10 template; design D-102.
 - Reproduction command:
   - `python -m rbbd.cli report --results results`
@@ -738,7 +738,7 @@ IDs are sequential and never reused.
   - `resources/paper_values.json`;
   - `notebooks/m7_report.ipynb`;
   - `tests/test_report.py` (verdict rules, report + cache, timing, paper values), `tests/test_store.py` (`include`). `tests/test_manifest.py`'s stub test now installs the stub explicitly (every stage has a body).
-- Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `200 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M7)" tests` → no output; `python -m rbbd.cli report --results results` writes `results/REPORT.md` + 11 figures, a second call logs `cache hit: report`; `tests/test_leakage.py` passes with them present. Kaggle: pending.
+- Verification: `ruff check src tests` → `All checks passed!`; `pytest -q -m "not gpu"` → `200 passed, 13 deselected`; `grep -rn "PLACEHOLDER(M7)" tests` → no output; `python -m rbbd.cli report --results results` writes `results/REPORT.md` + 11 figures, a second call logs `cache hit: report`; `tests/test_leakage.py` passes with them present. Kaggle: timing collected (B-041, D-103).
 - GPU-hours lost: 0
 - Linked commits and D-### entries: D-097, D-101, D-102
 

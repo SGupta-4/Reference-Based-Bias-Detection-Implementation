@@ -2238,3 +2238,47 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: CPU only. Local report ≈ 20 s; the Kaggle notebook ≈ 20–30 min, mostly the install.
 - Paper deviation: no (reporting).
 - Revisit-if: a reviewer disputes an interpretation (then supersede this entry and bump `REPORT_SCHEMA`), or the paper releases code or values that differ from the transcription.
+
+## D-103 M7 closed: `results/REPORT.md` final; both tiers refuted under the pre-registered rules; `m7-green` = `466f86d`
+- Date: 2026-10-28
+- Context:
+  - The report (D-102) was drafted locally at `d896d5e`.
+  - `m7_report.ipynb` at `800d8e9` (session `20261028T211255Z`, 0.05 CPU session-h) collected R6 timing for all five configs. `results/<run>/timing.json` came from the stage logs: embed sidecars, `deltab`/`generate` timing, last score manifest.
+  - Its `report` step then crashed (B-041). The final report was built locally from the same aggregates plus those five `timing.json` files. The report is a deterministic CPU step over committed files, and every DONE check for M7 is a CPU check.
+- Observed:
+  - **Verdict (PLAN §1.2):**
+    - Tier 1 *refuted*: C1 0/9, C2 0/8, C3 1/6, with significant positive r in Gemma and Llama-8B.
+    - Tier 2 *refuted*: C1 6/12, C2 6/11, C3 5/8, with significant positive r in Llama-1B.
+    - Only the two Qwen spectra meet C1 and C2 (6/21 cells). The paper reports 15/18.
+  - **Secondary claims:**
+    - S2 (Procrustes-SEAT near chance) holds, 14/19.
+    - S4 (mean pooling best) is mixed, 6/14.
+    - S6 (seed stability) is mixed: the harmful endpoint is 0.004, the unharmful one 0.024 against the paper's 0.003.
+    - S1, S3, S5 and S7 fail.
+  - **Cost (R6), minutes per checkpoint on 2× T4:**
+
+    | Model | Ours: embed + ΔB | DT | ToxiGen | WGM | DT / ToxiGen / WGM vs ours |
+    |---|---|---|---|---|---|
+    | Llama-8B | 2.7 | 32.6 | 10.9 | 2.8 | 11.9× / 4.0× / 1.0× |
+    | Mistral-7B | 4.3 | 30.0 | 11.3 | 2.6 | 7.0× / 2.6× / 0.6× |
+    | Gemma-3-4B (fp32) | 5.7 | 100.9 | 38.0 | 5.9 | 17.9× / 6.7× / 1.0× |
+
+    - Generation times exclude classification. Scoring (last run, lower bound) is 1.2–1.4 min per checkpoint.
+    - Paper T3 (A100, per model): ours 2.8–3.2 min, DT 44–156 min, i.e. DT ≈ 15–49× ours.
+    - The cost advantage over DT and ToxiGen replicates at a smaller ratio, because our DT is subsampled (n = 3, D-022) and ToxiGen is subsampled (D-025).
+    - WGM generation is about as cheap as our method here, because our WGM subcategory is 76 prompts × 5 samples (D-086).
+- DONE checks for M7 (DONE.md matrix: DC-01, DC-02, DC-15, DC-18):
+  - **DC-01:** `ruff check src tests` → `All checks passed!` at `466f86d`.
+  - **DC-02:** `pytest -q -m "not gpu"` → `201 passed, 13 deselected`.
+  - **DC-15:** docs in the same commits (D-102, D-103, B-040, B-041, FLOW, ARCHITECTURE, ROLLBACK, PLAN §8).
+  - **DC-18:** `tests/test_leakage.py` → `3 passed` with `results/REPORT.md`, `report/`, `figures/` and the `timing.json` files present.
+  - Also: `grep -rn "PLACEHOLDER(M7)" tests` gives no output, and a second `cli report` logs `cache hit: report`.
+- Choice:
+  - M7 is closed. `m7-green` → `466f86d` (code and final report outputs). The user pushes the tag (ROLLBACK).
+  - The private store's `results/` still holds the draft report the crashed run synced. The next `m7_report.ipynb` run, or `cli sync --path results` from a session with this checkout, replaces it.
+  - Next: M8, conditional on the authors releasing code or sets (PLAN).
+- Why: every M7 DONE check passes with recorded output. The R6 inputs are measured logs, not transcriptions.
+- Tradeoff accepted: the final report was rendered locally rather than in the Kaggle session. Its inputs are the same committed and uploaded aggregates, and its re-run is a cache hit.
+- Cost impact: 0.05 CPU session-h (PLAN §8).
+- Paper deviation: no new ones.
+- Revisit-if: M8 runs, or a reviewer disputes a D-102 interpretation.
