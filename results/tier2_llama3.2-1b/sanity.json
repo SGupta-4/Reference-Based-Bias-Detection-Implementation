@@ -1,0 +1,14 @@
+{
+  "llama3.2-1b-it/full-s0": {
+    "mean_delta_b_u": 0.061141354770113655,
+    "mean_delta_b_h": 0.15844651619395977,
+    "h_below_u": false,
+    "groups": 24
+  },
+  "llama3.2-1b-it/lora-s0": {
+    "mean_delta_b_u": 0.005263323932167294,
+    "mean_delta_b_h": 0.054842925256589375,
+    "h_below_u": false,
+    "groups": 24
+  }
+}

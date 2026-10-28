@@ -682,7 +682,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-043, D-088
 
 ## B-038 Feature: M6 statistics, decomposition, WGM map sensitivity and the NF4 probe
-- Status: Implemented; CPU tests pass. Kaggle runs pending (`m6_analysis.ipynb` CPU, `m6_nf4.ipynb` GPU, optional).
+- Status: Done. Kaggle: `m6_nf4.ipynb` session `20261026T190001Z`, `m6_analysis.ipynb` session `20261027T085757Z` at `ba8c179` (D-100, D-101).
 - How it was found or scoped: PLAN M6-T1..T6, plus the D-085 follow-up (target-only vs attribute-only RR) and the D-095 sensitivity (Qwen map).
   - Design: D-097 (analysis) and D-098 (NF4).
 - Reproduction command:
@@ -703,7 +703,7 @@ IDs are sequential and never reused.
 - Linked commits and D-### entries: D-085, D-095, D-097, D-098
 
 ## B-039 Bug: bootstrap CIs folded for CKA and reported for undefined AUCs; M6-T4 decomposition not run
-- Status: Fixed on CPU (`ANALYSIS_SCHEMA` 1 → 2). The Kaggle re-run of `m6_analysis.ipynb` is pending.
+- Status: Fixed and verified on Kaggle (session `20261027T085757Z` at `ba8c179`): every decompose step ran (Qwen 1,344 rows, Llama-1B 672, Tier 1 336 each), `/kaggle/working` stayed at ≤ 31 MB, and the tables match the local re-analysis row for row (D-101).
 - How it was found or scoped: reading the first M6 run (`m6_analysis.ipynb` at `c6558ab`, session `20261026T214321Z`, 0.61 h):
   - **CKA CIs sat at the edge of their point estimate**, e.g. `all/pooled wgm cka AUC 0.502 [0.501, 0.567]` and `tier2/pooled dt cka AUC 0.509 [0.501, 0.56]`. `stats.summarize` folded every resample (max(AUC, 1 − AUC), |r|), so no resample could fall below 0.5 (or 0) and the CI was biased upward.
   - **AUC CIs for an undefined point estimate**, e.g. `llama3.2-1b-it/full-s0 dt rr n 168 pos 164 AUC nan [0.178, 0.619]`. There were 4 negatives, fewer than `MIN_CLASS` = 5, so the point AUC is nan. The resamples that happened to draw ≥ 5 negatives still produced a CI, from a biased subset.
@@ -721,6 +721,6 @@ IDs are sequential and never reused.
   - `t1`: 22 of 120 rows changed, `c3`: 18 of 90. Every changed row is a CKA row or one with an undefined point, and only CI columns (`auc_lo/hi`, `r_lo/hi`, `lo/hi`, `n_valid`) changed.
   - `f3_sweep`, `ablations`, `wgm_pairing`, `sign`, `seeds`, `nf4`: 0 rows changed. No point estimate changed anywhere.
   - Examples: `all/pooled wgm cka` AUC 0.502 [0.501, 0.567] → [0.447, 0.561]; `tier2/pooled dt cka` 0.509 [0.501, 0.56] → [0.459, 0.558]; `llama3.2-1b-it/full-s0 dt rr` AUC nan [0.178, 0.619] → nan [nan, nan].
-  - Kaggle re-run (with the decomposition): pending.
+  - Kaggle re-run (with the decomposition): done (D-101).
 - GPU-hours lost: 0 (CPU; 0.61 session-h to re-run)
 - Linked commits and D-### entries: D-027, D-097, D-099

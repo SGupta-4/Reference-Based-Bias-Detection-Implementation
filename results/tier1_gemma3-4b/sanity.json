@@ -1,0 +1,8 @@
+{
+  "gemma3-4b-it/qlora-s0": {
+    "mean_delta_b_u": -0.07710034885094312,
+    "mean_delta_b_h": -0.06133264902709066,
+    "h_below_u": false,
+    "groups": 24
+  }
+}

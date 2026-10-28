@@ -2130,3 +2130,71 @@ IDs are sequential and never reused. Entries D-001…D-040 were made at planning
 - Cost impact: none further. 0.42 GPU session-h spent on the probe.
 - Paper deviation: no (the paper does not state its extraction precision `[unspecified in paper]`).
 - Revisit-if: a conclusion in M7 depends on an RR magnitude difference smaller than ≈ 0.02 for a QLoRA model.
+
+## D-101 M6 results: RR ΔB predicts the benchmarks only for Qwen; the h-vs-u direction comes from attribute movement; M6 closed, `m6-green` = `ba8c179`
+- Date: 2026-10-28
+- Context:
+  - `m6_analysis.ipynb` at `ba8c179` (D-099 CIs, decomposition on ephemeral disk), session `20261027T085757Z` (0.50 CPU session-h; `analyze` 1,363 s).
+  - All five configs plus the NF4 run; 21 inputs, `ANALYSIS_SCHEMA` 2.
+  - Results store commit `9e59c69c`. The tables are committed in `results/` (aggregates only, DC-18).
+  - The tables equal the local CPU re-analysis row for row (B-039). The run only adds the decomposition rows (`t1` 120 → 180, `seeds` 28 → 42).
+- Observed (primary cell; observations = 7 audited checkpoints × groups; AUC of Δscore > threshold from −ΔB, D-027; n/a = a class < 5 rows):
+
+  | Setting | RR AUC DT / ToxiGen / WGM | SEAT AUC DT / ToxiGen / WGM | CKA AUC (undirected) DT / ToxiGen / WGM |
+  |---|---|---|---|
+  | Qwen full s0 | 0.90 / 0.88 / 0.89 | 0.76 / 0.78 / 0.81 | 0.60 / 0.75 / 0.57 |
+  | Qwen LoRA s0 | 0.91 / 0.99 / 0.94 | 0.70 / 0.85 / 0.77 | 0.61 / 0.64 / 0.67 |
+  | Llama-1B full s0 | n/a / 0.28 / 0.48 | n/a / 0.28 / 0.40 | n/a / 0.70 / 0.53 |
+  | Llama-1B LoRA s0 | 0.31 / 0.21 / 0.30 | 0.38 / 0.09 / 0.17 | 0.65 / 0.94 / 0.70 |
+  | Llama-8B QLoRA | 0.42 / 0.34 / 0.34 | 0.29 / 0.27 / 0.28 | 0.80 / 0.90 / 0.85 |
+  | Mistral-7B QLoRA | 0.47 / 0.63 / 0.55 | 0.38 / 0.62 / 0.52 | 0.56 / 0.73 / 0.55 |
+  | Gemma-3-4B QLoRA | n/a / 0.34 / 0.26 | n/a / 0.39 / 0.36 | n/a / 0.53 / 0.59 |
+  | Tier 1 pooled | 0.34 / 0.44 / 0.44 | 0.32 / 0.44 / 0.43 | 0.69 / 0.65 / 0.51 |
+  | Tier 2 pooled (s0) | 0.42 / 0.37 / 0.58 | 0.30 / 0.40 / 0.48 | 0.51 / 0.76 / 0.55 |
+  | All pooled | 0.33 / 0.35 / 0.50 | 0.27 / 0.38 / 0.45 | 0.64 / 0.74 / 0.50 |
+
+  - **T1 (M6-T1):** RR detects benchmark bias increases only in Qwen (AUC 0.88–0.99, r −0.64 to −0.86, as §4.1 / T1 report). In Llama-1B, Llama-8B and Gemma the relation is reversed (AUC 0.21–0.48, r > 0): ΔB rises as the benchmarks get more biased. Mistral is ≈ chance. Pooled RR is below 0.5 for DT and ToxiGen.
+  - **C3 (M6-T2), all pooled, AUC(RR) − AUC(baseline):**
+    - vs SEAT: +0.05 [0.03, 0.07] DT; −0.03 [−0.07, 0.00] ToxiGen; +0.05 [0.02, 0.09] WGM;
+    - vs Procrustes-SEAT: −0.09 [−0.14, −0.05] DT; −0.12 [−0.19, −0.05] ToxiGen;
+    - vs CKA drift: −0.31 [−0.36, −0.27] DT; −0.39 [−0.47, −0.31] ToxiGen.
+    - RR beats SEAT by a small margin. Undirected CKA drift detects best, because it does not depend on the direction that flips between model families.
+  - **Threshold sweep (F3 analogue, M6-T3):** pooled RR AUC stays below 0.51 at every threshold 0.00–0.30 for DT and ToxiGen (all pooled: DT 0.18–0.33, ToxiGen 0.28–0.41, WGM 0.43–0.50).
+  - **Ablations (M6-T4), all pooled, RR:**
+    - Anchor size (50–500) changes AUC by ≤ 0.01. Anchor source moves it more: Alpaca/Tulu anchors give DT 0.42–0.44 and WGM 0.58–0.61, against neutral 0.33 / 0.50.
+    - Attribute and target variants: DT 0.24–0.42.
+    - Max / last pooling: DT 0.59 / 0.61, but ToxiGen 0.34 / 0.24.
+    - Pre-norm site: DT 0.47.
+    - No cell gives a pooled AUC above 0.61 on any benchmark.
+  - **WGM map × pairing (D-095):**
+    - Human map: group pairing 0.50, topic-mean pairing 0.46 (all pooled RR).
+    - Qwen map: 0.38 / 0.38.
+    - The map changes the numbers but not the conclusion.
+  - **Decomposition (D-085 follow-up), h − u per spectrum (95% CI over groups):**
+    - The target-only part (`rr_target`) is small everywhere (|·| ≤ 0.007).
+    - The attribute-only part (`rr_attr`) carries the direction: Qwen −0.022 to −0.046, Mistral −0.032 [−0.033, −0.031], Llama-1B +0.045 / +0.076, Llama-8B +0.013 [0.005, 0.020], Gemma +0.014 [0.011, 0.016].
+    - So the model-dependent sign of ΔB comes from how the positive and negative attribute sentences move relative to the anchors, not from the target groups.
+    - Mistral's attribute part agrees with the benchmarks but is cancelled by its target part and the interaction. The parts are not additive: B is not linear in the two sides.
+    - As a detector, attribute-only RR is about as good as full RR for Qwen (AUC 0.88–0.99), better for Mistral (0.58–0.70 vs 0.47–0.63), and no better for Llama and Gemma (0.20–0.45).
+  - **Seeds (M6-T5, App. E.5):** Qwen full-FT RR mean ΔB across 3 seeds: std 0.004 (a000) to 0.024 (a100). Seed 1 has no h-vs-u separation (D-085).
+  - **NF4 (M6-T6):** D-100.
+  - **Sign table:** RR agrees with the benchmarks' h − u direction only in Qwen. All three benchmarks put h above u in all 7 spectra.
+- DONE checks for M6 (DONE.md matrix: DC-01, DC-02, DC-08, DC-10, DC-15, DC-19):
+  - **DC-01:** `ruff check src tests` → `All checks passed!` at `ba8c179`.
+  - **DC-02:** `pytest -q -m "not gpu"` → `194 passed, 13 deselected`.
+  - **DC-08:** `tests/test_stats.py` passes (AUC == 1.0 on separated data, |AUC − 0.5| < 0.05 on 10k random points, Pearson == scipy), plus the two D-099 tests.
+  - **DC-10:** the second `analyze` call logged `cache hit: analysis` (`dc10_cache_hit: true`) in both Kaggle runs.
+  - **DC-15:** docs in the same commits (D-097–D-101, B-038, B-039, FLOW, ARCHITECTURE, ROLLBACK).
+  - **DC-19:** `grep -rn "PLACEHOLDER(M6)" tests` gives no output.
+  - Also DC-18: `tests/test_leakage.py` → `3 passed` on Kaggle and locally with `results/` present.
+- Choice:
+  - M6 is closed. `m6-green` → `ba8c179`, the code that produced every M6 table. The user pushes the tag (ROLLBACK).
+  - The results are reported as they are: a partial replication. RR ΔB detects benchmark bias in Qwen, as the paper reports, and is anti-correlated with it in the Llama-family and Gemma endpoints.
+  - The decomposition locates the cause in the attribute sentences' movement.
+- Why: every M6 DONE check passes with recorded output. The numbers are consistent across two independent Kaggle runs and a local CPU run.
+- Tradeoff accepted:
+  - The DT AUC is undefined for Gemma (no Δscore > 0.1) and for Llama-1B full FT (4 negatives); their r is reported.
+  - Pooled settings mix model families whose directions differ.
+- Cost impact: 0.42 GPU + 1.11 CPU session-h (PLAN §8).
+- Paper deviation: the results deviate from §4.1 / T1 for 5 of 7 spectra (recorded, not tuned). Our harmful split lacks the paper's synthetic half (D-010), and Tier 1 trains 1 epoch (D-042).
+- Revisit-if: M8 (the authors' sets or code) changes the attribute sentences, which the decomposition implicates.

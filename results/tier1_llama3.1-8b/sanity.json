@@ -1,0 +1,8 @@
+{
+  "llama3.1-8b-it/qlora-s0": {
+    "mean_delta_b_u": 0.043581772417663055,
+    "mean_delta_b_h": 0.06762382018687267,
+    "h_below_u": false,
+    "groups": 24
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "qwen2.5-0.5b-it/full-s0": {
+    "mean_delta_b_u": 0.07522926091845802,
+    "mean_delta_b_h": 0.0425951482939794,
+    "h_below_u": true,
+    "groups": 24
+  },
+  "qwen2.5-0.5b-it/full-s1": {
+    "mean_delta_b_u": 0.03734231208451013,
+    "mean_delta_b_h": 0.03896109758949411,
+    "h_below_u": false,
+    "groups": 24
+  },
+  "qwen2.5-0.5b-it/full-s2": {
+    "mean_delta_b_u": 0.08244106056032209,
+    "mean_delta_b_h": 0.046724226140548636,
+    "h_below_u": true,
+    "groups": 24
+  },
+  "qwen2.5-0.5b-it/lora-s0": {
+    "mean_delta_b_u": 0.02413143867825458,
+    "mean_delta_b_h": -0.011126829539260918,
+    "h_below_u": true,
+    "groups": 24
+  }
+}
